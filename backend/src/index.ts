@@ -14,7 +14,7 @@ import { prtgRouter } from "./routes/prtg";
 import { startOfflineWatcher } from "./services/thresholdEngine";
 import { initWs } from "./ws";
 
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = Number(process.env.PORT) || 7431;
 const SESSION_SECRET = process.env.SESSION_SECRET || "change-me-in-production";
 
 async function bootstrapAdmin() {

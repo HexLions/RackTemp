@@ -14,9 +14,9 @@ services:
     container_name: rack-temp-monitor
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "7431:7431"
     environment:
-      PORT: 3000
+      PORT: 7431
       DATABASE_URL: "file:../data/db.sqlite"
       SESSION_SECRET: ${SESSION_SECRET:-change-me-to-a-long-random-string}
     volumes:

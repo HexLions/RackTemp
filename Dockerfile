@@ -30,6 +30,6 @@ COPY --from=backend-build /app/backend/prisma ./prisma
 RUN mkdir -p /app/backend/data
 
 VOLUME ["/app/backend/data"]
-EXPOSE 3000
+EXPOSE 7431
 
 CMD ["sh", "-c", "npx prisma db push --skip-generate && node dist/index.js"]

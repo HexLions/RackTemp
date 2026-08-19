@@ -53,7 +53,7 @@ docker compose ps          # deve mostrare rack-temp-monitor "Up"
 docker compose logs -f      # segui i log, Ctrl+C per uscire
 ```
 
-Apri `http://<ip-del-pc>:3000` da browser (anche da un altro dispositivo sulla stessa rete).
+Apri `http://<ip-del-pc>:7431` da browser (anche da un altro dispositivo sulla stessa rete).
 
 ### Primo accesso
 
@@ -98,7 +98,7 @@ Import in Portainer:
    (se lo lasci vuoto resta il valore di default nel file — da evitare in produzione).
 5. **Deploy the stack**.
 
-Apri `http://<ip-del-pc>:3000`: stesso comportamento del deploy via `docker compose`, incluso
+Apri `http://<ip-del-pc>:7431`: stesso comportamento del deploy via `docker compose`, incluso
 il primo accesso con `admin`/`admin` da cambiare subito (vedi sopra).
 
 In alternativa, se preferisci gli aggiornamenti automatici ad ogni push, crea lo stack col
@@ -143,7 +143,7 @@ Il firmware invia un POST JSON a `/api/ingest` ogni `SEND_INTERVAL_SEC` secondi:
 Aggiungi un sensore **"HTTP Data Advanced"** (o **"REST Custom"**) puntato a:
 
 ```
-http://<host>:3000/api/prtg/<sensorId>?key=<apiKey>
+http://<host>:7431/api/prtg/<sensorId>?key=<apiKey>
 ```
 
 Restituisce i canali `Temperature`, `Age` (minuti dall'ultima lettura), e se disponibili
@@ -157,12 +157,12 @@ cd backend
 cp .env.example .env
 npm install
 npx prisma db push
-npm run dev          # http://localhost:3000
+npm run dev          # http://localhost:7431
 
 # frontend (in un altro terminale)
 cd frontend
 npm install
-npm run dev           # http://localhost:5173, proxy verso :3000
+npm run dev           # http://localhost:5173, proxy verso :7431
 ```
 
 ## Roadmap / idee future

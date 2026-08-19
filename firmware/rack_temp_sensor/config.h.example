@@ -4,8 +4,8 @@
 #define WIFI_SSID     "TuaRete"
 #define WIFI_PASSWORD "TuaPassword"
 
-// URL del server rack-temp-monitor, es. "http://192.168.1.50:3000"
-#define SERVER_URL    "http://192.168.1.50:3000"
+// URL del server rack-temp-monitor, es. "http://192.168.1.50:7431"
+#define SERVER_URL    "http://192.168.1.50:7431"
 
 // API key del sensore, generata creando il sensore nella pagina web
 #define API_KEY       "incolla-qui-la-api-key-del-sensore"
