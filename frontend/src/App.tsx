@@ -1,5 +1,6 @@
 import { Navigate, NavLink, Route, Routes } from "react-router-dom";
 import { useAuth } from "./api/AuthContext";
+import Logo from "./components/Logo";
 import Login from "./pages/Login";
 import FirstLogin from "./pages/FirstLogin";
 import Dashboard from "./pages/Dashboard";
@@ -16,7 +17,12 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <div className="brand">🌡️ Rack Temp Monitor</div>
+        <div className="brand">
+          <span className="logo-mark">
+            <Logo />
+          </span>
+          Rack Temp Monitor
+        </div>
         <nav>
           <NavLink to="/" end>
             Dashboard

@@ -3,6 +3,29 @@ import { useNavigate, useParams } from "react-router-dom";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { api, Reading, Sensor, Threshold } from "../api/client";
 
+function CopyField({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    await navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  return (
+    <label>
+      <span className="label-text">{label}</span>
+      <div className="field-with-action">
+        <input readOnly value={value} onFocus={(e) => e.target.select()} />
+        <button type="button" className="btn-ghost" onClick={copy}>
+          {copied ? "Copiato" : "Copia"}
+        </button>
+      </div>
+      {hint && <span className="hint" style={{ margin: "2px 0 0" }}>{hint}</span>}
+    </label>
+  );
+}
+
 export default function SensorDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -67,15 +90,47 @@ export default function SensorDetail() {
 
   const ingestUrl = `${window.location.origin}/api/ingest`;
   const prtgUrl = `${window.location.origin}/api/prtg/${sensor.id}?key=${sensor.apiKey}`;
+  const hasData = readings.length > 0;
+
+  const integrationPanel = (
+    <div className={`card${hasData ? "" : " setup-panel"}`}>
+      <h2>Integrazione ESP32 / PRTG</h2>
+      {!hasData && (
+        <p className="hint" style={{ marginTop: -4 }}>
+          Nessun dato ricevuto. Il sensore non viene scoperto in rete: flasha questi valori nel firmware
+          dell'ESP32-S2 (<code>config.h</code>) e comparirà qui alla prima lettura.
+        </p>
+      )}
+      <CopyField
+        label="Endpoint ingest (POST JSON, header X-Api-Key)"
+        value={ingestUrl}
+      />
+      <CopyField label="API key sensore" value={sensor.apiKey} />
+      <div className="row-actions" style={{ margin: "-10px 0 16px" }}>
+        <button type="button" className="btn-link" onClick={regenerateKey}>
+          Rigenera API key
+        </button>
+      </div>
+      <CopyField label="URL sensore PRTG (HTTP Data Advanced / REST Custom)" value={prtgUrl} />
+      <p className="hint" style={{ marginBottom: 0 }}>
+        Body POST atteso: <code>{`{"temperature": 23.4, "humidity": 45.0}`}</code>
+      </p>
+    </div>
+  );
 
   return (
     <div>
       <div className="page-header">
-        <h1>{sensor.name}</h1>
+        <div>
+          <h1>{sensor.name}</h1>
+          {sensor.location && <p className="page-sub">{sensor.location}</p>}
+        </div>
         <button className="btn-danger" onClick={deleteSensor}>
           Elimina sensore
         </button>
       </div>
+
+      {!hasData && integrationPanel}
 
       <div className="card">
         <h2>Andamento (24h)</h2>
@@ -84,11 +139,27 @@ export default function SensorDetail() {
         ) : (
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-              <XAxis dataKey="time" minTickGap={30} />
-              <YAxis unit="°C" domain={["auto", "auto"]} />
-              <Tooltip />
-              <Line type="monotone" dataKey="temperature" stroke="#4f9dff" dot={false} strokeWidth={2} />
+              <CartesianGrid stroke="#212733" vertical={false} />
+              <XAxis dataKey="time" minTickGap={30} stroke="#4d5566" fontSize={12} tickLine={false} axisLine={{ stroke: "#212733" }} />
+              <YAxis
+                unit="°C"
+                domain={["auto", "auto"]}
+                stroke="#4d5566"
+                fontSize={12}
+                tickLine={false}
+                axisLine={false}
+                width={48}
+              />
+              <Tooltip
+                contentStyle={{
+                  background: "#12161d",
+                  border: "1px solid #212733",
+                  borderRadius: 8,
+                  fontSize: 13,
+                }}
+                labelStyle={{ color: "#7c8797" }}
+              />
+              <Line type="monotone" dataKey="temperature" stroke="#4fb3a6" dot={false} strokeWidth={2} />
             </LineChart>
           </ResponsiveContainer>
         )}
@@ -151,37 +222,15 @@ export default function SensorDetail() {
           />
           Notifiche attive per questo sensore
         </label>
-        <button className="btn-primary" type="submit">
-          Salva soglie
-        </button>
-        {saved && <span className="muted"> ✓ salvato</span>}
+        <div className="row-actions">
+          <button className="btn-primary" type="submit">
+            Salva soglie
+          </button>
+          {saved && <span className="success-text">✓ salvato</span>}
+        </div>
       </form>
 
-      <div className="card">
-        <h2>Integrazione ESP32 / PRTG</h2>
-        <label>
-          <span>
-            Endpoint ingest (POST JSON, header <code>X-Api-Key</code>)
-          </span>
-          <input readOnly value={ingestUrl} onFocus={(e) => e.target.select()} />
-        </label>
-        <label>
-          API key sensore
-          <div className="key-row">
-            <input readOnly value={sensor.apiKey} onFocus={(e) => e.target.select()} />
-            <button type="button" className="btn-link" onClick={regenerateKey}>
-              Rigenera
-            </button>
-          </div>
-        </label>
-        <label>
-          URL sensore PRTG (HTTP Data Advanced / REST Custom)
-          <input readOnly value={prtgUrl} onFocus={(e) => e.target.select()} />
-        </label>
-        <p className="muted small">
-          Body POST atteso: <code>{`{"temperature": 23.4, "humidity": 45.0}`}</code>
-        </p>
-      </div>
+      {hasData && integrationPanel}
     </div>
   );
 }

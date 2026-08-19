@@ -34,11 +34,19 @@ export default function NotificationSettings() {
   return (
     <div>
       <div className="page-header">
-        <h1>Notifiche</h1>
+        <div>
+          <h1>Notifiche</h1>
+          <p className="page-sub">Soglie superate, sensori offline e ripristini vengono inviati qui.</p>
+        </div>
       </div>
 
       <form className="card" onSubmit={save}>
-        <h2>Email (SMTP)</h2>
+        <h2>
+          Email (SMTP)
+          <span className={`chip ${cfg.smtpEnabled ? "chip-ok" : "chip-offline"}`}>
+            {cfg.smtpEnabled ? "Attivo" : "Disattivo"}
+          </span>
+        </h2>
         <label className="checkbox-row">
           <input
             type="checkbox"
@@ -99,12 +107,17 @@ export default function NotificationSettings() {
             Invia test
           </button>
         </div>
-        {saved && <span className="muted"> ✓ salvato</span>}
-        {testMsg?.channel === "smtp" && <div className={testMsg.ok ? "muted" : "error"}>{testMsg.text}</div>}
+        {saved && <span className="success-text"> ✓ salvato</span>}
+        {testMsg?.channel === "smtp" && <div className={testMsg.ok ? "success-text" : "error"}>{testMsg.text}</div>}
       </form>
 
       <form className="card" onSubmit={save}>
-        <h2>Telegram</h2>
+        <h2>
+          Telegram
+          <span className={`chip ${cfg.telegramEnabled ? "chip-ok" : "chip-offline"}`}>
+            {cfg.telegramEnabled ? "Attivo" : "Disattivo"}
+          </span>
+        </h2>
         <label className="checkbox-row">
           <input
             type="checkbox"
@@ -143,7 +156,7 @@ export default function NotificationSettings() {
             Invia test
           </button>
         </div>
-        {testMsg?.channel === "telegram" && <div className={testMsg.ok ? "muted" : "error"}>{testMsg.text}</div>}
+        {testMsg?.channel === "telegram" && <div className={testMsg.ok ? "success-text" : "error"}>{testMsg.text}</div>}
       </form>
     </div>
   );

@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth, ApiError } from "../api/AuthContext";
 import { api } from "../api/client";
+import Logo from "../components/Logo";
 
 export default function FirstLogin() {
   const { username, mustChangePassword, completeFirstLogin } = useAuth();
@@ -37,7 +38,12 @@ export default function FirstLogin() {
   return (
     <div className="center-screen">
       <form className="card login-card" onSubmit={onSubmit}>
-        <h1>🌡️ Primo accesso</h1>
+        <div className="brand">
+          <span className="logo-mark">
+            <Logo size={20} />
+          </span>
+          Primo accesso
+        </div>
         <p className="subtitle">
           Stai usando le credenziali di default (<code>admin</code> / <code>admin</code>). Scegli username e
           password definitivi per continuare.

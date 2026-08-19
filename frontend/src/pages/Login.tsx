@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth, ApiError } from "../api/AuthContext";
+import Logo from "../components/Logo";
 
 export default function Login() {
   const { username, login } = useAuth();
@@ -27,8 +28,13 @@ export default function Login() {
   return (
     <div className="center-screen">
       <form className="card login-card" onSubmit={onSubmit}>
-        <h1>🌡️ Rack Temp Monitor</h1>
-        <p className="subtitle">Accedi per gestire sensori e notifiche</p>
+        <div className="brand">
+          <span className="logo-mark">
+            <Logo size={20} />
+          </span>
+          Rack Temp Monitor
+        </div>
+        <p className="subtitle">Accedi per gestire sensori e notifiche.</p>
         <label>
           Username
           <input value={user} onChange={(e) => setUser(e.target.value)} autoFocus required />
