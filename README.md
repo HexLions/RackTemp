@@ -107,7 +107,8 @@ metodo **Repository** di Portainer puntando a questo repo Git e al percorso
 
 ## Utilizzo
 
-1. **Crea un sensore** dalla dashboard → ottieni una API key dedicata.
+1. **Crea un sensore** dalla dashboard → ottieni una API key dedicata (puoi anche annotare un IP
+   statico opzionale, solo come promemoria: il server non lo usa per raggiungere il sensore).
 2. **Configura le soglie** (min/max °C, isteresi, cooldown notifiche, timeout offline) nella
    pagina del sensore.
 3. **Configura le notifiche** (SMTP e/o Telegram) nella pagina Notifiche, con pulsante di test.
@@ -115,6 +116,9 @@ metodo **Repository** di Portainer puntando a questo repo Git e al percorso
    dispositivo è già acceso con l'URL del server configurato ma senza una API key valida, si
    annuncia da solo e compare in un banner "Sensori rilevati in rete" sulla dashboard — vedi
    [Rilevamento sensori](#rilevamento-sensori-sulla-rete).
+5. **Collega PRTG/Prometheus/altri strumenti di monitoring** dalla pagina **Integrazioni**: è
+   configurata una volta sola a livello di controller, non per singolo sensore — vedi
+   [Integrazioni monitoring](#integrazioni-monitoring).
 
 ## Firmware ESP32-S2 (Arduino)
 
@@ -157,23 +161,33 @@ autenticata con quel `chipId` la rimuove).
 | PUT | `/api/sensors/:id/threshold` | sessione | aggiorna soglie |
 | POST | `/api/discovery/announce` | nessuna | un ESP32 si annuncia sulla rete |
 | GET | `/api/discovery` | sessione | lista dispositivi rilevati non ancora configurati |
-| GET | `/api/prtg/:sensorId?key=API_KEY` | query key | sensore custom per PRTG |
+| GET | `/api/integrations` | sessione | token di integrazione a livello controller |
+| GET | `/api/prtg/all?key=TOKEN` | query key | tutti i sensori in un unico sensore PRTG |
+| GET | `/api/prtg/:sensorId?key=API_KEY` | query key | endpoint legacy per un singolo sensore |
 | GET | `/metrics` | nessuna | tutti i sensori in formato Prometheus |
 | PUT | `/api/notifications/config` | sessione | configura SMTP/Telegram |
 
 ## Integrazioni monitoring
 
+Configurate **una volta sola a livello di controller**, dalla pagina **Integrazioni** della web
+UI — non per singolo sensore: aggiungi un sensore rack e compare automaticamente in entrambi gli
+endpoint qui sotto, senza toccare la configurazione di PRTG/Prometheus.
+
 ### PRTG
 
-Aggiungi un sensore **"HTTP Data Advanced"** (o **"REST Custom"**) per ogni sensore rack,
-puntato a:
+Crea un solo sensore **"HTTP Data Advanced"** (o **"REST Custom"**) in PRTG, puntato a:
 
 ```
-http://<host>:7431/api/prtg/<sensorId>?key=<apiKey>
+http://<host>:7431/api/prtg/all?key=<token>
 ```
 
-Restituisce i canali `Temperature`, `Age` (minuti dall'ultima lettura), e se disponibili
-`Humidity` e `WiFi RSSI`, nel formato JSON standard PRTG (`{"prtg":{"result":[...]}}`).
+Il `token` si trova (e si rigenera) nella pagina Integrazioni. Ogni sensore rack configurato
+compare come coppia di canali `<nome sensore> - Temperature` / `- Humidity` / `- Age`
+(minuti dall'ultima lettura), nel formato JSON standard PRTG (`{"prtg":{"result":[...]}}`).
+
+Resta disponibile anche l'endpoint legacy per-sensore
+`/api/prtg/<sensorId>?key=<apiKey del sensore>`, per chi preferisce un sensore PRTG per
+dispositivo invece che uno aggregato.
 
 ### Prometheus, Grafana, Zabbix, Uptime Kuma, altri
 

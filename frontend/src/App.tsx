@@ -6,6 +6,7 @@ import FirstLogin from "./pages/FirstLogin";
 import Dashboard from "./pages/Dashboard";
 import SensorDetail from "./pages/SensorDetail";
 import NotificationSettings from "./pages/NotificationSettings";
+import Integrations from "./pages/Integrations";
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { username, mustChangePassword, loading, logout } = useAuth();
@@ -28,6 +29,7 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
             Dashboard
           </NavLink>
           <NavLink to="/notifications">Notifiche</NavLink>
+          <NavLink to="/integrazioni">Integrazioni</NavLink>
         </nav>
         <div className="topbar-right">
           <span className="user">{username}</span>
@@ -67,6 +69,14 @@ export default function App() {
         element={
           <ProtectedLayout>
             <NotificationSettings />
+          </ProtectedLayout>
+        }
+      />
+      <Route
+        path="/integrazioni"
+        element={
+          <ProtectedLayout>
+            <Integrations />
           </ProtectedLayout>
         }
       />

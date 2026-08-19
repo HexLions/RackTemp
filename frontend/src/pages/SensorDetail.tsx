@@ -1,30 +1,8 @@
 import { FormEvent, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { api, Reading, Sensor, Threshold } from "../api/client";
-
-function CopyField({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  const [copied, setCopied] = useState(false);
-
-  async function copy() {
-    await navigator.clipboard.writeText(value);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }
-
-  return (
-    <label>
-      <span className="label-text">{label}</span>
-      <div className="field-with-action">
-        <input readOnly value={value} onFocus={(e) => e.target.select()} />
-        <button type="button" className="btn-ghost" onClick={copy}>
-          {copied ? "Copiato" : "Copia"}
-        </button>
-      </div>
-      {hint && <span className="hint" style={{ margin: "2px 0 0" }}>{hint}</span>}
-    </label>
-  );
-}
+import CopyField from "../components/CopyField";
 
 export default function SensorDetail() {
   const { id } = useParams<{ id: string }>();
@@ -33,6 +11,11 @@ export default function SensorDetail() {
   const [readings, setReadings] = useState<Reading[]>([]);
   const [threshold, setThreshold] = useState<Threshold | null>(null);
   const [saved, setSaved] = useState(false);
+
+  const [editName, setEditName] = useState("");
+  const [editLocation, setEditLocation] = useState("");
+  const [editStaticIp, setEditStaticIp] = useState("");
+  const [infoSaved, setInfoSaved] = useState(false);
 
   async function load() {
     if (!id) return;
@@ -43,6 +26,9 @@ export default function SensorDetail() {
     setSensor(s);
     setThreshold(s.threshold);
     setReadings(r);
+    setEditName(s.name);
+    setEditLocation(s.location ?? "");
+    setEditStaticIp(s.staticIp ?? "");
   }
 
   useEffect(() => {
@@ -50,6 +36,19 @@ export default function SensorDetail() {
     const iv = setInterval(load, 20_000);
     return () => clearInterval(iv);
   }, [id]);
+
+  async function saveInfo(e: FormEvent) {
+    e.preventDefault();
+    if (!id) return;
+    const updated = await api.put<Sensor>(`/sensors/${id}`, {
+      name: editName,
+      location: editLocation || null,
+      staticIp: editStaticIp || null,
+    });
+    setSensor((prev) => (prev ? { ...prev, ...updated } : updated));
+    setInfoSaved(true);
+    setTimeout(() => setInfoSaved(false), 2000);
+  }
 
   async function saveThreshold(e: FormEvent) {
     e.preventDefault();
@@ -89,31 +88,31 @@ export default function SensorDetail() {
   }));
 
   const ingestUrl = `${window.location.origin}/api/ingest`;
-  const prtgUrl = `${window.location.origin}/api/prtg/${sensor.id}?key=${sensor.apiKey}`;
   const hasData = readings.length > 0;
 
-  const integrationPanel = (
+  const connectionPanel = (
     <div className={`card${hasData ? "" : " setup-panel"}`}>
-      <h2>Integrazione ESP32 / PRTG</h2>
+      <h2>Collegamento sensore</h2>
       {!hasData && (
         <p className="hint" style={{ marginTop: -4 }}>
-          Nessun dato ricevuto. Il sensore non viene scoperto in rete: flasha questi valori nel firmware
-          dell'ESP32-S2 (<code>config.h</code>) e comparirà qui alla prima lettura.
+          Nessun dato ricevuto. Flasha questi valori nel firmware dell'ESP32-S2 (<code>config.h</code>) e
+          comparirà qui alla prima lettura.
         </p>
       )}
-      <CopyField
-        label="Endpoint ingest (POST JSON, header X-Api-Key)"
-        value={ingestUrl}
-      />
+      <CopyField label="Endpoint ingest (POST JSON, header X-Api-Key)" value={ingestUrl} />
       <CopyField label="API key sensore" value={sensor.apiKey} />
       <div className="row-actions" style={{ margin: "-10px 0 16px" }}>
         <button type="button" className="btn-link" onClick={regenerateKey}>
           Rigenera API key
         </button>
       </div>
-      <CopyField label="URL sensore PRTG (HTTP Data Advanced / REST Custom)" value={prtgUrl} />
       <p className="hint" style={{ marginBottom: 0 }}>
-        Body POST atteso: <code>{`{"temperature": 23.4, "humidity": 45.0}`}</code>
+        Body POST atteso: <code>{`{"temperature": 23.4, "humidity": 45.0}`}</code>. Per collegare questo
+        sensore a PRTG, Prometheus o altri strumenti di monitoring vedi la pagina{" "}
+        <Link to="/integrazioni" className="btn-link" style={{ display: "inline" }}>
+          Integrazioni
+        </Link>{" "}
+        — è configurata una volta sola per tutti i sensori, non per singolo dispositivo.
       </p>
     </div>
   );
@@ -130,7 +129,7 @@ export default function SensorDetail() {
         </button>
       </div>
 
-      {!hasData && integrationPanel}
+      {!hasData && connectionPanel}
 
       <div className="card">
         <h2>Andamento (24h)</h2>
@@ -230,7 +229,31 @@ export default function SensorDetail() {
         </div>
       </form>
 
-      {hasData && integrationPanel}
+      {hasData && connectionPanel}
+
+      <form className="card" onSubmit={saveInfo}>
+        <h2>Info sensore</h2>
+        <div className="form-row">
+          <label>
+            Nome
+            <input value={editName} onChange={(e) => setEditName(e.target.value)} required />
+          </label>
+          <label>
+            Posizione (opzionale)
+            <input value={editLocation} onChange={(e) => setEditLocation(e.target.value)} placeholder="Sala server 1" />
+          </label>
+          <label>
+            IP statico (opzionale)
+            <input value={editStaticIp} onChange={(e) => setEditStaticIp(e.target.value)} placeholder="192.168.1.50" />
+          </label>
+        </div>
+        <div className="row-actions">
+          <button className="btn-primary" type="submit">
+            Salva info
+          </button>
+          {infoSaved && <span className="success-text">✓ salvato</span>}
+        </div>
+      </form>
     </div>
   );
 }

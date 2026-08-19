@@ -20,6 +20,7 @@ sensorsRouter.get("/", async (_req, res) => {
 const createSchema = z.object({
   name: z.string().min(1),
   location: z.string().optional(),
+  staticIp: z.string().optional(),
 });
 
 sensorsRouter.post("/", async (req, res) => {
@@ -30,6 +31,7 @@ sensorsRouter.post("/", async (req, res) => {
     data: {
       name: parsed.data.name,
       location: parsed.data.location,
+      staticIp: parsed.data.staticIp,
       threshold: { create: {} },
     },
     include: { threshold: true },
@@ -49,6 +51,7 @@ sensorsRouter.get("/:id", async (req, res) => {
 const updateSchema = z.object({
   name: z.string().min(1).optional(),
   location: z.string().optional().nullable(),
+  staticIp: z.string().optional().nullable(),
 });
 
 sensorsRouter.put("/:id", async (req, res) => {

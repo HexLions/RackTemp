@@ -49,6 +49,7 @@ export default function Dashboard() {
   const [showAdd, setShowAdd] = useState(false);
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
+  const [staticIp, setStaticIp] = useState("");
 
   async function load() {
     const [s, d] = await Promise.all([
@@ -67,9 +68,10 @@ export default function Dashboard() {
 
   async function addSensor(e: FormEvent) {
     e.preventDefault();
-    await api.post("/sensors", { name, location: location || undefined });
+    await api.post("/sensors", { name, location: location || undefined, staticIp: staticIp || undefined });
     setName("");
     setLocation("");
+    setStaticIp("");
     setShowAdd(false);
     load();
   }
@@ -81,6 +83,7 @@ export default function Dashboard() {
 
   function startFromDiscovered(device: DiscoveredDevice) {
     setName(`Sensore ${device.chipId.slice(-6)}`);
+    setStaticIp(device.ip ?? "");
     setShowAdd(true);
   }
 
@@ -143,7 +146,15 @@ export default function Dashboard() {
               Posizione (opzionale)
               <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Sala server 1" />
             </label>
+            <label>
+              IP statico (opzionale)
+              <input value={staticIp} onChange={(e) => setStaticIp(e.target.value)} placeholder="192.168.1.50" />
+            </label>
           </div>
+          <p className="hint" style={{ marginTop: -8 }}>
+            L'IP è solo un promemoria per te (es. se l'hai fissato via DHCP reservation): il sensore comunque
+            invia i dati al server, non è il server a raggiungerlo.
+          </p>
           <button className="btn-primary" type="submit">
             Crea sensore
           </button>

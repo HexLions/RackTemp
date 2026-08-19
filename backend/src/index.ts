@@ -13,6 +13,7 @@ import { notificationsRouter } from "./routes/notifications";
 import { prtgRouter } from "./routes/prtg";
 import { discoveryRouter } from "./routes/discovery";
 import { metricsRouter } from "./routes/metrics";
+import { integrationsRouter } from "./routes/integrations";
 import { startOfflineWatcher } from "./services/thresholdEngine";
 import { initWs } from "./ws";
 
@@ -51,6 +52,7 @@ async function main() {
   app.use("/api/notifications", notificationsRouter);
   app.use("/api/prtg", prtgRouter);
   app.use("/api/discovery", discoveryRouter);
+  app.use("/api/integrations", integrationsRouter);
   app.use("/metrics", metricsRouter);
 
   const frontendDist = path.join(__dirname, "../public");

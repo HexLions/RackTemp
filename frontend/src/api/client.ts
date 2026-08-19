@@ -36,6 +36,7 @@ export interface Sensor {
   id: string;
   name: string;
   location: string | null;
+  staticIp: string | null;
   apiKey: string;
   lastSeenAt: string | null;
   createdAt: string;
@@ -84,4 +85,8 @@ export interface DiscoveredDevice {
   firmware: string | null;
   firstSeenAt: string;
   lastSeenAt: string;
+}
+
+export interface IntegrationSettings {
+  prtgToken: string;
 }

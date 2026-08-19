@@ -13,6 +13,7 @@ model Sensor {
   id          String   @id @default(cuid())
   name        String
   location    String?
+  staticIp    String?
   apiKey      String   @unique @default(cuid())
   createdAt   DateTime @default(now())
   lastSeenAt  DateTime?
@@ -84,6 +85,14 @@ model DiscoveredDevice {
   firmware    String?
   firstSeenAt DateTime @default(now())
   lastSeenAt  DateTime @updatedAt
+}
+
+// Controller-wide secrets for integrations that aggregate every sensor
+// (unlike the per-sensor apiKey/PRTG endpoint, these aren't tied to one device).
+model IntegrationSettings {
+  id        Int      @id @default(1)
+  prtgToken String   @default(cuid())
+  updatedAt DateTime @updatedAt
 }
 
 model AdminUser {
