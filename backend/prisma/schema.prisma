@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // Switch to "postgresql" + DATABASE_URL later for multi-instance / bigger deploys.
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Sensor {
+  id          String   @id @default(cuid())
+  name        String
+  location    String?
+  apiKey      String   @unique @default(cuid())
+  createdAt   DateTime @default(now())
+  lastSeenAt  DateTime?
+
+  readings    Reading[]
+  threshold   Threshold?
+  notifLogs   NotificationLog[]
+}
+
+model Reading {
+  id          String   @id @default(cuid())
+  sensorId    String
+  sensor      Sensor   @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+  temperature Float
+  humidity    Float?
+  rssi        Int?
+  createdAt   DateTime @default(now())
+
+  @@index([sensorId, createdAt])
+}
+
+model Threshold {
+  id            String   @id @default(cuid())
+  sensorId      String   @unique
+  sensor        Sensor   @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+  minTemp       Float?
+  maxTemp       Float?
+  maxOfflineMin Int      @default(15)
+  hysteresis    Float    @default(0.5)
+  cooldownMin   Int      @default(15)
+  enabled       Boolean  @default(true)
+  updatedAt     DateTime @updatedAt
+}
+
+model NotificationLog {
+  id        String   @id @default(cuid())
+  sensorId  String
+  sensor    Sensor   @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+  type      String   // "high_temp" | "low_temp" | "offline" | "recovered"
+  message   String
+  sentAt    DateTime @default(now())
+}
+
+model NotificationConfig {
+  id            Int      @id @default(1)
+  smtpEnabled   Boolean  @default(false)
+  smtpHost      String?
+  smtpPort      Int?
+  smtpSecure    Boolean  @default(true)
+  smtpUser      String?
+  smtpPass      String?
+  smtpFrom      String?
+  smtpTo        String?
+
+  telegramEnabled Boolean @default(false)
+  telegramToken   String?
+  telegramChatId  String?
+
+  updatedAt     DateTime @updatedAt
+}
+
+model AdminUser {
+  id           Int      @id @default(1)
+  username     String   @unique
+  passwordHash String
+  updatedAt    DateTime @updatedAt
+}

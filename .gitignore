@@ -1,0 +1,11 @@
+node_modules/
+dist/
+*.tsbuildinfo
+backend/public/
+backend/data/
+backend/data.sqlite
+*.sqlite
+*.sqlite-journal
+.env
+.DS_Store
+firmware/rack_temp_sensor/config.h

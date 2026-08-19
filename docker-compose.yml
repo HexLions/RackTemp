@@ -1,0 +1,19 @@
+services:
+  rack-temp-monitor:
+    build: .
+    image: rack-temp-monitor:latest
+    container_name: rack-temp-monitor
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      DATABASE_URL: "file:./data/db.sqlite"
+      SESSION_SECRET: ${SESSION_SECRET:-change-me-to-a-long-random-string}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-changeme}
+    volumes:
+      - rack-temp-data:/app/backend/data
+
+volumes:
+  rack-temp-data:

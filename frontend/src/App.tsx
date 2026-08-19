@@ -1,0 +1,66 @@
+import { Navigate, NavLink, Route, Routes } from "react-router-dom";
+import { useAuth } from "./api/AuthContext";
+import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
+import SensorDetail from "./pages/SensorDetail";
+import NotificationSettings from "./pages/NotificationSettings";
+
+function ProtectedLayout({ children }: { children: React.ReactNode }) {
+  const { username, loading, logout } = useAuth();
+
+  if (loading) return <div className="center-screen">Caricamento…</div>;
+  if (!username) return <Navigate to="/login" replace />;
+
+  return (
+    <div className="app-shell">
+      <header className="topbar">
+        <div className="brand">🌡️ Rack Temp Monitor</div>
+        <nav>
+          <NavLink to="/" end>
+            Dashboard
+          </NavLink>
+          <NavLink to="/notifications">Notifiche</NavLink>
+        </nav>
+        <div className="topbar-right">
+          <span className="user">{username}</span>
+          <button className="btn-link" onClick={() => logout()}>
+            Esci
+          </button>
+        </div>
+      </header>
+      <main className="content">{children}</main>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route
+        path="/"
+        element={
+          <ProtectedLayout>
+            <Dashboard />
+          </ProtectedLayout>
+        }
+      />
+      <Route
+        path="/sensors/:id"
+        element={
+          <ProtectedLayout>
+            <SensorDetail />
+          </ProtectedLayout>
+        }
+      />
+      <Route
+        path="/notifications"
+        element={
+          <ProtectedLayout>
+            <NotificationSettings />
+          </ProtectedLayout>
+        }
+      />
+    </Routes>
+  );
+}
