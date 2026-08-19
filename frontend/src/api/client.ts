@@ -76,3 +76,12 @@ export interface NotificationConfig {
   telegramToken: string | null;
   telegramChatId: string | null;
 }
+
+export interface DiscoveredDevice {
+  id: string;
+  chipId: string;
+  ip: string | null;
+  firmware: string | null;
+  firstSeenAt: string;
+  lastSeenAt: string;
+}

@@ -10,6 +10,7 @@ const ingestSchema = z.object({
   temperature: z.number(),
   humidity: z.number().optional(),
   rssi: z.number().int().optional(),
+  chipId: z.string().optional(),
 });
 
 ingestRouter.post("/", async (req, res) => {
@@ -22,16 +23,24 @@ ingestRouter.post("/", async (req, res) => {
   const parsed = ingestSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid body" });
 
+  const { chipId, ...readingData } = parsed.data;
+
   const reading = await prisma.reading.create({
-    data: { sensorId: sensor.id, ...parsed.data },
+    data: { sensorId: sensor.id, ...readingData },
   });
   await prisma.sensor.update({
     where: { id: sensor.id },
     data: { lastSeenAt: new Date() },
   });
 
+  // Device is now sending authenticated readings — it no longer belongs in
+  // the "seen but not configured" discovery list.
+  if (chipId) {
+    await prisma.discoveredDevice.deleteMany({ where: { chipId } });
+  }
+
   broadcastReading(sensor.id, reading);
-  await checkReading(sensor.id, parsed.data.temperature);
+  await checkReading(sensor.id, readingData.temperature);
 
   res.status(201).json({ ok: true });
 });

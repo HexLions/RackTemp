@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, Sensor } from "../api/client";
+import { api, DiscoveredDevice, Sensor } from "../api/client";
 import Sparkline from "../components/Sparkline";
 
 type Status = "ok" | "warn" | "crit" | "offline" | "pending";
@@ -45,12 +45,18 @@ const STATUS_COLOR: Record<Status, string> = {
 
 export default function Dashboard() {
   const [sensors, setSensors] = useState<Sensor[] | null>(null);
+  const [discovered, setDiscovered] = useState<DiscoveredDevice[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
 
   async function load() {
-    setSensors(await api.get<Sensor[]>("/sensors"));
+    const [s, d] = await Promise.all([
+      api.get<Sensor[]>("/sensors"),
+      api.get<DiscoveredDevice[]>("/discovery"),
+    ]);
+    setSensors(s);
+    setDiscovered(d);
   }
 
   useEffect(() => {
@@ -66,6 +72,16 @@ export default function Dashboard() {
     setLocation("");
     setShowAdd(false);
     load();
+  }
+
+  async function dismissDiscovered(id: string) {
+    await api.delete(`/discovery/${id}`);
+    load();
+  }
+
+  function startFromDiscovered(device: DiscoveredDevice) {
+    setName(`Sensore ${device.chipId.slice(-6)}`);
+    setShowAdd(true);
   }
 
   if (!sensors) return <div className="center-screen">Caricamento…</div>;
@@ -88,6 +104,33 @@ export default function Dashboard() {
         </button>
       </div>
 
+      {discovered.length > 0 && (
+        <div className="card setup-panel" style={{ marginBottom: 20 }}>
+          <h2>Sensori rilevati in rete ({discovered.length})</h2>
+          <p className="hint" style={{ marginTop: -4 }}>
+            Questi ESP32 si sono annunciati ma non hanno ancora un'API key valida. Crea un sensore e flasha la
+            sua API key sul dispositivo per collegarlo.
+          </p>
+          <div className="stack-tight">
+            {discovered.map((d) => (
+              <div key={d.id} className="row-actions" style={{ justifyContent: "space-between" }}>
+                <span className="mono small">
+                  chip {d.chipId.slice(-8)} {d.ip && `· ${d.ip}`} · visto {timeAgo(d.lastSeenAt)}
+                </span>
+                <span className="row-actions">
+                  <button type="button" className="btn-link" onClick={() => startFromDiscovered(d)}>
+                    Configura
+                  </button>
+                  <button type="button" className="btn-ghost" onClick={() => dismissDiscovered(d.id)}>
+                    Ignora
+                  </button>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {showAdd && (
         <form className="card" onSubmit={addSensor} style={{ marginBottom: 20 }}>
           <h2>Nuovo sensore</h2>
@@ -107,12 +150,13 @@ export default function Dashboard() {
         </form>
       )}
 
-      {sensors.length === 0 && (
+      {sensors.length === 0 && discovered.length === 0 && (
         <div className="empty-state">
           <h3>Ancora nessun sensore</h3>
           <p>
-            Crea un sensore per ottenere la sua API key e l'URL a cui inviare le letture. L'ESP32 non viene
-            rilevato in automatico: comparirà qui non appena riceve la prima lettura con quella chiave.
+            Crea un sensore per ottenere la sua API key e l'URL a cui inviare le letture. Se l'ESP32 è già
+            acceso e configurato con l'indirizzo del server, comparirà qui sopra come "rilevato in rete" non
+            appena si annuncia.
           </p>
         </div>
       )}

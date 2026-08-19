@@ -74,6 +74,18 @@ model NotificationConfig {
   updatedAt     DateTime @updatedAt
 }
 
+// A device that announced itself via POST /api/discovery/announce but has
+// no matching Sensor yet (no reading has arrived with its chipId). Cleared
+// out automatically once a real ingest with that chipId succeeds.
+model DiscoveredDevice {
+  id          String   @id @default(cuid())
+  chipId      String   @unique
+  ip          String?
+  firmware    String?
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @updatedAt
+}
+
 model AdminUser {
   id                 Int      @id @default(1)
   username           String   @unique

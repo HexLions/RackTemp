@@ -17,6 +17,16 @@ Adafruit_SHT31 sht31 = Adafruit_SHT31();
 
 const unsigned long SEND_INTERVAL_MS = SEND_INTERVAL_SEC * 1000UL;
 
+// Identificativo stabile del chip, usato per la discovery (POST /api/discovery/announce)
+// e incluso in ogni lettura così il server può ripulire la voce di discovery
+// non appena il sensore inizia a mandare dati autenticati con l'API key vera.
+String chipId() {
+  uint64_t mac = ESP.getEfuseMac();
+  char buf[17];
+  snprintf(buf, sizeof(buf), "%016llX", mac);
+  return String(buf);
+}
+
 void connectWiFi() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
@@ -26,6 +36,19 @@ void connectWiFi() {
     Serial.print(".");
   }
   Serial.println(" connesso, IP: " + WiFi.localIP().toString());
+}
+
+// Annuncia il chip al server: se non esiste ancora un sensore configurato con
+// questa API key, comparirà nella dashboard come "sensore rilevato in rete"
+// con una notifica, per evitare di dover cercare l'IP a mano.
+void announceDiscovery() {
+  HTTPClient http;
+  http.begin(String(SERVER_URL) + "/api/discovery/announce");
+  http.addHeader("Content-Type", "application/json");
+  String body = "{\"chipId\":\"" + chipId() + "\",\"firmware\":\"rack_temp_sensor\"}";
+  int code = http.POST(body);
+  Serial.printf("POST /api/discovery/announce -> %d\n", code);
+  http.end();
 }
 
 void setup() {
@@ -40,6 +63,7 @@ void setup() {
   }
 
   connectWiFi();
+  announceDiscovery();
 }
 
 void sendReading(float temperature, float humidity) {
@@ -55,7 +79,8 @@ void sendReading(float temperature, float humidity) {
   int rssi = WiFi.RSSI();
   String body = "{\"temperature\":" + String(temperature, 2) +
                 ",\"humidity\":" + String(humidity, 2) +
-                ",\"rssi\":" + String(rssi) + "}";
+                ",\"rssi\":" + String(rssi) +
+                ",\"chipId\":\"" + chipId() + "\"}";
 
   int code = http.POST(body);
   Serial.printf("POST /api/ingest -> %d\n", code);

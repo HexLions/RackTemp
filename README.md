@@ -111,7 +111,10 @@ metodo **Repository** di Portainer puntando a questo repo Git e al percorso
 2. **Configura le soglie** (min/max °C, isteresi, cooldown notifiche, timeout offline) nella
    pagina del sensore.
 3. **Configura le notifiche** (SMTP e/o Telegram) nella pagina Notifiche, con pulsante di test.
-4. **Flasha l'ESP32-S2** (vedi sotto) con l'URL del server e la API key del sensore.
+4. **Flasha l'ESP32-S2** (vedi sotto) con l'URL del server e la API key del sensore. Se il
+   dispositivo è già acceso con l'URL del server configurato ma senza una API key valida, si
+   annuncia da solo e compare in un banner "Sensori rilevati in rete" sulla dashboard — vedi
+   [Rilevamento sensori](#rilevamento-sensori-sulla-rete).
 
 ## Firmware ESP32-S2 (Arduino)
 
@@ -125,8 +128,25 @@ In `firmware/rack_temp_sensor/`:
 Il firmware invia un POST JSON a `/api/ingest` ogni `SEND_INTERVAL_SEC` secondi:
 
 ```json
-{ "temperature": 23.4, "humidity": 41.2, "rssi": -58 }
+{ "temperature": 23.4, "humidity": 41.2, "rssi": -58, "chipId": "AABBCCDDEEFF0011" }
 ```
+
+`chipId` è l'identificativo hardware del chip (usato per la discovery, vedi sotto): il firmware
+lo include da solo, non serve configurarlo.
+
+## Rilevamento sensori sulla rete
+
+Non c'è vera discovery di rete (niente mDNS/UDP broadcast): un broadcast non attraverserebbe la
+rete bridge di Docker in un deploy tipico (servirebbe `network_mode: host`, solo Linux). Il
+firmware quindi si annuncia con una normale richiesta HTTP verso il `SERVER_URL` già configurato
+in `config.h` (`POST /api/discovery/announce`, chiamata all'avvio) — funziona senza modifiche di
+rete anche dentro Docker/Portainer.
+
+Se il chip che si annuncia non ha ancora nessun sensore configurato con la sua API key, compare
+nel banner **"Sensori rilevati in rete"** sulla dashboard con IP e ID del chip, e arriva una
+notifica (SMTP/Telegram, se configurate) alla prima volta che viene visto. Appena crei il
+sensore e flashi la sua API key vera sul dispositivo, la voce sparisce da sola (la prima lettura
+autenticata con quel `chipId` la rimuove).
 
 ## API principali
 
@@ -135,12 +155,18 @@ Il firmware invia un POST JSON a `/api/ingest` ogni `SEND_INTERVAL_SEC` secondi:
 | POST | `/api/ingest` | header `X-Api-Key` | riceve una lettura dal sensore |
 | GET | `/api/sensors` | sessione | lista sensori + ultima lettura |
 | PUT | `/api/sensors/:id/threshold` | sessione | aggiorna soglie |
+| POST | `/api/discovery/announce` | nessuna | un ESP32 si annuncia sulla rete |
+| GET | `/api/discovery` | sessione | lista dispositivi rilevati non ancora configurati |
 | GET | `/api/prtg/:sensorId?key=API_KEY` | query key | sensore custom per PRTG |
+| GET | `/metrics` | nessuna | tutti i sensori in formato Prometheus |
 | PUT | `/api/notifications/config` | sessione | configura SMTP/Telegram |
 
-## Integrazione PRTG
+## Integrazioni monitoring
 
-Aggiungi un sensore **"HTTP Data Advanced"** (o **"REST Custom"**) puntato a:
+### PRTG
+
+Aggiungi un sensore **"HTTP Data Advanced"** (o **"REST Custom"**) per ogni sensore rack,
+puntato a:
 
 ```
 http://<host>:7431/api/prtg/<sensorId>?key=<apiKey>
@@ -148,6 +174,30 @@ http://<host>:7431/api/prtg/<sensorId>?key=<apiKey>
 
 Restituisce i canali `Temperature`, `Age` (minuti dall'ultima lettura), e se disponibili
 `Humidity` e `WiFi RSSI`, nel formato JSON standard PRTG (`{"prtg":{"result":[...]}}`).
+
+### Prometheus, Grafana, Zabbix, Uptime Kuma, altri
+
+`GET /metrics` espone tutti i sensori in formato Prometheus standard — copre nativamente
+Prometheus/Grafana, e la maggior parte degli altri strumenti (Zabbix via item HTTP/Prometheus,
+Uptime Kuma, ecc.) sa leggere questo formato senza plugin dedicati. Un sensore nuovo compare da
+solo al primo dato, senza configurazione per-sensore nel tool di monitoring.
+
+Esempio target Prometheus (`prometheus.yml`):
+
+```yaml
+scrape_configs:
+  - job_name: rack-temp-monitor
+    static_configs:
+      - targets: ["<host>:7431"]
+```
+
+Metriche esposte: `rack_temp_celsius`, `rack_temp_humidity_percent`, `rack_temp_online`,
+`rack_temp_last_seen_seconds`, `rack_temp_threshold_min_celsius`, `rack_temp_threshold_max_celsius`
+— tutte con label `sensor`, `sensor_id`, `location`.
+
+L'endpoint non richiede autenticazione (come `node_exporter` e la maggior parte degli
+`/metrics`): se questa istanza è raggiungibile oltre la tua LAN fidata, mettila dietro un
+reverse proxy con allowlist IP o basic auth.
 
 ## Sviluppo locale (senza Docker)
 
