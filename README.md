@@ -8,14 +8,68 @@ React + Vite sul frontend, tutto in un unico container Docker.
 
 ## Avvio rapido (Docker)
 
+### Prerequisiti
+
+Serve Docker con il plugin Compose v2 (comando `docker compose`, senza trattino):
+
+- **Windows/Mac**: installa [Docker Desktop](https://www.docker.com/products/docker-desktop/) — include già Compose.
+- **Linux**: installa [Docker Engine](https://docs.docker.com/engine/install/) e il plugin
+  `docker-compose-plugin` (su Debian/Ubuntu: `sudo apt install docker-compose-plugin`).
+
+Verifica che funzioni:
+
 ```bash
+docker --version
+docker compose version
+```
+
+### Clone e avvio
+
+```bash
+git clone https://github.com/HexLions/RackTemp.git
+cd RackTemp
 cp .env.example .env
-# modifica SESSION_SECRET, ADMIN_USERNAME, ADMIN_PASSWORD in .env
+```
+
+Apri `.env` e imposta valori tuoi (non lasciare i default in produzione):
+
+```
+SESSION_SECRET=una-stringa-lunga-e-casuale
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=una-password-tua
+```
+
+Poi builda e avvia il container:
+
+```bash
 docker compose up -d --build
 ```
 
-Apri `http://<host>:3000`, login con le credenziali di `.env`. Cambia la password da
-Impostazioni dopo il primo accesso.
+Prima esecuzione: scarica le immagini base e builda backend+frontend, ci vuole qualche minuto.
+Le esecuzioni successive (`docker compose up -d`) sono immediate.
+
+### Verifica
+
+```bash
+docker compose ps          # deve mostrare rack-temp-monitor "Up"
+docker compose logs -f      # segui i log, Ctrl+C per uscire
+```
+
+Apri `http://<ip-del-pc>:3000` da browser (anche da un altro dispositivo sulla stessa rete),
+login con `ADMIN_USERNAME`/`ADMIN_PASSWORD` di `.env`. Cambia la password da Impostazioni dopo
+il primo accesso.
+
+### Gestione
+
+```bash
+docker compose down         # ferma e rimuove il container (i dati restano nel volume)
+docker compose up -d        # riavvia senza rebuild
+docker compose up -d --build   # rebuild dopo un git pull con modifiche al codice
+docker compose down -v      # ATTENZIONE: rimuove anche il volume, cancella tutti i dati
+```
+
+I dati (sensori, letture, soglie) vivono nel volume Docker `rack-temp-data`, persistono tra
+riavvii/rebuild finché non usi `-v`.
 
 ## Utilizzo
 
