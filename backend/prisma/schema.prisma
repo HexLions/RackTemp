@@ -74,8 +74,9 @@ model NotificationConfig {
 }
 
 model AdminUser {
-  id           Int      @id @default(1)
-  username     String   @unique
-  passwordHash String
-  updatedAt    DateTime @updatedAt
+  id                 Int      @id @default(1)
+  username           String   @unique
+  passwordHash       String
+  mustChangePassword Boolean  @default(true)
+  updatedAt          DateTime @updatedAt
 }

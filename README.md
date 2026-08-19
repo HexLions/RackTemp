@@ -31,12 +31,10 @@ cd RackTemp
 cp .env.example .env
 ```
 
-Apri `.env` e imposta valori tuoi (non lasciare i default in produzione):
+Apri `.env` e imposta un `SESSION_SECRET` tuo (una stringa lunga e casuale):
 
 ```
 SESSION_SECRET=una-stringa-lunga-e-casuale
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=una-password-tua
 ```
 
 Poi builda e avvia il container:
@@ -55,9 +53,15 @@ docker compose ps          # deve mostrare rack-temp-monitor "Up"
 docker compose logs -f      # segui i log, Ctrl+C per uscire
 ```
 
-Apri `http://<ip-del-pc>:3000` da browser (anche da un altro dispositivo sulla stessa rete),
-login con `ADMIN_USERNAME`/`ADMIN_PASSWORD` di `.env`. Cambia la password da Impostazioni dopo
-il primo accesso.
+Apri `http://<ip-del-pc>:3000` da browser (anche da un altro dispositivo sulla stessa rete).
+
+### Primo accesso
+
+Al primo avvio l'app crea un utente amministratore con credenziali di default
+**`admin` / `admin`**. Al primo login l'app blocca l'accesso al resto delle funzioni e ti
+chiede subito di scegliere un username e una password definitivi (min. 8 caratteri) — non è
+possibile usare l'app con le credenziali di default. Non serve configurare nulla in `.env` per
+questo.
 
 ### Gestione
 
@@ -70,6 +74,36 @@ docker compose down -v      # ATTENZIONE: rimuove anche il volume, cancella tutt
 
 I dati (sensori, letture, soglie) vivono nel volume Docker `rack-temp-data`, persistono tra
 riavvii/rebuild finché non usi `-v`.
+
+## Avvio con Portainer
+
+Se preferisci gestire il container da Portainer invece che da riga di comando, usa lo stack
+già pronto in [`docker-compose.portainer.yml`](docker-compose.portainer.yml). A differenza del
+`docker-compose.yml` principale non builda da Dockerfile (Portainer non ha accesso alla
+repository locale), ma usa un'immagine già pronta pubblicata su GitHub Container Registry a
+ogni push su `main` (vedi [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml)).
+
+**Prima del primo utilizzo**, il pacchetto Docker su GHCR va reso pubblico (di default è
+privato anche se il repo è pubblico): su GitHub vai su
+`github.com/HexLions/RackTemp` → tab **Packages** → `racktemp` → **Package settings** → **Change
+visibility** → **Public**. Senza questo passaggio Portainer non riesce a scaricare l'immagine.
+
+Import in Portainer:
+
+1. **Stacks** → **Add stack**.
+2. Nome stack, es. `rack-temp-monitor`.
+3. **Web editor**: incolla il contenuto di `docker-compose.portainer.yml`
+   (oppure **Upload**: seleziona il file direttamente).
+4. In **Environment variables** aggiungi `SESSION_SECRET` con una stringa lunga e casuale
+   (se lo lasci vuoto resta il valore di default nel file — da evitare in produzione).
+5. **Deploy the stack**.
+
+Apri `http://<ip-del-pc>:3000`: stesso comportamento del deploy via `docker compose`, incluso
+il primo accesso con `admin`/`admin` da cambiare subito (vedi sopra).
+
+In alternativa, se preferisci gli aggiornamenti automatici ad ogni push, crea lo stack col
+metodo **Repository** di Portainer puntando a questo repo Git e al percorso
+`docker-compose.portainer.yml`, attivando il **GitOps update** (polling o webhook).
 
 ## Utilizzo
 

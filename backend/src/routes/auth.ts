@@ -21,7 +21,8 @@ authRouter.post("/login", async (req, res) => {
   }
 
   (req.session as any).userId = user.id;
-  res.json({ ok: true, username: user.username });
+  (req.session as any).mustChangePassword = user.mustChangePassword;
+  res.json({ ok: true, username: user.username, mustChangePassword: user.mustChangePassword });
 });
 
 authRouter.post("/logout", (req, res) => {
@@ -34,7 +35,40 @@ authRouter.get("/me", async (req, res) => {
   if (!session?.userId) return res.status(401).json({ error: "not authenticated" });
   const user = await prisma.adminUser.findUnique({ where: { id: session.userId } });
   if (!user) return res.status(401).json({ error: "not authenticated" });
-  res.json({ username: user.username });
+  res.json({ username: user.username, mustChangePassword: user.mustChangePassword });
+});
+
+// Usato solo al primo accesso (credenziali di default admin/admin): l'utente
+// sceglie username e password definitivi prima di poter usare il resto dell'app.
+const firstLoginSchema = z.object({
+  newUsername: z.string().min(3),
+  newPassword: z.string().min(8),
+});
+
+authRouter.post("/first-login", async (req, res) => {
+  const session = req.session as any;
+  if (!session?.userId) return res.status(401).json({ error: "not authenticated" });
+
+  const user = await prisma.adminUser.findUnique({ where: { id: session.userId } });
+  if (!user) return res.status(401).json({ error: "not authenticated" });
+  if (!user.mustChangePassword) return res.status(400).json({ error: "already configured" });
+
+  const parsed = firstLoginSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid body" });
+
+  const existing = await prisma.adminUser.findUnique({ where: { username: parsed.data.newUsername } });
+  if (existing && existing.id !== user.id) {
+    return res.status(400).json({ error: "username già in uso" });
+  }
+
+  const passwordHash = await bcrypt.hash(parsed.data.newPassword, 10);
+  const updated = await prisma.adminUser.update({
+    where: { id: user.id },
+    data: { username: parsed.data.newUsername, passwordHash, mustChangePassword: false },
+  });
+
+  session.mustChangePassword = false;
+  res.json({ ok: true, username: updated.username, mustChangePassword: false });
 });
 
 const changePasswordSchema = z.object({
@@ -45,6 +79,7 @@ const changePasswordSchema = z.object({
 authRouter.post("/change-password", async (req, res) => {
   const session = req.session as any;
   if (!session?.userId) return res.status(401).json({ error: "not authenticated" });
+  if (session.mustChangePassword) return res.status(403).json({ error: "must_change_password" });
 
   const parsed = changePasswordSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid body" });

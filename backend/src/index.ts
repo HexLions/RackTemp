@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import cookieSession from "cookie-session";
 import cors from "cors";
@@ -20,11 +21,11 @@ async function bootstrapAdmin() {
   const existing = await prisma.adminUser.findFirst();
   if (existing) return;
 
-  const username = process.env.ADMIN_USERNAME || "admin";
-  const password = process.env.ADMIN_PASSWORD || "changeme";
-  const passwordHash = await bcrypt.hash(password, 10);
-  await prisma.adminUser.create({ data: { username, passwordHash } });
-  console.log(`[bootstrap] created admin user "${username}" — change the password after first login`);
+  const passwordHash = await bcrypt.hash("admin", 10);
+  await prisma.adminUser.create({
+    data: { username: "admin", passwordHash, mustChangePassword: true },
+  });
+  console.log('[bootstrap] created default admin user "admin" / "admin" — you will be asked to set a real username and password on first login');
 }
 
 async function main() {

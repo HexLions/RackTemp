@@ -1,0 +1,26 @@
+# Stack per Portainer (Stacks -> Add stack -> Web editor / Upload).
+# A differenza di docker-compose.yml usa un'immagine pre-buildata da GHCR
+# invece di "build: .", perché Portainer (Web editor/Upload) non builda da
+# Dockerfile locale. L'immagine viene pubblicata da .github/workflows/docker-publish.yml
+# ad ogni push su main.
+#
+# In Portainer, alla creazione dello stack aggiungi la variabile d'ambiente
+# SESSION_SECRET (Environment variables) con una stringa lunga e casuale,
+# altrimenti resta il valore di default sotto (da cambiare comunque).
+
+services:
+  rack-temp-monitor:
+    image: ghcr.io/hexlions/racktemp:latest
+    container_name: rack-temp-monitor
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      DATABASE_URL: "file:../data/db.sqlite"
+      SESSION_SECRET: ${SESSION_SECRET:-change-me-to-a-long-random-string}
+    volumes:
+      - rack-temp-data:/app/backend/data
+
+volumes:
+  rack-temp-data:

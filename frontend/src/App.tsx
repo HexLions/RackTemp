@@ -1,15 +1,17 @@
 import { Navigate, NavLink, Route, Routes } from "react-router-dom";
 import { useAuth } from "./api/AuthContext";
 import Login from "./pages/Login";
+import FirstLogin from "./pages/FirstLogin";
 import Dashboard from "./pages/Dashboard";
 import SensorDetail from "./pages/SensorDetail";
 import NotificationSettings from "./pages/NotificationSettings";
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
-  const { username, loading, logout } = useAuth();
+  const { username, mustChangePassword, loading, logout } = useAuth();
 
   if (loading) return <div className="center-screen">Caricamento…</div>;
   if (!username) return <Navigate to="/login" replace />;
+  if (mustChangePassword) return <Navigate to="/first-login" replace />;
 
   return (
     <div className="app-shell">
@@ -37,6 +39,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/first-login" element={<FirstLogin />} />
       <Route
         path="/"
         element={
