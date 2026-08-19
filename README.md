@@ -83,10 +83,10 @@ già pronto in [`docker-compose.portainer.yml`](docker-compose.portainer.yml). A
 repository locale), ma usa un'immagine già pronta pubblicata su GitHub Container Registry a
 ogni push su `main` (vedi [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml)).
 
-**Prima del primo utilizzo**, il pacchetto Docker su GHCR va reso pubblico (di default è
-privato anche se il repo è pubblico): su GitHub vai su
-`github.com/HexLions/RackTemp` → tab **Packages** → `racktemp` → **Package settings** → **Change
-visibility** → **Public**. Senza questo passaggio Portainer non riesce a scaricare l'immagine.
+Il pacchetto `ghcr.io/hexlions/racktemp` è pubblico (eredita la visibilità del repo), quindi
+Portainer può scaricarlo senza autenticazione. Se in futuro il repo diventasse privato, il
+pacchetto andrebbe reso pubblico a mano da GitHub → tab **Packages** → `racktemp` →
+**Package settings** → **Change visibility**, altrimenti Portainer non riesce a fare il pull.
 
 Import in Portainer:
 
