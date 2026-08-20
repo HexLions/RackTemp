@@ -112,15 +112,18 @@ con **GitOps update** attivo.
 
 ## 📋 Come si usa
 
-1. **Crea un sensore** dalla dashboard → ottieni una API key dedicata (puoi annotare anche un
-   IP statico, solo come promemoria: il server non lo usa per raggiungere il sensore).
-2. **Configura le soglie** (min/max °C, isteresi, cooldown notifiche, timeout offline) nella
+1. **Flasha l'ESP32-C3** (vedi sotto) — stesso firmware per tutti i sensori, nessuna
+   configurazione da compilare.
+2. **Collega il sensore alla tua rete**: al primo avvio apre un access point di setup, ci ti
+   connetti da telefono/PC e inserisci WiFi + indirizzo del server dalla sua pagina web.
+3. **Crea il sensore** dalla dashboard → ottieni una API key dedicata (puoi annotare anche un
+   IP statico, solo come promemoria: il server non lo usa per raggiungere il sensore). Se il
+   dispositivo si è già annunciato, compare nel banner "Sensori rilevati in rete" — vedi
+   [Rilevamento sensori](#-rilevamento-sensori-in-rete).
+4. **Configura le soglie** (min/max °C, isteresi, cooldown notifiche, timeout offline) nella
    pagina del sensore.
-3. **Configura le notifiche** (SMTP e/o Telegram) nella pagina Notifiche, con pulsante di test.
-4. **Flasha l'ESP32-C3** con l'URL del server e la API key. Se è già acceso e configurato ma
-   senza API key valida, si annuncia da solo e compare nel banner "Sensori rilevati in rete" —
-   vedi [Rilevamento sensori](#-rilevamento-sensori-in-rete).
-5. **Collega PRTG/Prometheus/altri strumenti** dalla pagina **Integrazioni** — una volta sola
+5. **Configura le notifiche** (SMTP e/o Telegram) nella pagina Notifiche, con pulsante di test.
+6. **Collega PRTG/Prometheus/altri strumenti** dalla pagina **Integrazioni** — una volta sola
    per tutti i sensori, non per singolo dispositivo.
 
 ---
@@ -150,11 +153,14 @@ con **GitOps update** attivo.
 
 In `firmware/rack_temp_sensor/`:
 
-1. Installa le librerie **Adafruit SHT31 Library** e **Adafruit BusIO** (Library Manager).
-2. Copia `config.h.example` in `config.h`, imposta WiFi, `SERVER_URL` e `API_KEY` del sensore.
-3. Collega il sensore come sopra, flasha lo sketch.
+1. Installa le librerie **Adafruit SHT31 Library** e **Adafruit BusIO** (Library Manager) —
+   WiFi/WebServer/DNSServer/Preferences/HTTPClient/Wire sono già incluse nel core esp32.
+2. Collega il sensore come da tabella sopra.
+3. Flasha lo sketch **così com'è**: nessun file da editare, nessun dato da compilare dentro.
+   Lo stesso firmware va bene per ogni sensore che monti.
 
-Il firmware invia un POST JSON a `/api/ingest` ogni `SEND_INTERVAL_SEC` secondi:
+Il firmware invia un POST JSON a `/api/ingest` ogni 60 secondi (`SEND_INTERVAL_SEC` in cima
+allo sketch, se vuoi cambiarlo):
 
 ```json
 { "temperature": 23.4, "humidity": 41.2, "rssi": -58, "chipId": "AABBCCDDEEFF0011" }
@@ -163,20 +169,47 @@ Il firmware invia un POST JSON a `/api/ingest` ogni `SEND_INTERVAL_SEC` secondi:
 `chipId` è l'identificativo hardware del chip (usato per la discovery sotto): il firmware lo
 include da solo, non serve configurarlo.
 
+### Setup WiFi via portale captive (primo avvio)
+
+Al primo avvio — o tenendo premuto **BOOT** all'accensione per rientrarci più tardi — il
+sensore non trova nessuna configurazione salvata e apre un proprio access point invece di
+collegarsi a una rete:
+
+1. Da telefono/PC, connettiti alla rete WiFi **`RackTemp-XXXXXXXX`** (nessuna password —
+   le ultime cifre sono l'ID del chip).
+2. Si apre da solo un popup "accedi alla rete" (Android/iOS/Windows); se non appare, apri il
+   browser su `http://192.168.4.1`.
+3. Scegli la tua rete WiFi dall'elenco (o scrivila a mano) + password, indirizzo del server
+   (es. `http://192.168.1.50:7431`), e se già la conosci la API key del sensore — altrimenti
+   lasciala vuota.
+4. **Salva**: il sensore si riavvia e prova a collegarsi. Se l'API key è vuota, si annuncia in
+   rete e lo colleghi dal banner discovery nella dashboard (vedi sotto); se l'hai già incollata,
+   parte a mandare dati subito.
+
+La configurazione resta salvata sul chip (NVS interna) anche dopo un power-cycle o un
+re-flash dello sketch. Per cambiarla — nuova rete, nuovo server, nuova API key — tieni premuto
+BOOT all'accensione per riaprire il portale; i campi WiFi/server/API key restano precompilati
+con i valori attuali, la password va reinserita solo se vuoi cambiarla.
+
+> Nota: su questi cloni **BOOT è spesso sullo stesso GPIO9 usato per SCL** — lo sketch lo legge
+> una volta sola all'avvio, prima di inizializzare l'I2C, quindi normalmente non c'è conflitto.
+> Se sulla tua scheda BOOT è su un pin diverso, aggiorna `#define BOOT_BUTTON_PIN` in cima allo
+> sketch.
+
 ---
 
 ## 📡 Rilevamento sensori in rete
 
 Niente discovery via mDNS/UDP broadcast: un broadcast non attraverserebbe la rete bridge di
 Docker in un deploy tipico (servirebbe `network_mode: host`, solo Linux). Il firmware si
-annuncia invece con una normale richiesta HTTP verso il `SERVER_URL` già configurato
-(`POST /api/discovery/announce`, all'avvio) — funziona senza modifiche di rete anche dentro
-Docker/Portainer.
+annuncia invece con una normale richiesta HTTP verso l'indirizzo del server inserito nel
+portale di setup (`POST /api/discovery/announce`, appena connesso) — funziona senza modifiche
+di rete anche dentro Docker/Portainer.
 
-Se il chip non ha ancora un sensore configurato con la sua API key, compare nel banner
-**"Sensori rilevati in rete"** in dashboard con IP e ID del chip, più una notifica
-(SMTP/Telegram, se configurate) al primo avvistamento. Appena crei il sensore e flashi la sua
-API key vera, la voce sparisce da sola.
+Se il chip non ha ancora una API key valida, compare nel banner **"Sensori rilevati in rete"**
+in dashboard con IP e ID del chip, più una notifica (SMTP/Telegram, se configurate) al primo
+avvistamento. Appena crei il sensore, incolli la sua API key nel portale di setup del
+dispositivo (tieni premuto BOOT per riaprirlo) e salvi, la voce sparisce da sola.
 
 ---
 
@@ -221,7 +254,7 @@ RackTemp/
 │   └── prisma/schema.prisma
 ├── frontend/                   ← React + Vite (dashboard, sensore, notifiche, integrazioni)
 │   └── src/pages/
-├── firmware/rack_temp_sensor/  ← sketch Arduino ESP32-C3 + config.h.example
+├── firmware/rack_temp_sensor/  ← sketch Arduino ESP32-C3, setup WiFi via portale captive
 ├── Dockerfile                  ← build multi-stage, immagine unica
 ├── docker-compose.yml          ← deploy via CLI (build da sorgente)
 ├── docker-compose.portainer.yml ← deploy via Portainer (immagine da GHCR)
