@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { useAuth, ApiError } from "../api/AuthContext";
 import { api } from "../api/client";
 import Logo from "../components/Logo";
+import ThemeToggle from "../components/ThemeToggle";
 
 export default function FirstLogin() {
   const { username, mustChangePassword, completeFirstLogin } = useAuth();
@@ -37,6 +38,9 @@ export default function FirstLogin() {
 
   return (
     <div className="center-screen">
+      <div className="theme-toggle-float">
+        <ThemeToggle />
+      </div>
       <form className="card login-card" onSubmit={onSubmit}>
         <div className="brand">
           <span className="logo-mark">

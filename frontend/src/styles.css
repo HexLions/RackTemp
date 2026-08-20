@@ -1,5 +1,5 @@
 :root {
-  color-scheme: light;
+  color-scheme: light dark;
 
   /* Enterprise console: cool near-white canvas, white panels, navy ink. */
   --bg: #f6f7f9;
@@ -10,6 +10,7 @@
   --paper: #1b2430;
   --dim: #5b6472;
   --dimmer: #8a93a1;
+  --well: #f1f3f6;
 
   /* Corporate blue — confident, restrained, no gradients. */
   --accent: #2455c7;
@@ -34,6 +35,69 @@
   --radius-sm: 6px;
   --shadow-card: 0 1px 2px rgba(27, 36, 48, 0.06);
   --shadow-pop: 0 4px 16px rgba(27, 36, 48, 0.1);
+}
+
+/* Dark mode — warm charcoal grey, deliberately not near-black. Applied when
+   the OS prefers dark and the user hasn't overridden it, or when the toggle
+   sets data-theme explicitly (which always wins over the OS preference). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #24262b;
+    --panel: #2c2f35;
+    --panel-hover: #32363d;
+    --line: #3d4149;
+    --line-strong: #4c515a;
+    --paper: #eceef1;
+    --dim: #a3a9b3;
+    --dimmer: #767c87;
+    --well: #1c1e22;
+
+    --accent: #5b8bef;
+    --accent-strong: #7ea2f3;
+    --accent-soft: rgba(91, 139, 239, 0.16);
+    --accent-ink: #0e1116;
+
+    --ok: #3ddc8f;
+    --ok-dim: rgba(61, 220, 143, 0.14);
+    --warn: #e0a63e;
+    --warn-dim: rgba(224, 166, 62, 0.14);
+    --crit: #f0596a;
+    --crit-dim: rgba(240, 89, 106, 0.14);
+    --offline: #9096a1;
+    --offline-dim: rgba(144, 150, 161, 0.14);
+
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.24);
+    --shadow-pop: 0 4px 16px rgba(0, 0, 0, 0.36);
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #24262b;
+  --panel: #2c2f35;
+  --panel-hover: #32363d;
+  --line: #3d4149;
+  --line-strong: #4c515a;
+  --paper: #eceef1;
+  --dim: #a3a9b3;
+  --dimmer: #767c87;
+  --well: #1c1e22;
+
+  --accent: #5b8bef;
+  --accent-strong: #7ea2f3;
+  --accent-soft: rgba(91, 139, 239, 0.16);
+  --accent-ink: #0e1116;
+
+  --ok: #3ddc8f;
+  --ok-dim: rgba(61, 220, 143, 0.14);
+  --warn: #e0a63e;
+  --warn-dim: rgba(224, 166, 62, 0.14);
+  --crit: #f0596a;
+  --crit-dim: rgba(240, 89, 106, 0.14);
+  --offline: #9096a1;
+  --offline-dim: rgba(144, 150, 161, 0.14);
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.24);
+  --shadow-pop: 0 4px 16px rgba(0, 0, 0, 0.36);
 }
 
 * {
@@ -81,7 +145,7 @@ code, .mono {
 }
 
 code {
-  background: #f1f3f6;
+  background: var(--well);
   border: 1px solid var(--line);
   padding: 1px 6px;
   border-radius: 4px;
@@ -603,7 +667,7 @@ input[type="checkbox"] {
 }
 
 .code-block {
-  background: #f1f3f6;
+  background: var(--well);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   padding: 12px 14px;
@@ -619,4 +683,32 @@ input[type="checkbox"] {
   line-height: 1.6;
   white-space: pre;
   color: var(--paper);
+}
+
+/* ---------- theme toggle ---------- */
+
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--dim);
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+}
+
+.theme-toggle:hover {
+  color: var(--paper);
+  border-color: var(--dimmer);
+  background: var(--bg);
+}
+
+.theme-toggle-float {
+  position: fixed;
+  top: 20px;
+  right: 20px;
 }

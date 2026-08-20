@@ -1,6 +1,7 @@
 import { Navigate, NavLink, Route, Routes } from "react-router-dom";
 import { useAuth } from "./api/AuthContext";
 import Logo from "./components/Logo";
+import ThemeToggle from "./components/ThemeToggle";
 import Login from "./pages/Login";
 import FirstLogin from "./pages/FirstLogin";
 import Dashboard from "./pages/Dashboard";
@@ -32,6 +33,7 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
           <NavLink to="/integrazioni">Integrazioni</NavLink>
         </nav>
         <div className="topbar-right">
+          <ThemeToggle />
           <span className="user">{username}</span>
           <button className="btn-link" onClick={() => logout()}>
             Esci

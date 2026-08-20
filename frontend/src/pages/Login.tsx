@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth, ApiError } from "../api/AuthContext";
 import Logo from "../components/Logo";
+import ThemeToggle from "../components/ThemeToggle";
 
 export default function Login() {
   const { username, login } = useAuth();
@@ -27,6 +28,9 @@ export default function Login() {
 
   return (
     <div className="center-screen">
+      <div className="theme-toggle-float">
+        <ThemeToggle />
+      </div>
       <form className="card login-card" onSubmit={onSubmit}>
         <div className="brand">
           <span className="logo-mark">
