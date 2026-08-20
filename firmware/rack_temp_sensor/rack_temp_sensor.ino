@@ -1,11 +1,20 @@
-// Firmware per Adafruit QT Py ESP32-S2 + sensore STEMMA QT SHT31-D / SHT40
+// Firmware per ESP32-C3 Super Mini + sensore SHT31-D (I2C via jumper wire).
 // Legge temperatura/umidità e le invia via HTTP POST al backend rack-temp-monitor.
 //
 // Librerie richieste (Arduino Library Manager):
-//   - Adafruit SHT31 Library (per SHT31-D)  -- oppure Adafruit SHT4x Library (per SHT40)
+//   - Adafruit SHT31 Library
 //   - Adafruit BusIO
 //
-// Board: "Adafruit QT Py ESP32-S2" (installabile da Boards Manager -> esp32 by Espressif)
+// Board: "ESP32C3 Dev Module" (installabile da Boards Manager -> esp32 by Espressif).
+// Sulla maggior parte dei cloni "ESP32-C3 Super Mini" serve anche il driver USB-seriale
+// CH340 per vederla come porta COM/tty. Se il flash non parte, tieni premuto BOOT
+// mentre colleghi il cavo USB.
+//
+// Cablaggio SHT31-D -> ESP32-C3 Super Mini (verifica la piedinatura stampata sulla tua
+// scheda: i cloni non sono tutti identici; SDA/GPIO8 e SCL/GPIO9 sono i più comuni):
+//   VIN -> 3V3      GND -> GND      SCL -> GPIO9      SDA -> GPIO8
+#define I2C_SDA_PIN 8
+#define I2C_SCL_PIN 9
 
 #include <WiFi.h>
 #include <HTTPClient.h>
@@ -55,11 +64,10 @@ void setup() {
   Serial.begin(115200);
   delay(500);
 
-  // QT Py ESP32-S2: STEMMA QT è su Wire di default (SDA=41, SCL=40).
-  Wire.begin();
+  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
 
   if (!sht31.begin(0x44)) {
-    Serial.println("Sensore SHT31/SHT40 non trovato, controlla il cablaggio STEMMA QT.");
+    Serial.println("Sensore SHT31 non trovato, controlla il cablaggio I2C (SDA/SCL/3V3/GND).");
   }
 
   connectWiFi();

@@ -1,7 +1,7 @@
 # Rack Temp Monitor
 
-Monitoraggio temperatura/umidità rack basato su **Adafruit QT Py ESP32-S2** + sensore STEMMA QT
-(SHT31-D / SHT40), con backend + web UI self-hosted, notifiche SMTP/Telegram e integrazione PRTG.
+Monitoraggio temperatura/umidità rack basato su **ESP32-C3 Super Mini** + sensore I2C
+**SHT31-D**, con backend + web UI self-hosted, notifiche SMTP/Telegram e integrazione PRTG.
 
 Stack: Node.js + TypeScript + Express + Prisma (SQLite, migrabile a Postgres) sul backend,
 React + Vite sul frontend, tutto in un unico container Docker.
@@ -112,7 +112,7 @@ metodo **Repository** di Portainer puntando a questo repo Git e al percorso
 2. **Configura le soglie** (min/max °C, isteresi, cooldown notifiche, timeout offline) nella
    pagina del sensore.
 3. **Configura le notifiche** (SMTP e/o Telegram) nella pagina Notifiche, con pulsante di test.
-4. **Flasha l'ESP32-S2** (vedi sotto) con l'URL del server e la API key del sensore. Se il
+4. **Flasha l'ESP32-C3** (vedi sotto) con l'URL del server e la API key del sensore. Se il
    dispositivo è già acceso con l'URL del server configurato ma senza una API key valida, si
    annuncia da solo e compare in un banner "Sensori rilevati in rete" sulla dashboard — vedi
    [Rilevamento sensori](#rilevamento-sensori-sulla-rete).
@@ -120,14 +120,18 @@ metodo **Repository** di Portainer puntando a questo repo Git e al percorso
    configurata una volta sola a livello di controller, non per singolo sensore — vedi
    [Integrazioni monitoring](#integrazioni-monitoring).
 
-## Firmware ESP32-S2 (Arduino)
+## Firmware ESP32-C3 Super Mini (Arduino)
 
 In `firmware/rack_temp_sensor/`:
 
-1. Installa in Arduino IDE la board **Adafruit QT Py ESP32-S2** (Boards Manager → esp32).
-2. Installa le librerie **Adafruit SHT31** (o **Adafruit SHT4x** per SHT40) e **Adafruit BusIO**.
+1. Installa in Arduino IDE la board **"ESP32C3 Dev Module"** (Boards Manager → esp32 by
+   Espressif). Molti cloni "Super Mini" richiedono anche il driver USB-seriale **CH340**; se il
+   flash non parte, tieni premuto **BOOT** mentre colleghi il cavo USB.
+2. Installa le librerie **Adafruit SHT31 Library** e **Adafruit BusIO**.
 3. Copia `config.h.example` in `config.h` e imposta WiFi, `SERVER_URL` e `API_KEY` del sensore.
-4. Collega il sensore SHT31-D/SHT40 via STEMMA QT (nessuna saldatura richiesta), flasha.
+4. Collega il sensore SHT31-D via I2C: `VIN→3V3`, `GND→GND`, `SCL→GPIO9`, `SDA→GPIO8`
+   (piedinatura più comune su questi cloni — verifica la serigrafia della tua scheda; i pin sono
+   `#define I2C_SDA_PIN`/`I2C_SCL_PIN` in cima allo sketch se devi cambiarli), poi flasha.
 
 Il firmware invia un POST JSON a `/api/ingest` ogni `SEND_INTERVAL_SEC` secondi:
 
