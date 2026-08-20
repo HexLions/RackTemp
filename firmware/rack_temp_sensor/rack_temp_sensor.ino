@@ -25,6 +25,9 @@
 Adafruit_SHT31 sht31 = Adafruit_SHT31();
 
 const unsigned long SEND_INTERVAL_MS = SEND_INTERVAL_SEC * 1000UL;
+const unsigned long WIFI_CONNECT_TIMEOUT_MS = 15000UL;
+
+bool announced = false;
 
 // Identificativo stabile del chip, usato per la discovery (POST /api/discovery/announce)
 // e incluso in ogni lettura così il server può ripulire la voce di discovery
@@ -36,15 +39,29 @@ String chipId() {
   return String(buf);
 }
 
-void connectWiFi() {
+// Prova a connettersi per un tempo limitato invece di bloccare all'infinito:
+// se la rete è giù, meglio riprovare al prossimo ciclo che restare impiccati
+// qui e non leggere/inviare più nulla finché non torna.
+bool connectWiFi() {
+  if (WiFi.status() == WL_CONNECTED) return true;
+
   WiFi.mode(WIFI_STA);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   Serial.print("Connessione WiFi");
-  while (WiFi.status() != WL_CONNECTED) {
+
+  unsigned long start = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - start < WIFI_CONNECT_TIMEOUT_MS) {
     delay(400);
     Serial.print(".");
   }
+
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println(" non riuscita, riprovo al prossimo ciclo.");
+    return false;
+  }
+
   Serial.println(" connesso, IP: " + WiFi.localIP().toString());
+  return true;
 }
 
 // Annuncia il chip al server: se non esiste ancora un sensore configurato con
@@ -71,12 +88,12 @@ void setup() {
   }
 
   connectWiFi();
-  announceDiscovery();
 }
 
 void sendReading(float temperature, float humidity) {
-  if (WiFi.status() != WL_CONNECTED) {
-    connectWiFi();
+  if (!connectWiFi()) {
+    Serial.println("Salto invio: WiFi non disponibile.");
+    return;
   }
 
   HTTPClient http;
@@ -96,6 +113,11 @@ void sendReading(float temperature, float humidity) {
 }
 
 void loop() {
+  if (!announced && connectWiFi()) {
+    announceDiscovery();
+    announced = true;
+  }
+
   float temperature = sht31.readTemperature();
   float humidity = sht31.readHumidity();
 
