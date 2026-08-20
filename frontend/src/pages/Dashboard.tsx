@@ -36,11 +36,11 @@ const STATUS_LABEL: Record<Status, string> = {
 };
 
 const STATUS_COLOR: Record<Status, string> = {
-  ok: "#4af626",
-  warn: "#ffb300",
-  crit: "#ff2a2a",
-  offline: "#6a6a6a",
-  pending: "#6a6a6a",
+  ok: "#1c8a5b",
+  warn: "#b7791f",
+  crit: "#c42b3a",
+  offline: "#8a93a1",
+  pending: "#8a93a1",
 };
 
 export default function Dashboard() {
