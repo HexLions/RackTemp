@@ -138,27 +138,37 @@ export default function SensorDetail() {
         ) : (
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={chartData}>
-              <CartesianGrid stroke="#212733" vertical={false} />
-              <XAxis dataKey="time" minTickGap={30} stroke="#4d5566" fontSize={12} tickLine={false} axisLine={{ stroke: "#212733" }} />
+              <CartesianGrid stroke="#2a2a2a" vertical={false} />
+              <XAxis
+                dataKey="time"
+                minTickGap={30}
+                stroke="#565656"
+                fontSize={11}
+                fontFamily="ui-monospace, monospace"
+                tickLine={false}
+                axisLine={{ stroke: "#2a2a2a" }}
+              />
               <YAxis
                 unit="°C"
                 domain={["auto", "auto"]}
-                stroke="#4d5566"
-                fontSize={12}
+                stroke="#565656"
+                fontSize={11}
+                fontFamily="ui-monospace, monospace"
                 tickLine={false}
                 axisLine={false}
                 width={48}
               />
               <Tooltip
                 contentStyle={{
-                  background: "#12161d",
-                  border: "1px solid #212733",
-                  borderRadius: 8,
+                  background: "#121212",
+                  border: "1px solid #2a2a2a",
+                  borderRadius: 0,
                   fontSize: 13,
+                  fontFamily: "ui-monospace, monospace",
                 }}
-                labelStyle={{ color: "#7c8797" }}
+                labelStyle={{ color: "#8a8a8a" }}
               />
-              <Line type="monotone" dataKey="temperature" stroke="#4fb3a6" dot={false} strokeWidth={2} />
+              <Line type="monotone" dataKey="temperature" stroke="#ff2a2a" dot={false} strokeWidth={2} />
             </LineChart>
           </ResponsiveContainer>
         )}
