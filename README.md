@@ -1,137 +1,158 @@
-# Rack Temp Monitor
+<div align="center">
 
-Monitoraggio temperatura/umidità rack basato su **ESP32-C3 Super Mini** + sensore I2C
-**SHT31-D**, con backend + web UI self-hosted, notifiche SMTP/Telegram e integrazione PRTG.
+# 🌡️ RackTemp
+### Monitora temperatura e umidità del tuo rack, self-hosted, dal browser.
 
-Stack: Node.js + TypeScript + Express + Prisma (SQLite, migrabile a Postgres) sul backend,
-React + Vite sul frontend, tutto in un unico container Docker.
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](./LICENSE)
+[![Docker](https://img.shields.io/badge/docker-ready-2496ED.svg?logo=docker&logoColor=white)](#-avvio-rapido-docker)
+[![GHCR](https://img.shields.io/badge/ghcr.io-hexlions%2Fracktemp-blue.svg)](https://github.com/HexLions/RackTemp/pkgs/container/racktemp)
+[![Self-hosted](https://img.shields.io/badge/self--hosted-yes-success.svg)](#-avvio-rapido-docker)
+[![Version](https://img.shields.io/badge/version-0.1.0-purple.svg)](#)
 
-## Avvio rapido (Docker)
+**📦 [Vedi il pacchetto Docker →](https://github.com/HexLions/RackTemp/pkgs/container/racktemp)**
 
-### Prerequisiti
+</div>
 
-Serve Docker con il plugin Compose v2 (comando `docker compose`, senza trattino):
+---
 
-- **Windows/Mac**: installa [Docker Desktop](https://www.docker.com/products/docker-desktop/) — include già Compose.
-- **Linux**: installa [Docker Engine](https://docs.docker.com/engine/install/) e il plugin
-  `docker-compose-plugin` (su Debian/Ubuntu: `sudo apt install docker-compose-plugin`).
+## 🤔 Cos'è?
 
-Verifica che funzioni:
+Un sensore **ESP32-C3 Super Mini + SHT31-D** manda temperatura e umidità via WiFi a un
+backend che gira su Docker, in casa tua. Nessun cloud, nessun abbonamento: soglie, notifiche
+(email/Telegram) e integrazione con PRTG/Prometheus/Grafana/Zabbix configurate tutte dalla
+stessa pagina web.
 
-```bash
-docker --version
-docker compose version
+---
+
+## ✨ Funzionalità
+
+- 🐳 **Un solo container Docker** — build da sorgente o immagine pronta da GHCR, dati in un volume
+- 🔐 **Nessuna credenziale di default sfruttabile** — primo accesso forzato a scegliere
+  username/password veri, l'app resta bloccata finché non lo fai
+- 📊 **Dashboard live** — LED di stato, sparkline, soglie min/max con isteresi e cooldown
+- 🔔 **Notifiche SMTP + Telegram** — soglia superata, sensore offline, rientro alla normalità
+- 📡 **Rilevamento sensori in rete** — un ESP32 non ancora collegato si annuncia da solo e
+  compare in dashboard con una notifica, senza dover cercare l'IP a mano
+- 🔗 **Integrazioni a livello di controller** — un endpoint PRTG aggregato e uno Prometheus
+  standard: aggiungi un sensore e compare ovunque, zero setup per-dispositivo
+- 🌐 **IP statico opzionale** — annota l'IP di ogni sensore per riferimento, se ne hai fissato uno
+- ⌨️ **UI a tema strumentazione rack** — ogni numero (temperature, chiavi, timestamp) in
+  monospace tabulare, stati codificati a colori come i LED reali di un apparato rack
+
+---
+
+## 🚀 Avvio rapido (Docker)
+
 ```
-
-### Clone e avvio
+┌─────────────────────────────────────────────────────────┐
+│  1. 🐳 Installa Docker (Desktop su Win/Mac, Engine+Compose su Linux) │
+│  2. 📥 git clone + cp .env.example .env                  │
+│  3. 🔑 Imposta un SESSION_SECRET tuo nel .env             │
+│  4. ▶️  docker compose up -d --build                      │
+│  5. 🌐 Apri http://<ip-del-pc>:7431                       │
+│  6. 👤 Primo accesso: admin/admin → scegli credenziali vere │
+└─────────────────────────────────────────────────────────┘
+```
 
 ```bash
 git clone https://github.com/HexLions/RackTemp.git
 cd RackTemp
 cp .env.example .env
-```
-
-Apri `.env` e imposta un `SESSION_SECRET` tuo (una stringa lunga e casuale):
-
-```
-SESSION_SECRET=una-stringa-lunga-e-casuale
-```
-
-Poi builda e avvia il container:
-
-```bash
+# apri .env, imposta SESSION_SECRET=una-stringa-lunga-e-casuale
 docker compose up -d --build
 ```
 
-Prima esecuzione: scarica le immagini base e builda backend+frontend, ci vuole qualche minuto.
-Le esecuzioni successive (`docker compose up -d`) sono immediate.
+Prima esecuzione: scarica le immagini base e builda backend+frontend, qualche minuto. Le
+successive (`docker compose up -d`) sono immediate.
 
-### Verifica
+**Verifica:**
 
 ```bash
 docker compose ps          # deve mostrare rack-temp-monitor "Up"
 docker compose logs -f      # segui i log, Ctrl+C per uscire
 ```
 
-Apri `http://<ip-del-pc>:7431` da browser (anche da un altro dispositivo sulla stessa rete).
+> 🔑 **Primo accesso**: l'app crea sempre un admin con credenziali di default `admin`/`admin`,
+> ma blocca ogni altra funzione finché non scegli username e password veri (min. 8 caratteri)
+> dalla schermata dedicata — non serve configurare nulla in `.env` per questo.
 
-### Primo accesso
-
-Al primo avvio l'app crea un utente amministratore con credenziali di default
-**`admin` / `admin`**. Al primo login l'app blocca l'accesso al resto delle funzioni e ti
-chiede subito di scegliere un username e una password definitivi (min. 8 caratteri) — non è
-possibile usare l'app con le credenziali di default. Non serve configurare nulla in `.env` per
-questo.
-
-### Gestione
+**Gestione:**
 
 ```bash
-docker compose down         # ferma e rimuove il container (i dati restano nel volume)
-docker compose up -d        # riavvia senza rebuild
+docker compose down            # ferma e rimuove il container (i dati restano nel volume)
+docker compose up -d           # riavvia senza rebuild
 docker compose up -d --build   # rebuild dopo un git pull con modifiche al codice
-docker compose down -v      # ATTENZIONE: rimuove anche il volume, cancella tutti i dati
+docker compose down -v         # ⚠️ rimuove anche il volume, cancella tutti i dati
 ```
 
 I dati (sensori, letture, soglie) vivono nel volume Docker `rack-temp-data`, persistono tra
 riavvii/rebuild finché non usi `-v`.
 
-## Avvio con Portainer
+---
 
-Se preferisci gestire il container da Portainer invece che da riga di comando, usa lo stack
-già pronto in [`docker-compose.portainer.yml`](docker-compose.portainer.yml). A differenza del
-`docker-compose.yml` principale non builda da Dockerfile (Portainer non ha accesso alla
-repository locale), ma usa un'immagine già pronta pubblicata su GitHub Container Registry a
-ogni push su `main` (vedi [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml)).
+## 🐳 Avvio con Portainer
 
-Il pacchetto `ghcr.io/hexlions/racktemp` è pubblico (eredita la visibilità del repo), quindi
-Portainer può scaricarlo senza autenticazione. Se in futuro il repo diventasse privato, il
-pacchetto andrebbe reso pubblico a mano da GitHub → tab **Packages** → `racktemp` →
-**Package settings** → **Change visibility**, altrimenti Portainer non riesce a fare il pull.
+Preferisci gestirlo da Portainer? Usa lo stack pronto in
+[`docker-compose.portainer.yml`](docker-compose.portainer.yml) — a differenza del compose
+principale non builda da Dockerfile (Portainer non ha accesso alla repo locale), ma tira giù
+l'immagine già pronta da `ghcr.io/hexlions/racktemp`, pubblicata automaticamente a ogni push su
+`main` da [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml).
 
-Import in Portainer:
+1. **Stacks** → **Add stack**, nome a piacere.
+2. **Web editor**: incolla il contenuto di `docker-compose.portainer.yml` (o **Upload** del file).
+3. In **Environment variables** aggiungi `SESSION_SECRET` con una stringa lunga e casuale.
+4. **Deploy the stack**.
 
-1. **Stacks** → **Add stack**.
-2. Nome stack, es. `rack-temp-monitor`.
-3. **Web editor**: incolla il contenuto di `docker-compose.portainer.yml`
-   (oppure **Upload**: seleziona il file direttamente).
-4. In **Environment variables** aggiungi `SESSION_SECRET` con una stringa lunga e casuale
-   (se lo lasci vuoto resta il valore di default nel file — da evitare in produzione).
-5. **Deploy the stack**.
+Apri `http://<ip-del-pc>:7431` — stesso comportamento del deploy via CLI, incluso il primo
+accesso `admin`/`admin` da cambiare subito. Per aggiornamenti automatici a ogni push, usa il
+metodo **Repository** di Portainer puntato a questo repo + `docker-compose.portainer.yml`,
+con **GitOps update** attivo.
 
-Apri `http://<ip-del-pc>:7431`: stesso comportamento del deploy via `docker compose`, incluso
-il primo accesso con `admin`/`admin` da cambiare subito (vedi sopra).
+---
 
-In alternativa, se preferisci gli aggiornamenti automatici ad ogni push, crea lo stack col
-metodo **Repository** di Portainer puntando a questo repo Git e al percorso
-`docker-compose.portainer.yml`, attivando il **GitOps update** (polling o webhook).
+## 📋 Come si usa
 
-## Utilizzo
-
-1. **Crea un sensore** dalla dashboard → ottieni una API key dedicata (puoi anche annotare un IP
-   statico opzionale, solo come promemoria: il server non lo usa per raggiungere il sensore).
+1. **Crea un sensore** dalla dashboard → ottieni una API key dedicata (puoi annotare anche un
+   IP statico, solo come promemoria: il server non lo usa per raggiungere il sensore).
 2. **Configura le soglie** (min/max °C, isteresi, cooldown notifiche, timeout offline) nella
    pagina del sensore.
 3. **Configura le notifiche** (SMTP e/o Telegram) nella pagina Notifiche, con pulsante di test.
-4. **Flasha l'ESP32-C3** (vedi sotto) con l'URL del server e la API key del sensore. Se il
-   dispositivo è già acceso con l'URL del server configurato ma senza una API key valida, si
-   annuncia da solo e compare in un banner "Sensori rilevati in rete" sulla dashboard — vedi
-   [Rilevamento sensori](#rilevamento-sensori-sulla-rete).
-5. **Collega PRTG/Prometheus/altri strumenti di monitoring** dalla pagina **Integrazioni**: è
-   configurata una volta sola a livello di controller, non per singolo sensore — vedi
-   [Integrazioni monitoring](#integrazioni-monitoring).
+4. **Flasha l'ESP32-C3** con l'URL del server e la API key. Se è già acceso e configurato ma
+   senza API key valida, si annuncia da solo e compare nel banner "Sensori rilevati in rete" —
+   vedi [Rilevamento sensori](#-rilevamento-sensori-in-rete).
+5. **Collega PRTG/Prometheus/altri strumenti** dalla pagina **Integrazioni** — una volta sola
+   per tutti i sensori, non per singolo dispositivo.
 
-## Firmware ESP32-C3 Super Mini (Arduino)
+---
+
+## 🔌 Firmware ESP32-C3 Super Mini
+
+### Hardware
+
+| Componente | Note |
+|---|---|
+| **ESP32-C3 Super Mini** | Board Arduino IDE: `ESP32C3 Dev Module`. Molti cloni servono il driver USB-seriale **CH340**; se il flash non parte, tieni **BOOT** premuto collegando l'USB |
+| **SHT31-D** | Sensore temperatura/umidità I2C, indirizzo `0x44` |
+
+### Cablaggio I2C
+
+| SHT31-D | ESP32-C3 Super Mini |
+|---|---|
+| VIN | 3V3 |
+| GND | GND |
+| SCL | GPIO9 |
+| SDA | GPIO8 |
+
+> Piedinatura più comune sui cloni "Super Mini" — verifica la serigrafia della tua scheda. I
+> pin sono `#define I2C_SDA_PIN` / `I2C_SCL_PIN` in cima allo sketch, se devi cambiarli.
+
+### Flash
 
 In `firmware/rack_temp_sensor/`:
 
-1. Installa in Arduino IDE la board **"ESP32C3 Dev Module"** (Boards Manager → esp32 by
-   Espressif). Molti cloni "Super Mini" richiedono anche il driver USB-seriale **CH340**; se il
-   flash non parte, tieni premuto **BOOT** mentre colleghi il cavo USB.
-2. Installa le librerie **Adafruit SHT31 Library** e **Adafruit BusIO**.
-3. Copia `config.h.example` in `config.h` e imposta WiFi, `SERVER_URL` e `API_KEY` del sensore.
-4. Collega il sensore SHT31-D via I2C: `VIN→3V3`, `GND→GND`, `SCL→GPIO9`, `SDA→GPIO8`
-   (piedinatura più comune su questi cloni — verifica la serigrafia della tua scheda; i pin sono
-   `#define I2C_SDA_PIN`/`I2C_SCL_PIN` in cima allo sketch se devi cambiarli), poi flasha.
+1. Installa le librerie **Adafruit SHT31 Library** e **Adafruit BusIO** (Library Manager).
+2. Copia `config.h.example` in `config.h`, imposta WiFi, `SERVER_URL` e `API_KEY` del sensore.
+3. Collega il sensore come sopra, flasha lo sketch.
 
 Il firmware invia un POST JSON a `/api/ingest` ogni `SEND_INTERVAL_SEC` secondi:
 
@@ -139,68 +160,39 @@ Il firmware invia un POST JSON a `/api/ingest` ogni `SEND_INTERVAL_SEC` secondi:
 { "temperature": 23.4, "humidity": 41.2, "rssi": -58, "chipId": "AABBCCDDEEFF0011" }
 ```
 
-`chipId` è l'identificativo hardware del chip (usato per la discovery, vedi sotto): il firmware
-lo include da solo, non serve configurarlo.
+`chipId` è l'identificativo hardware del chip (usato per la discovery sotto): il firmware lo
+include da solo, non serve configurarlo.
 
-## Rilevamento sensori sulla rete
+---
 
-Non c'è vera discovery di rete (niente mDNS/UDP broadcast): un broadcast non attraverserebbe la
-rete bridge di Docker in un deploy tipico (servirebbe `network_mode: host`, solo Linux). Il
-firmware quindi si annuncia con una normale richiesta HTTP verso il `SERVER_URL` già configurato
-in `config.h` (`POST /api/discovery/announce`, chiamata all'avvio) — funziona senza modifiche di
-rete anche dentro Docker/Portainer.
+## 📡 Rilevamento sensori in rete
 
-Se il chip che si annuncia non ha ancora nessun sensore configurato con la sua API key, compare
-nel banner **"Sensori rilevati in rete"** sulla dashboard con IP e ID del chip, e arriva una
-notifica (SMTP/Telegram, se configurate) alla prima volta che viene visto. Appena crei il
-sensore e flashi la sua API key vera sul dispositivo, la voce sparisce da sola (la prima lettura
-autenticata con quel `chipId` la rimuove).
+Niente discovery via mDNS/UDP broadcast: un broadcast non attraverserebbe la rete bridge di
+Docker in un deploy tipico (servirebbe `network_mode: host`, solo Linux). Il firmware si
+annuncia invece con una normale richiesta HTTP verso il `SERVER_URL` già configurato
+(`POST /api/discovery/announce`, all'avvio) — funziona senza modifiche di rete anche dentro
+Docker/Portainer.
 
-## API principali
+Se il chip non ha ancora un sensore configurato con la sua API key, compare nel banner
+**"Sensori rilevati in rete"** in dashboard con IP e ID del chip, più una notifica
+(SMTP/Telegram, se configurate) al primo avvistamento. Appena crei il sensore e flashi la sua
+API key vera, la voce sparisce da sola.
 
-| Metodo | Endpoint | Auth | Descrizione |
-|---|---|---|---|
-| POST | `/api/ingest` | header `X-Api-Key` | riceve una lettura dal sensore |
-| GET | `/api/sensors` | sessione | lista sensori + ultima lettura |
-| PUT | `/api/sensors/:id/threshold` | sessione | aggiorna soglie |
-| POST | `/api/discovery/announce` | nessuna | un ESP32 si annuncia sulla rete |
-| GET | `/api/discovery` | sessione | lista dispositivi rilevati non ancora configurati |
-| GET | `/api/integrations` | sessione | token di integrazione a livello controller |
-| GET | `/api/prtg/all?key=TOKEN` | query key | tutti i sensori in un unico sensore PRTG |
-| GET | `/api/prtg/:sensorId?key=API_KEY` | query key | endpoint legacy per un singolo sensore |
-| GET | `/metrics` | nessuna | tutti i sensori in formato Prometheus |
-| PUT | `/api/notifications/config` | sessione | configura SMTP/Telegram |
+---
 
-## Integrazioni monitoring
+## 🔗 Integrazioni monitoring
 
-Configurate **una volta sola a livello di controller**, dalla pagina **Integrazioni** della web
-UI — non per singolo sensore: aggiungi un sensore rack e compare automaticamente in entrambi gli
-endpoint qui sotto, senza toccare la configurazione di PRTG/Prometheus.
+Configurate **una volta sola a livello di controller**, dalla pagina **Integrazioni** — non per
+singolo sensore: aggiungi un sensore rack e compare automaticamente ovunque.
 
-### PRTG
+| Strumento | Come |
+|---|---|
+| **PRTG** | Un solo sensore `HTTP Data Advanced` puntato a `/api/prtg/all?key=<token>` — ogni sensore rack diventa una coppia di canali `<nome> - Temperature/Humidity/Age`. Token nella pagina Integrazioni |
+| **Prometheus / Grafana** | `GET /metrics` in formato Prometheus standard, aggiungilo come scrape target |
+| **Zabbix, Uptime Kuma, altri** | Leggono lo stesso `/metrics` senza plugin dedicati |
+| **PRTG per-dispositivo (legacy)** | `/api/prtg/<sensorId>?key=<apiKey del sensore>`, se preferisci un sensore PRTG per device |
 
-Crea un solo sensore **"HTTP Data Advanced"** (o **"REST Custom"**) in PRTG, puntato a:
-
-```
-http://<host>:7431/api/prtg/all?key=<token>
-```
-
-Il `token` si trova (e si rigenera) nella pagina Integrazioni. Ogni sensore rack configurato
-compare come coppia di canali `<nome sensore> - Temperature` / `- Humidity` / `- Age`
-(minuti dall'ultima lettura), nel formato JSON standard PRTG (`{"prtg":{"result":[...]}}`).
-
-Resta disponibile anche l'endpoint legacy per-sensore
-`/api/prtg/<sensorId>?key=<apiKey del sensore>`, per chi preferisce un sensore PRTG per
-dispositivo invece che uno aggregato.
-
-### Prometheus, Grafana, Zabbix, Uptime Kuma, altri
-
-`GET /metrics` espone tutti i sensori in formato Prometheus standard — copre nativamente
-Prometheus/Grafana, e la maggior parte degli altri strumenti (Zabbix via item HTTP/Prometheus,
-Uptime Kuma, ecc.) sa leggere questo formato senza plugin dedicati. Un sensore nuovo compare da
-solo al primo dato, senza configurazione per-sensore nel tool di monitoring.
-
-Esempio target Prometheus (`prometheus.yml`):
+Esempio `prometheus.yml`:
 
 ```yaml
 scrape_configs:
@@ -213,11 +205,48 @@ Metriche esposte: `rack_temp_celsius`, `rack_temp_humidity_percent`, `rack_temp_
 `rack_temp_last_seen_seconds`, `rack_temp_threshold_min_celsius`, `rack_temp_threshold_max_celsius`
 — tutte con label `sensor`, `sensor_id`, `location`.
 
-L'endpoint non richiede autenticazione (come `node_exporter` e la maggior parte degli
-`/metrics`): se questa istanza è raggiungibile oltre la tua LAN fidata, mettila dietro un
-reverse proxy con allowlist IP o basic auth.
+> `/metrics` non richiede autenticazione (come `node_exporter` e la maggior parte degli
+> endpoint Prometheus): se questa istanza è raggiungibile oltre la tua LAN fidata, mettila
+> dietro un reverse proxy con allowlist IP o basic auth.
 
-## Sviluppo locale (senza Docker)
+---
+
+## 📁 Struttura progetto
+
+```
+RackTemp/
+├── backend/                    ← API Express + Prisma/SQLite
+│   ├── src/routes/             ← auth, sensors, ingest, discovery, prtg, metrics, integrations
+│   ├── src/services/           ← notifier (SMTP/Telegram), soglie e allarmi
+│   └── prisma/schema.prisma
+├── frontend/                   ← React + Vite (dashboard, sensore, notifiche, integrazioni)
+│   └── src/pages/
+├── firmware/rack_temp_sensor/  ← sketch Arduino ESP32-C3 + config.h.example
+├── Dockerfile                  ← build multi-stage, immagine unica
+├── docker-compose.yml          ← deploy via CLI (build da sorgente)
+├── docker-compose.portainer.yml ← deploy via Portainer (immagine da GHCR)
+└── .github/workflows/          ← publish automatico su ghcr.io a ogni push
+```
+
+---
+
+## 🧭 API principali
+
+| Metodo | Endpoint | Auth | Descrizione |
+|---|---|---|---|
+| POST | `/api/ingest` | header `X-Api-Key` | riceve una lettura dal sensore |
+| GET | `/api/sensors` | sessione | lista sensori + ultima lettura |
+| PUT | `/api/sensors/:id/threshold` | sessione | aggiorna soglie |
+| POST | `/api/discovery/announce` | nessuna | un ESP32 si annuncia sulla rete |
+| GET | `/api/discovery` | sessione | dispositivi rilevati non ancora configurati |
+| GET | `/api/integrations` | sessione | token di integrazione a livello controller |
+| GET | `/api/prtg/all?key=TOKEN` | query key | tutti i sensori in un unico sensore PRTG |
+| GET | `/metrics` | nessuna | tutti i sensori in formato Prometheus |
+| PUT | `/api/notifications/config` | sessione | configura SMTP/Telegram |
+
+---
+
+## 💻 Sviluppo locale (senza Docker)
 
 ```bash
 # backend
@@ -225,17 +254,51 @@ cd backend
 cp .env.example .env
 npm install
 npx prisma db push
-npm run dev          # http://localhost:7431
+npm run dev            # http://localhost:7431
 
-# frontend (in un altro terminale)
+# frontend, in un altro terminale
 cd frontend
 npm install
-npm run dev           # http://localhost:5173, proxy verso :7431
+npm run dev             # http://localhost:5173, proxy verso :7431
 ```
 
-## Roadmap / idee future
+---
 
-- Migrazione a Postgres per deploy multi-istanza (basta cambiare `provider` in
-  `backend/prisma/schema.prisma` e `DATABASE_URL`).
-- Supporto MQTT come alternativa a HTTP POST.
-- Export storico letture (CSV/Prometheus).
+## 🗺️ Roadmap
+
+- 🐘 Migrazione a Postgres per deploy multi-istanza (cambia `provider` in
+  `backend/prisma/schema.prisma` + `DATABASE_URL`)
+- 📶 Supporto MQTT come alternativa a HTTP POST
+- 📤 Export storico letture (CSV)
+
+---
+
+## 🙏 Crediti
+
+Costruito su un'ottima base open-source:
+
+- 🔧 **[Prisma](https://www.prisma.io/)** + **[Express](https://expressjs.com/)** — backend e persistenza
+- ⚛️ **[React](https://react.dev/)** + **[Vite](https://vitejs.dev/)** + **[Recharts](https://recharts.org/)** — dashboard e grafici
+- 📟 **[Adafruit SHT31 Library](https://github.com/adafruit/Adafruit_SHT31)** — driver del sensore
+- 📨 **[Nodemailer](https://nodemailer.com/)** + **[node-telegram-bot-api](https://github.com/yagop/node-telegram-bot-api)** — notifiche
+- 🐳 **Docker** + **GitHub Container Registry** — build e distribuzione dell'immagine
+
+---
+
+## 📜 Licenza
+
+Rilasciato sotto **[GNU General Public License v3.0](./LICENSE)**.
+
+> This program is free software: you can redistribute it and/or modify it under the terms of
+> the GNU General Public License as published by the Free Software Foundation, either version 3
+> of the License, or (at your option) any later version.
+
+---
+
+<div align="center">
+
+**Made with 💚 by [HexLions](https://github.com/HexLions)**
+
+*Se questo progetto ti è utile, lascia una ⭐ sul repo!*
+
+</div>
