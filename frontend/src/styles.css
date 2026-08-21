@@ -270,6 +270,49 @@ code {
   margin: 4px 0 0;
 }
 
+/* ---------- settings layout ---------- */
+
+.settings-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 32px;
+}
+
+.settings-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 190px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 24px;
+}
+
+.settings-sidebar a {
+  color: var(--dim);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 0.87rem;
+  font-weight: 500;
+  transition: color 0.12s, background 0.12s;
+}
+
+.settings-sidebar a:hover {
+  color: var(--paper);
+  background: var(--bg);
+}
+
+.settings-sidebar a.active {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+
+.settings-content {
+  flex: 1;
+  min-width: 0;
+}
+
 /* ---------- summary stats ---------- */
 
 .summary-stats {
@@ -794,6 +837,18 @@ input[type="checkbox"] {
   .page-header {
     flex-wrap: wrap;
     gap: 12px;
+  }
+
+  .settings-layout {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .settings-sidebar {
+    flex-direction: row;
+    width: 100%;
+    overflow-x: auto;
+    position: static;
   }
 
   .summary-stats {

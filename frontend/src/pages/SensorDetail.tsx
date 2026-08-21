@@ -146,7 +146,7 @@ export default function SensorDetail() {
       <p className="hint" style={{ marginBottom: 0 }}>
         Body POST atteso: <code>{`{"temperature": 23.4, "humidity": 45.0}`}</code>. Per collegare questo
         sensore a PRTG, Prometheus o altri strumenti di monitoring vedi la pagina{" "}
-        <Link to="/integrazioni" className="btn-link" style={{ display: "inline" }}>
+        <Link to="/impostazioni/integrazioni" className="btn-link" style={{ display: "inline" }}>
           Integrazioni
         </Link>{" "}
         — è configurata una volta sola per tutti i sensori, non per singolo dispositivo.

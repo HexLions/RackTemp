@@ -7,10 +7,14 @@ import Login from "./pages/Login";
 import FirstLogin from "./pages/FirstLogin";
 import Dashboard from "./pages/Dashboard";
 import SensorDetail from "./pages/SensorDetail";
-import NotificationSettings from "./pages/NotificationSettings";
-import Integrations from "./pages/Integrations";
 import BulkThresholds from "./pages/BulkThresholds";
-import Account from "./pages/Account";
+import SettingsLayout from "./pages/settings/SettingsLayout";
+import AccountSection from "./pages/settings/AccountSection";
+import NotificationsSection from "./pages/settings/NotificationsSection";
+import IntegrationsSection from "./pages/settings/IntegrationsSection";
+import UpdatesSection from "./pages/settings/UpdatesSection";
+import FirmwareSection from "./pages/settings/FirmwareSection";
+import BackupSection from "./pages/settings/BackupSection";
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { username, mustChangePassword, loading, logout } = useAuth();
@@ -32,13 +36,12 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
           <NavLink to="/" end>
             Dashboard
           </NavLink>
-          <NavLink to="/notifications">Notifiche</NavLink>
-          <NavLink to="/integrazioni">Integrazioni</NavLink>
           <NavLink to="/soglie-bulk">Soglie multiple</NavLink>
+          <NavLink to="/impostazioni">Impostazioni</NavLink>
         </nav>
         <div className="topbar-right">
           <ThemeToggle />
-          <NavLink to="/account" className="user" style={{ textDecoration: "none" }}>
+          <NavLink to="/impostazioni/account" className="user" style={{ textDecoration: "none" }}>
             {username}
           </NavLink>
           <button className="btn-link" onClick={() => logout()}>
@@ -74,22 +77,6 @@ export default function App() {
         }
       />
       <Route
-        path="/notifications"
-        element={
-          <ProtectedLayout>
-            <NotificationSettings />
-          </ProtectedLayout>
-        }
-      />
-      <Route
-        path="/integrazioni"
-        element={
-          <ProtectedLayout>
-            <Integrations />
-          </ProtectedLayout>
-        }
-      />
-      <Route
         path="/soglie-bulk"
         element={
           <ProtectedLayout>
@@ -98,13 +85,26 @@ export default function App() {
         }
       />
       <Route
-        path="/account"
+        path="/impostazioni"
         element={
           <ProtectedLayout>
-            <Account />
+            <SettingsLayout />
           </ProtectedLayout>
         }
-      />
+      >
+        <Route index element={<Navigate to="account" replace />} />
+        <Route path="account" element={<AccountSection />} />
+        <Route path="notifiche" element={<NotificationsSection />} />
+        <Route path="integrazioni" element={<IntegrationsSection />} />
+        <Route path="aggiornamenti" element={<UpdatesSection />} />
+        <Route path="firmware" element={<FirmwareSection />} />
+        <Route path="backup" element={<BackupSection />} />
+      </Route>
+
+      {/* Vecchi indirizzi, per link/segnalibri esistenti */}
+      <Route path="/account" element={<Navigate to="/impostazioni/account" replace />} />
+      <Route path="/notifications" element={<Navigate to="/impostazioni/notifiche" replace />} />
+      <Route path="/integrazioni" element={<Navigate to="/impostazioni/integrazioni" replace />} />
     </Routes>
   );
 }

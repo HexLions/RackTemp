@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { api, NotificationConfig, NotificationLogEntry, ApiError } from "../api/client";
+import { api, NotificationConfig, NotificationLogEntry, ApiError } from "../../api/client";
 
 function timeAgo(iso: string) {
   const sec = (Date.now() - new Date(iso).getTime()) / 1000;
@@ -31,7 +31,7 @@ const TYPE_CHIP: Record<string, string> = {
   recovered_humidity: "chip-ok",
 };
 
-export default function NotificationSettings() {
+export default function NotificationsSection() {
   const [cfg, setCfg] = useState<NotificationConfig | null>(null);
   const [saved, setSaved] = useState(false);
   const [testMsg, setTestMsg] = useState<{ channel: string; ok: boolean; text: string } | null>(null);
@@ -64,14 +64,7 @@ export default function NotificationSettings() {
   if (!cfg) return <div className="center-screen">Caricamento…</div>;
 
   return (
-    <div>
-      <div className="page-header">
-        <div>
-          <h1>Notifiche</h1>
-          <p className="page-sub">Soglie superate, sensori offline e ripristini vengono inviati qui.</p>
-        </div>
-      </div>
-
+    <>
       <form className="card" onSubmit={save}>
         <h2>
           Email (SMTP)
@@ -216,6 +209,6 @@ export default function NotificationSettings() {
           </div>
         )}
       </div>
-    </div>
+    </>
   );
 }
