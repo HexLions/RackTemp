@@ -49,6 +49,7 @@ Name: "autostart"; Description: "Avvia RackTemp (finestra/tray) automaticamente 
 [Files]
 Source: "{#StagedApp}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 Source: "racktemp.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "start-service.cmd"; DestDir: "{app}\backend"; Flags: ignoreversion
 
 [Dirs]
 Name: "{commonappdata}\RackTemp\data"; Permissions: users-modify
@@ -59,9 +60,9 @@ Name: "{group}\Disinstalla RackTemp"; Filename: "{uninstallexe}"; IconFilename: 
 Name: "{userstartup}\RackTemp"; Filename: "{app}\tray\RackTempTray.exe"; Parameters: "--minimized"; IconFilename: "{app}\racktemp.ico"; Tasks: autostart
 
 [Run]
-Filename: "{app}\nssm.exe"; Parameters: "install RackTemp ""{app}\node\node.exe"""; Flags: runhidden; StatusMsg: "Registro il servizio Windows..."
+Filename: "{app}\nssm.exe"; Parameters: "install RackTemp cmd.exe"; Flags: runhidden; StatusMsg: "Registro il servizio Windows..."
 Filename: "{app}\nssm.exe"; Parameters: "set RackTemp AppDirectory ""{app}\backend"""; Flags: runhidden
-Filename: "{app}\nssm.exe"; Parameters: "set RackTemp AppParameters ""dist\index.js"""; Flags: runhidden
+Filename: "{app}\nssm.exe"; Parameters: "set RackTemp AppParameters ""/c start-service.cmd"""; Flags: runhidden
 Filename: "{app}\nssm.exe"; Parameters: "set RackTemp DisplayName ""RackTemp"""; Flags: runhidden
 Filename: "{app}\nssm.exe"; Parameters: "set RackTemp Description ""RackTemp - monitor temperatura/umidita rack (http://localhost:7431)"""; Flags: runhidden
 Filename: "{app}\nssm.exe"; Parameters: "set RackTemp Start SERVICE_AUTO_START"; Flags: runhidden
