@@ -16,3 +16,5 @@ skills-lock.json
 tools/
 dist-windows/
 dist-linux/
+windows-tray/**/bin/
+windows-tray/**/obj/

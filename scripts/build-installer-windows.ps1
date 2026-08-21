@@ -1,16 +1,20 @@
-# Builds backend + frontend, stages a self-contained app folder (portable
-# Node.js runtime + compiled app + nssm.exe), then compiles the Inno Setup
-# installer. Run from anywhere; paths are resolved relative to this script.
+# Builds backend + frontend + the WebView2 tray shell, stages a self-
+# contained app folder (portable Node.js runtime + compiled app + nssm.exe
+# + tray exe), then compiles the Inno Setup installer. Run from anywhere;
+# paths are resolved relative to this script.
 #
-# Requirements on the BUILD machine only: Node.js + npm, Inno Setup 6
-# (ISCC.exe). The machine that RUNS the installer needs neither — that's
-# the point, everything Node-related ships inside the installer.
+# Requirements on the BUILD machine only: Node.js + npm, .NET 8 SDK, Inno
+# Setup 6 (ISCC.exe). The machine that RUNS the installer needs none of
+# these — that's the point, everything ships inside the installer (the
+# WebView2 *runtime* itself is the one exception: the installer fetches it
+# on the target machine at install time if missing, see installer.iss).
 
 $ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 $backend = Join-Path $root "backend"
 $frontend = Join-Path $root "frontend"
+$tray = Join-Path $root "windows-tray\RackTempTray"
 $tools = Join-Path $root "tools"
 $stage = Join-Path $root "dist-windows\app"
 $outDir = Join-Path $root "dist-windows"
@@ -52,7 +56,13 @@ npm run build
 if ($LASTEXITCODE -ne 0) { throw "frontend build failed" }
 Pop-Location
 
-Write-Host "== 3/6: portable Node.js runtime ==" -ForegroundColor Cyan
+Write-Host "== 3/7: tray shell build (WebView2 window) ==" -ForegroundColor Cyan
+Push-Location $tray
+dotnet publish -c Release -r win-x64 --self-contained true -o (Join-Path $root "dist-windows\tray-publish")
+if ($LASTEXITCODE -ne 0) { throw "tray app publish failed" }
+Pop-Location
+
+Write-Host "== 4/7: portable Node.js runtime ==" -ForegroundColor Cyan
 New-Item -ItemType Directory -Force -Path $tools | Out-Null
 $nodeZip = Join-Path $tools "$nodeDirName.zip"
 $nodeDir = Join-Path $tools $nodeDirName
@@ -64,7 +74,7 @@ if (-not (Test-Path $nodeDir)) {
     Expand-Archive -Path $nodeZip -DestinationPath $tools -Force
 }
 
-Write-Host "== 4/6: nssm (Windows service wrapper) ==" -ForegroundColor Cyan
+Write-Host "== 5/7: nssm (Windows service wrapper) ==" -ForegroundColor Cyan
 $nssmZip = Join-Path $tools "$nssmDirName.zip"
 $nssmDir = Join-Path $tools $nssmDirName
 if (-not (Test-Path $nssmDir)) {
@@ -75,7 +85,7 @@ if (-not (Test-Path $nssmDir)) {
     Expand-Archive -Path $nssmZip -DestinationPath $tools -Force
 }
 
-Write-Host "== 5/6: staging app folder ==" -ForegroundColor Cyan
+Write-Host "== 6/7: staging app folder ==" -ForegroundColor Cyan
 Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
 
@@ -91,7 +101,10 @@ Copy-Item (Join-Path $backend "package.json") (Join-Path $stage "backend\package
 
 Copy-Item (Join-Path $nssmDir "win64\nssm.exe") (Join-Path $stage "nssm.exe") -Force
 
-Write-Host "== 6/6: compiling installer ==" -ForegroundColor Cyan
+New-Item -ItemType Directory -Force -Path (Join-Path $stage "tray") | Out-Null
+Copy-Item (Join-Path $root "dist-windows\tray-publish\*") (Join-Path $stage "tray") -Recurse -Force
+
+Write-Host "== 7/7: compiling installer ==" -ForegroundColor Cyan
 $pkgVersion = (Get-Content (Join-Path $backend "package.json") -Raw | ConvertFrom-Json).version
 Write-Host "App version: $pkgVersion (from backend\package.json)"
 $iscc = Get-ISCC

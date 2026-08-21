@@ -43,6 +43,9 @@ UninstallDisplayIcon={app}\racktemp.ico
 Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
+[Tasks]
+Name: "autostart"; Description: "Avvia RackTemp (finestra/tray) automaticamente all'accesso a Windows"; GroupDescription: "Opzioni aggiuntive:"
+
 [Files]
 Source: "{#StagedApp}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
 Source: "racktemp.ico"; DestDir: "{app}"; Flags: ignoreversion
@@ -51,8 +54,9 @@ Source: "racktemp.ico"; DestDir: "{app}"; Flags: ignoreversion
 Name: "{commonappdata}\RackTemp\data"; Permissions: users-modify
 
 [Icons]
-Name: "{group}\RackTemp"; Filename: "{app}\racktemp.url"; IconFilename: "{app}\racktemp.ico"
+Name: "{group}\RackTemp"; Filename: "{app}\tray\RackTempTray.exe"; IconFilename: "{app}\racktemp.ico"
 Name: "{group}\Disinstalla RackTemp"; Filename: "{uninstallexe}"; IconFilename: "{app}\racktemp.ico"
+Name: "{userstartup}\RackTemp"; Filename: "{app}\tray\RackTempTray.exe"; Parameters: "--minimized"; IconFilename: "{app}\racktemp.ico"; Tasks: autostart
 
 [Run]
 Filename: "{app}\nssm.exe"; Parameters: "install RackTemp ""{app}\node\node.exe"" ""{app}\backend\dist\index.js"""; Flags: runhidden; StatusMsg: "Registro il servizio Windows..."
@@ -64,7 +68,8 @@ Filename: "{app}\nssm.exe"; Parameters: "set RackTemp AppStdout ""{commonappdata
 Filename: "{app}\nssm.exe"; Parameters: "set RackTemp AppStderr ""{commonappdata}\RackTemp\service.log"""; Flags: runhidden
 Filename: "netsh"; Parameters: "advfirewall firewall add rule name=""RackTemp"" dir=in action=allow protocol=TCP localport=7431"; Flags: runhidden
 Filename: "{app}\nssm.exe"; Parameters: "start RackTemp"; Flags: runhidden; StatusMsg: "Avvio il servizio RackTemp..."
-Filename: "http://localhost:7431"; Description: "Apri RackTemp nel browser"; Flags: postinstall shellexec skipifsilent
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile '{tmp}\MicrosoftEdgeWebView2Setup.exe'; Start-Process -FilePath '{tmp}\MicrosoftEdgeWebView2Setup.exe' -ArgumentList '/silent /install' -Wait"""; StatusMsg: "Installo Microsoft Edge WebView2 (serve alla finestra di RackTemp)..."; Flags: runhidden; Check: WebView2Missing
+Filename: "{app}\tray\RackTempTray.exe"; Description: "Avvia RackTemp"; Flags: postinstall skipifsilent nowait
 
 [UninstallRun]
 Filename: "{app}\nssm.exe"; Parameters: "stop RackTemp"; Flags: runhidden; RunOnceId: "StopRackTemp"
@@ -83,12 +88,23 @@ begin
     Result := Result + Chars[Random(Length(Chars)) + 1];
 end;
 
-procedure CreateUrlShortcut;
+// Rilevamento standard Microsoft: il runtime WebView2 (Evergreen) scrive la
+// propria versione in una di queste chiavi. Se assente/vuota/0.0.0.0, il
+// componente non è installato e va scaricato prima che la finestra tray
+// possa mostrare qualcosa.
+function WebView2Missing(): Boolean;
 var
-  UrlFile: String;
+  Version, ClientKey, ClientKeyWow: String;
 begin
-  UrlFile := ExpandConstant('{app}\racktemp.url');
-  SaveStringToFile(UrlFile, '[InternetShortcut]' + #13#10 + 'URL=http://localhost:7431' + #13#10, False);
+  ClientKey := 'SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}';
+  ClientKeyWow := 'SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}';
+  Result := True;
+  if RegQueryStringValue(HKLM, ClientKeyWow, 'pv', Version) and (Version <> '') and (Version <> '0.0.0.0') then
+    Result := False
+  else if RegQueryStringValue(HKLM, ClientKey, 'pv', Version) and (Version <> '') and (Version <> '0.0.0.0') then
+    Result := False
+  else if RegQueryStringValue(HKCU, ClientKey, 'pv', Version) and (Version <> '') and (Version <> '0.0.0.0') then
+    Result := False;
 end;
 
 procedure WriteEnvFileIfMissing;
@@ -114,7 +130,6 @@ procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then
   begin
-    CreateUrlShortcut;
     WriteEnvFileIfMissing;
   end;
 end;
