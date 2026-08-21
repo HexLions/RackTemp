@@ -34,7 +34,11 @@ services:
   # webhook da configurare. Il volume dati non viene toccato dal riavvio.
   # Per disattivare: rimuovi questo servizio dallo stack.
   watchtower:
-    image: containrrr/watchtower:latest
+    # containrrr/watchtower è fermo al 2023 (progetto archiviato) e negozia
+    # una versione dell'API Docker così vecchia (1.25) che i daemon Docker
+    # recenti la rifiutano ("client version too old"). nickfedor/watchtower
+    # è la continuazione mantenuta dello stesso progetto, stessa config.
+    image: nickfedor/watchtower:latest
     container_name: rack-temp-watchtower
     restart: unless-stopped
     volumes:
