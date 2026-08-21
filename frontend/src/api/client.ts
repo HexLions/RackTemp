@@ -103,6 +103,14 @@ export interface DiscoveredDevice {
 
 export interface IntegrationSettings {
   prtgToken: string;
+  portainerWebhookUrl: string | null;
+}
+
+export interface UpdateCheck {
+  currentVersion: string;
+  latestVersion: string;
+  updateAvailable: boolean;
+  releaseUrl: string;
 }
 
 export interface VersionInfo {

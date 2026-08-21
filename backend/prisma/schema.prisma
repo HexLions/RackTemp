@@ -95,9 +95,10 @@ model DiscoveredDevice {
 // Controller-wide secrets for integrations that aggregate every sensor
 // (unlike the per-sensor apiKey/PRTG endpoint, these aren't tied to one device).
 model IntegrationSettings {
-  id        Int      @id @default(1)
-  prtgToken String   @default(cuid())
-  updatedAt DateTime @updatedAt
+  id                  Int      @id @default(1)
+  prtgToken           String   @default(cuid())
+  portainerWebhookUrl String?
+  updatedAt           DateTime @updatedAt
 }
 
 // Single current firmware build available for sensors to self-update to.
