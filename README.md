@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/racktemp-logo.png" width="96" height="96" alt="RackTemp logo" />
+
 # 🌡️ RackTemp
 ### Monitora temperatura e umidità del tuo rack, self-hosted, dal browser.
 

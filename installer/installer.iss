@@ -36,7 +36,8 @@ PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
-UninstallDisplayIcon={app}\node\node.exe
+SetupIconFile=racktemp.ico
+UninstallDisplayIcon={app}\racktemp.ico
 
 [Languages]
 Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"
@@ -44,13 +45,14 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
 Source: "{#StagedApp}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
+Source: "racktemp.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Dirs]
 Name: "{commonappdata}\RackTemp\data"; Permissions: users-modify
 
 [Icons]
-Name: "{group}\RackTemp"; Filename: "{app}\racktemp.url"
-Name: "{group}\Disinstalla RackTemp"; Filename: "{uninstallexe}"
+Name: "{group}\RackTemp"; Filename: "{app}\racktemp.url"; IconFilename: "{app}\racktemp.ico"
+Name: "{group}\Disinstalla RackTemp"; Filename: "{uninstallexe}"; IconFilename: "{app}\racktemp.ico"
 
 [Run]
 Filename: "{app}\nssm.exe"; Parameters: "install RackTemp ""{app}\node\node.exe"" ""{app}\backend\dist\index.js"""; Flags: runhidden; StatusMsg: "Registro il servizio Windows..."
