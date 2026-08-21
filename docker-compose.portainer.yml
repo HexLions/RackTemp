@@ -47,6 +47,11 @@ services:
       WATCHTOWER_LABEL_ENABLE: "true"
       WATCHTOWER_CLEANUP: "true"
       WATCHTOWER_POLL_INTERVAL: "21600" # 6 ore
+      # Anche l'immagine aggiornata negozia comunque una versione API troppo
+      # bassa su alcuni host (bug noto del client Docker Go SDK quando la
+      # negoziazione automatica fallisce) — forzala esplicitamente a una
+      # versione recente invece di lasciarla decidere da sola.
+      DOCKER_API_VERSION: "1.44"
 
 volumes:
   rack-temp-data:
