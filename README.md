@@ -11,7 +11,7 @@
 [![Windows](https://img.shields.io/badge/windows-installer-0078D6.svg?logo=windows&logoColor=white)](#-avvio-su-windows-senza-docker)
 [![Linux](https://img.shields.io/badge/linux-systemd-FCC624.svg?logo=linux&logoColor=black)](#-avvio-su-linux-senza-docker)
 [![Self-hosted](https://img.shields.io/badge/self--hosted-yes-success.svg)](#-avvio-rapido-docker)
-[![Version](https://img.shields.io/badge/version-0.3.1-purple.svg)](#)
+[![Version](https://img.shields.io/badge/version-0.3.2-purple.svg)](#)
 
 **📦 [Vedi il pacchetto Docker →](https://github.com/HexLions/RackTemp/pkgs/container/racktemp)**
 
@@ -134,15 +134,26 @@ Windows** (auto-avvio, gira anche senza utente loggato — pensato per Windows S
 1. Scarica `RackTemp-Setup-X.Y.Z.exe` dalle [Release](../../releases) (compilato in automatico
    a ogni release, insieme all'immagine Docker — vedi
    [`.github/workflows/windows-installer.yml`](.github/workflows/windows-installer.yml)).
-2. Eseguilo (richiede privilegi amministratore).
-3. Si apre `http://localhost:7431` a fine installazione — stesso primo accesso `admin`/`admin`.
+2. Eseguilo (richiede privilegi amministratore). Windows SmartScreen probabilmente avvisa che
+   l'exe non è firmato ("Editore sconosciuto") — è normale per un installer open-source senza
+   certificato a pagamento: **Ulteriori informazioni → Esegui comunque**.
+3. A fine installazione si apre una finestra RackTemp dedicata (non il browser) — se manca il
+   runtime WebView2 lo installa da sé al volo (serve internet quel momento; su Windows 10/11
+   aggiornati è già presente e questo passo viene saltato).
+
+Il servizio Windows **RackTemp** (nssm, auto-avvio, gira anche senza utente loggato — pensato
+per Windows Server) fa girare backend/API indipendentemente dalla finestra: chiudendola con la
+X non si spegne nulla, va solo nella tray (icona vicino all'orologio) — doppio click per
+riaprirla, o tasto destro → Esci per chiudere solo quella finestra. Di default parte anche in
+automatico all'accesso a Windows (minimizzata in tray); si disattiva deselezionando l'opzione
+durante l'installazione.
 
 Il database vive in `%ProgramData%\RackTemp\data\`, fuori da Program Files: reinstallare o
 aggiornare (scaricando ed eseguendo un `Setup.exe` più recente) non tocca i dati né il
 `SESSION_SECRET` generato al primo install. Per buildare l'installer da sorgente:
 
 ```powershell
-# Serve solo Node.js + Inno Setup 6 (winget install JRSoftware.InnoSetup) sulla macchina di build
+# Serve Node.js + .NET 8 SDK + Inno Setup 6 (winget install JRSoftware.InnoSetup) sulla macchina di build
 powershell -ExecutionPolicy Bypass -File scripts\build-installer-windows.ps1
 ```
 
@@ -328,6 +339,7 @@ RackTemp/
 ├── docker-compose.yml          ← deploy via CLI (build da sorgente)
 ├── docker-compose.portainer.yml ← deploy via Portainer (immagine da GHCR) + Watchtower
 ├── installer/installer.iss     ← installer Windows (Inno Setup)
+├── windows-tray/RackTempTray/  ← finestra WebView2 + icona tray per l'install Windows
 ├── linux/                      ← systemd unit + install.sh/uninstall.sh
 ├── scripts/build-installer-windows.ps1 ← builda + compila l'installer Windows
 ├── scripts/build-package-linux.sh      ← builda il pacchetto nativo Linux
