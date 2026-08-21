@@ -11,7 +11,7 @@
 [![Windows](https://img.shields.io/badge/windows-installer-0078D6.svg?logo=windows&logoColor=white)](#-avvio-su-windows-senza-docker)
 [![Linux](https://img.shields.io/badge/linux-systemd-FCC624.svg?logo=linux&logoColor=black)](#-avvio-su-linux-senza-docker)
 [![Self-hosted](https://img.shields.io/badge/self--hosted-yes-success.svg)](#-avvio-rapido-docker)
-[![Version](https://img.shields.io/badge/version-0.3.5-purple.svg)](#)
+[![Version](https://img.shields.io/badge/version-0.3.6-purple.svg)](#)
 
 **📦 [Vedi il pacchetto Docker →](https://github.com/HexLions/RackTemp/pkgs/container/racktemp)**
 
@@ -144,9 +144,10 @@ Windows** (auto-avvio, gira anche senza utente loggato — pensato per Windows S
 Il servizio Windows **RackTemp** (nssm, auto-avvio, gira anche senza utente loggato — pensato
 per Windows Server) fa girare backend/API indipendentemente dalla finestra: chiudendola con la
 X non si spegne nulla, va solo nella tray (icona vicino all'orologio) — doppio click per
-riaprirla, o tasto destro → Esci per chiudere solo quella finestra. Di default parte anche in
-automatico all'accesso a Windows (minimizzata in tray); si disattiva deselezionando l'opzione
-durante l'installazione.
+riaprirla. Il menu tray (tasto destro sull'icona) ha **"Esci e ferma il servizio"** (quella è la
+vera uscita, richiede conferma UAC) e **"Avvia con Windows all'accesso"**, una spunta che puoi
+cambiare quando vuoi, non solo durante l'installazione. Riaprendo l'app dopo un'uscita completa,
+il servizio riparte da solo (altra UAC).
 
 Il database vive in `%ProgramData%\RackTemp\data\`, fuori da Program Files: reinstallare o
 aggiornare (scaricando ed eseguendo un `Setup.exe` più recente) non tocca i dati né il
