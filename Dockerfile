@@ -18,7 +18,9 @@ RUN npx prisma generate && npm run build
 
 # --- runtime ---
 FROM node:20-alpine AS runtime
+ARG GIT_SHA=dev
 ENV NODE_ENV=production
+ENV GIT_SHA=$GIT_SHA
 RUN apk add --no-cache openssl
 
 WORKDIR /app/backend

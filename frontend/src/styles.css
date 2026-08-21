@@ -719,3 +719,20 @@ input[type="checkbox"] {
   top: 20px;
   right: 20px;
 }
+
+/* ---------- footer ---------- */
+
+.app-footer {
+  text-align: center;
+  padding: 18px 24px;
+  color: var(--dimmer);
+  font-size: 0.76rem;
+}
+
+.center-screen .app-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 16px;
+}

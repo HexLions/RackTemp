@@ -4,6 +4,7 @@ import { useAuth, ApiError } from "../api/AuthContext";
 import { api } from "../api/client";
 import Logo from "../components/Logo";
 import ThemeToggle from "../components/ThemeToggle";
+import Footer from "../components/Footer";
 
 export default function FirstLogin() {
   const { username, mustChangePassword, completeFirstLogin } = useAuth();
@@ -75,6 +76,7 @@ export default function FirstLogin() {
           {busy ? "Salvataggio…" : "Imposta credenziali"}
         </button>
       </form>
+      <Footer />
     </div>
   );
 }

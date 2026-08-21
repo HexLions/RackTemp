@@ -91,3 +91,8 @@ export interface DiscoveredDevice {
 export interface IntegrationSettings {
   prtgToken: string;
 }
+
+export interface VersionInfo {
+  version: string;
+  commit: string;
+}

@@ -2,6 +2,7 @@ import { Navigate, NavLink, Route, Routes } from "react-router-dom";
 import { useAuth } from "./api/AuthContext";
 import Logo from "./components/Logo";
 import ThemeToggle from "./components/ThemeToggle";
+import Footer from "./components/Footer";
 import Login from "./pages/Login";
 import FirstLogin from "./pages/FirstLogin";
 import Dashboard from "./pages/Dashboard";
@@ -41,6 +42,7 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
       <main className="content">{children}</main>
+      <Footer />
     </div>
   );
 }

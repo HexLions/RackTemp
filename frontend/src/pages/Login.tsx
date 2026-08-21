@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { useAuth, ApiError } from "../api/AuthContext";
 import Logo from "../components/Logo";
 import ThemeToggle from "../components/ThemeToggle";
+import Footer from "../components/Footer";
 
 export default function Login() {
   const { username, login } = useAuth();
@@ -52,6 +53,7 @@ export default function Login() {
           {busy ? "Accesso…" : "Accedi"}
         </button>
       </form>
+      <Footer />
     </div>
   );
 }
