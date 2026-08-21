@@ -11,6 +11,7 @@ export default function SensorDetail() {
   const [readings, setReadings] = useState<Reading[]>([]);
   const [threshold, setThreshold] = useState<Threshold | null>(null);
   const [saved, setSaved] = useState(false);
+  const [rangeHours, setRangeHours] = useState(24);
 
   const [editName, setEditName] = useState("");
   const [editLocation, setEditLocation] = useState("");
@@ -21,7 +22,7 @@ export default function SensorDetail() {
     if (!id) return;
     const [s, r] = await Promise.all([
       api.get<Sensor>(`/sensors/${id}`),
-      api.get<Reading[]>(`/sensors/${id}/readings?hours=24`),
+      api.get<Reading[]>(`/sensors/${id}/readings?hours=${rangeHours}`),
     ]);
     setSensor(s);
     setThreshold(s.threshold);
@@ -35,7 +36,7 @@ export default function SensorDetail() {
     load();
     const iv = setInterval(load, 20_000);
     return () => clearInterval(iv);
-  }, [id]);
+  }, [id, rangeHours]);
 
   async function saveInfo(e: FormEvent) {
     e.preventDefault();
@@ -85,7 +86,10 @@ export default function SensorDetail() {
   if (!sensor || !threshold) return <div className="center-screen">Caricamento…</div>;
 
   const chartData = readings.map((r) => ({
-    time: new Date(r.createdAt).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
+    time:
+      rangeHours <= 24
+        ? new Date(r.createdAt).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" })
+        : new Date(r.createdAt).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }),
     temperature: r.temperature,
     humidity: r.humidity,
   }));
@@ -136,7 +140,27 @@ export default function SensorDetail() {
       {!hasData && connectionPanel}
 
       <div className="card">
-        <h2>Andamento (24h)</h2>
+        <div className="row-actions" style={{ justifyContent: "space-between", marginBottom: 16 }}>
+          <h2 style={{ margin: 0 }}>Andamento</h2>
+          <span className="row-actions" style={{ gap: 6 }}>
+            {[
+              { label: "24h", hours: 24 },
+              { label: "7g", hours: 24 * 7 },
+              { label: "30g", hours: 24 * 30 },
+            ].map((opt) => (
+              <button
+                key={opt.hours}
+                type="button"
+                className="btn-ghost"
+                disabled={rangeHours === opt.hours}
+                style={rangeHours === opt.hours ? { color: "var(--accent)", borderColor: "var(--accent)" } : undefined}
+                onClick={() => setRangeHours(opt.hours)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </span>
+        </div>
         {chartData.length === 0 ? (
           <p className="muted">Ancora nessuna lettura.</p>
         ) : (

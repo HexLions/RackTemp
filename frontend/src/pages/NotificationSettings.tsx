@@ -1,13 +1,45 @@
 import { FormEvent, useEffect, useState } from "react";
-import { api, NotificationConfig, ApiError } from "../api/client";
+import { api, NotificationConfig, NotificationLogEntry, ApiError } from "../api/client";
+
+function timeAgo(iso: string) {
+  const sec = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (sec < 60) return `${Math.round(sec)}s fa`;
+  if (sec < 3600) return `${Math.round(sec / 60)}m fa`;
+  if (sec < 86400) return `${Math.round(sec / 3600)}h fa`;
+  return `${Math.round(sec / 86400)}g fa`;
+}
+
+const TYPE_LABEL: Record<string, string> = {
+  high_temp: "Temp. alta",
+  low_temp: "Temp. bassa",
+  high_humidity: "Umidità alta",
+  low_humidity: "Umidità bassa",
+  offline: "Offline",
+  recovered: "Rientrato",
+  recovered_temp: "Rientrato",
+  recovered_humidity: "Rientrato",
+};
+
+const TYPE_CHIP: Record<string, string> = {
+  high_temp: "chip-crit",
+  low_temp: "chip-crit",
+  high_humidity: "chip-crit",
+  low_humidity: "chip-crit",
+  offline: "chip-offline",
+  recovered: "chip-ok",
+  recovered_temp: "chip-ok",
+  recovered_humidity: "chip-ok",
+};
 
 export default function NotificationSettings() {
   const [cfg, setCfg] = useState<NotificationConfig | null>(null);
   const [saved, setSaved] = useState(false);
   const [testMsg, setTestMsg] = useState<{ channel: string; ok: boolean; text: string } | null>(null);
+  const [log, setLog] = useState<NotificationLogEntry[] | null>(null);
 
   useEffect(() => {
     api.get<NotificationConfig>("/notifications/config").then(setCfg);
+    api.get<NotificationLogEntry[]>("/notifications/log?limit=100").then(setLog);
   }, []);
 
   async function save(e: FormEvent) {
@@ -158,6 +190,32 @@ export default function NotificationSettings() {
         </div>
         {testMsg?.channel === "telegram" && <div className={testMsg.ok ? "success-text" : "error"}>{testMsg.text}</div>}
       </form>
+
+      <div className="card">
+        <h2>Storico avvisi</h2>
+        {!log ? (
+          <p className="muted">Caricamento…</p>
+        ) : log.length === 0 ? (
+          <p className="muted">Nessun avviso inviato finora.</p>
+        ) : (
+          <div className="stack-tight">
+            {log.map((entry) => (
+              <div key={entry.id} className="row-actions" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <span className={`chip ${TYPE_CHIP[entry.type] ?? "chip-offline"}`}>
+                    {TYPE_LABEL[entry.type] ?? entry.type}
+                  </span>{" "}
+                  <strong style={{ fontSize: "0.88rem" }}>{entry.sensor.name}</strong>
+                  <div className="muted small">{entry.message}</div>
+                </div>
+                <span className="muted small mono" style={{ whiteSpace: "nowrap" }}>
+                  {timeAgo(entry.sentAt)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

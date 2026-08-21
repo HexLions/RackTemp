@@ -88,6 +88,10 @@ docker compose down -v         # ⚠️ rimuove anche il volume, cancella tutti 
 I dati (sensori, letture, soglie) vivono nel volume Docker `rack-temp-data`, persistono tra
 riavvii/rebuild finché non usi `-v`.
 
+Le letture vengono potate automaticamente dopo 90 giorni per non far crescere il DB
+all'infinito (soglie e sensori non vengono mai toccati). Per cambiare la finestra, imposta
+`READING_RETENTION_DAYS` nel `.env` (o come environment variable nello stack Portainer).
+
 ---
 
 ## 🐳 Avvio con Portainer

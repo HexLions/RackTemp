@@ -16,6 +16,7 @@ import { metricsRouter } from "./routes/metrics";
 import { integrationsRouter } from "./routes/integrations";
 import { versionRouter } from "./routes/version";
 import { startOfflineWatcher } from "./services/thresholdEngine";
+import { startRetentionWatcher } from "./services/retention";
 import { initWs } from "./ws";
 
 const PORT = Number(process.env.PORT) || 7431;
@@ -67,6 +68,7 @@ async function main() {
   const server = createServer(app);
   initWs(server);
   startOfflineWatcher();
+  startRetentionWatcher();
 
   server.listen(PORT, () => console.log(`rack-temp-monitor listening on :${PORT}`));
 }

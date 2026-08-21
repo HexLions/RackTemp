@@ -67,6 +67,15 @@ export interface Reading {
   createdAt: string;
 }
 
+export interface NotificationLogEntry {
+  id: string;
+  sensorId: string;
+  sensor: { name: string };
+  type: string;
+  message: string;
+  sentAt: string;
+}
+
 export interface NotificationConfig {
   smtpEnabled: boolean;
   smtpHost: string | null;

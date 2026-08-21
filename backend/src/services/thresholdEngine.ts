@@ -75,8 +75,11 @@ async function evaluateMetric(m: MetricCheck) {
   const backInRange =
     (max === null || value <= max - hysteresis) && (min === null || value >= min + hysteresis);
 
-  const last = await lastAlertTypeAmong(sensorId, [highType, lowType]);
-  if (backInRange && last) {
+  // Include recoveredType in the lookup: otherwise the most recent row stays
+  // "high"/"low" forever once a breach happened, and every single in-range
+  // reading after that re-fires a recovery notification instead of once.
+  const last = await lastAlertTypeAmong(sensorId, [highType, lowType, recoveredType]);
+  if (backInRange && (last === highType || last === lowType)) {
     const msg = `[${sensorName}] ${label} rientrata nella norma: ${value.toFixed(1)}${unit}`;
     await notifyAll(`Rack Temp - OK ${sensorName}`, msg);
     await logNotification(sensorId, recoveredType, msg);

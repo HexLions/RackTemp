@@ -56,6 +56,16 @@ notificationsRouter.put("/config", async (req, res) => {
   res.json({ ...cfg, smtpPass: mask(cfg.smtpPass), telegramToken: mask(cfg.telegramToken) });
 });
 
+notificationsRouter.get("/log", async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 100, 500);
+  const logs = await prisma.notificationLog.findMany({
+    orderBy: { sentAt: "desc" },
+    take: limit,
+    include: { sensor: { select: { name: true } } },
+  });
+  res.json(logs);
+});
+
 const testSchema = z.object({ channel: z.enum(["smtp", "telegram"]) });
 
 notificationsRouter.post("/test", async (req, res) => {
