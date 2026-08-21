@@ -11,3 +11,7 @@ backend/data.sqlite
 .agents/
 .claude/
 skills-lock.json
+
+# Windows installer build (scripts/build-installer-windows.ps1)
+tools/
+dist-windows/

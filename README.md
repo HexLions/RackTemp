@@ -6,8 +6,9 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](./LICENSE)
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED.svg?logo=docker&logoColor=white)](#-avvio-rapido-docker)
 [![GHCR](https://img.shields.io/badge/ghcr.io-hexlions%2Fracktemp-blue.svg)](https://github.com/HexLions/RackTemp/pkgs/container/racktemp)
+[![Windows](https://img.shields.io/badge/windows-installer-0078D6.svg?logo=windows&logoColor=white)](#-avvio-su-windows-senza-docker)
 [![Self-hosted](https://img.shields.io/badge/self--hosted-yes-success.svg)](#-avvio-rapido-docker)
-[![Version](https://img.shields.io/badge/version-0.1.0-purple.svg)](#)
+[![Version](https://img.shields.io/badge/version-0.3.0-purple.svg)](#)
 
 **📦 [Vedi il pacchetto Docker →](https://github.com/HexLions/RackTemp/pkgs/container/racktemp)**
 
@@ -117,6 +118,30 @@ Portainer. I dati restano intatti (vivono nel volume `rack-temp-data`, non nell'
 forzare subito un redeploy tramite un webhook Portainer opzionale, se non vuoi aspettare il poll
 di Watchtower. Per disattivare gli aggiornamenti automatici, rimuovi il servizio `watchtower` (e
 il relativo label su `rack-temp-monitor`) dallo stack.
+
+---
+
+## 🪟 Avvio su Windows (senza Docker)
+
+Niente Docker/Portainer? C'è un installer Windows nativo, stesso backend/frontend di questo
+repo: [`installer/installer.iss`](installer/installer.iss) impacchetta un runtime Node.js
+portatile + l'app in un unico `RackTemp-Setup-X.Y.Z.exe` che registra RackTemp come **servizio
+Windows** (auto-avvio, gira anche senza utente loggato — pensato per Windows Server).
+
+1. Scarica `RackTemp-Setup-X.Y.Z.exe` dalle [Release](../../releases) (compilato in automatico
+   a ogni release, insieme all'immagine Docker — vedi
+   [`.github/workflows/windows-installer.yml`](.github/workflows/windows-installer.yml)).
+2. Eseguilo (richiede privilegi amministratore).
+3. Si apre `http://localhost:7431` a fine installazione — stesso primo accesso `admin`/`admin`.
+
+Il database vive in `%ProgramData%\RackTemp\data\`, fuori da Program Files: reinstallare o
+aggiornare (scaricando ed eseguendo un `Setup.exe` più recente) non tocca i dati né il
+`SESSION_SECRET` generato al primo install. Per buildare l'installer da sorgente:
+
+```powershell
+# Serve solo Node.js + Inno Setup 6 (winget install JRSoftware.InnoSetup) sulla macchina di build
+powershell -ExecutionPolicy Bypass -File scripts\build-installer-windows.ps1
+```
 
 ---
 
@@ -267,8 +292,10 @@ RackTemp/
 ├── firmware/rack_temp_sensor/  ← sketch Arduino ESP32-C3, setup WiFi via portale captive
 ├── Dockerfile                  ← build multi-stage, immagine unica
 ├── docker-compose.yml          ← deploy via CLI (build da sorgente)
-├── docker-compose.portainer.yml ← deploy via Portainer (immagine da GHCR)
-└── .github/workflows/          ← publish automatico su ghcr.io a ogni push
+├── docker-compose.portainer.yml ← deploy via Portainer (immagine da GHCR) + Watchtower
+├── installer/installer.iss     ← installer Windows (Inno Setup)
+├── scripts/build-installer-windows.ps1 ← builda + compila l'installer Windows
+└── .github/workflows/          ← publish immagine Docker + installer Windows a ogni push/release
 ```
 
 ---
