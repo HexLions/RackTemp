@@ -86,10 +86,15 @@ async function evaluateMetric(m: MetricCheck) {
   }
 }
 
+function isMuted(mutedUntil: Date | null): boolean {
+  return !!mutedUntil && mutedUntil.getTime() > Date.now();
+}
+
 export async function checkReading(sensorId: string, temperature: number, humidity?: number | null) {
   const threshold = await prisma.threshold.findUnique({ where: { sensorId } });
   const sensor = await prisma.sensor.findUnique({ where: { id: sensorId } });
   if (!threshold || !threshold.enabled || !sensor) return;
+  if (isMuted(threshold.mutedUntil)) return;
 
   await evaluateMetric({
     sensorId,
@@ -128,7 +133,7 @@ async function checkOffline() {
   const sensors = await prisma.sensor.findMany({ include: { threshold: true } });
   for (const sensor of sensors) {
     const t = sensor.threshold;
-    if (!t || !t.enabled) continue;
+    if (!t || !t.enabled || isMuted(t.mutedUntil)) continue;
 
     const offlineSince = sensor.lastSeenAt
       ? Date.now() - sensor.lastSeenAt.getTime()

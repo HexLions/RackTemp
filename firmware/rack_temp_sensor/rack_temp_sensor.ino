@@ -26,7 +26,9 @@
 
 // Aggiornata ad ogni modifica del firmware — stampata via seriale al boot,
 // così sai al volo se il device sta girando con l'ultima versione flashata.
-#define FIRMWARE_VERSION "2026-08-21.1"
+// Usata anche per l'auto-update OTA: se il server ne offre una diversa, il
+// device se la scarica e si flasha da solo (vedi checkFirmwareUpdate sotto).
+#define FIRMWARE_VERSION "2026-08-22.1"
 
 // Pulsante BOOT, tenuto premuto all'accensione per rientrare nel setup WiFi. Su molti
 // cloni "Super Mini" è sullo stesso GPIO9 usato sopra per SCL: lo leggiamo solo all'avvio,
@@ -38,6 +40,7 @@
 
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include <HTTPUpdate.h>
 #include <WebServer.h>
 #include <DNSServer.h>
 #include <Preferences.h>
@@ -253,6 +256,39 @@ void announceDiscovery() {
   http.end();
 }
 
+// Confronta la versione con quella offerta dal server: se diversa, scarica il
+// nuovo .bin e si riflasha da sola (HTTPUpdate scrive solo la partizione OTA
+// dell'app — la NVS dove sono salvati WiFi/server/API key non viene toccata,
+// quindi la configurazione sopravvive intatta all'aggiornamento).
+void checkFirmwareUpdate() {
+  HTTPClient http;
+  http.begin(cfgServerUrl + "/api/firmware/latest");
+  int code = http.GET();
+  String latestVersion;
+
+  if (code == 200) {
+    String payload = http.getString();
+    int start = payload.indexOf("\"version\":\"");
+    if (start >= 0) {
+      start += 11;
+      int end = payload.indexOf('"', start);
+      if (end > start) latestVersion = payload.substring(start, end);
+    }
+  }
+  http.end();
+
+  if (latestVersion.length() == 0 || latestVersion == FIRMWARE_VERSION) return;
+
+  Serial.println("Nuovo firmware disponibile: " + latestVersion + " (attuale: " FIRMWARE_VERSION "). Aggiorno...");
+  WiFiClient client;
+  httpUpdate.rebootOnUpdate(true);
+  t_httpUpdate_return ret = httpUpdate.update(client, cfgServerUrl + "/api/firmware/latest.bin");
+  if (ret != HTTP_UPDATE_OK) {
+    Serial.printf("OTA fallito: %s\n", httpUpdate.getLastErrorString().c_str());
+  }
+  // Se ret == HTTP_UPDATE_OK il device si riavvia da solo (rebootOnUpdate).
+}
+
 void sendReading(float temperature, float humidity) {
   if (cfgApiKey.length() == 0) {
     Serial.println("Nessuna API key configurata: in attesa di essere collegato dalla dashboard.");
@@ -273,7 +309,8 @@ void sendReading(float temperature, float humidity) {
   String body = "{\"temperature\":" + String(temperature, 2) +
                 ",\"humidity\":" + String(humidity, 2) +
                 ",\"rssi\":" + String(rssi) +
-                ",\"chipId\":\"" + chipId() + "\"}";
+                ",\"chipId\":\"" + chipId() + "\"" +
+                ",\"firmwareVersion\":\"" FIRMWARE_VERSION "\"}";
 
   int code = http.POST(body);
   Serial.printf("POST /api/ingest -> %d\n", code);
@@ -302,9 +339,18 @@ void setup() {
   connectWiFi();
 }
 
+unsigned long lastOtaCheck = 0;
+const unsigned long OTA_CHECK_INTERVAL_MS = 24UL * 3600 * 1000;
+
 void loop() {
   if (cfgApiKey.length() == 0 && connectWiFi()) {
     announceDiscovery();
+  }
+
+  if (cfgApiKey.length() > 0 && connectWiFi() &&
+      (lastOtaCheck == 0 || millis() - lastOtaCheck > OTA_CHECK_INTERVAL_MS)) {
+    checkFirmwareUpdate();
+    lastOtaCheck = millis();
   }
 
   float temperature = sht31.readTemperature();

@@ -100,6 +100,28 @@ sensorsRouter.get("/:id/readings", async (req, res) => {
   res.json(readings);
 });
 
+sensorsRouter.get("/:id/readings.csv", async (req, res) => {
+  const sensor = await prisma.sensor.findUnique({ where: { id: req.params.id } });
+  if (!sensor) return res.status(404).json({ error: "not found" });
+
+  const hours = Math.min(Number(req.query.hours) || 24 * 30, 24 * 365);
+  const since = new Date(Date.now() - hours * 3600_000);
+  const readings = await prisma.reading.findMany({
+    where: { sensorId: req.params.id, createdAt: { gte: since } },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const rows = ["timestamp,temperature_c,humidity_pct,rssi_dbm"];
+  for (const r of readings) {
+    rows.push([r.createdAt.toISOString(), r.temperature, r.humidity ?? "", r.rssi ?? ""].join(","));
+  }
+
+  const safeName = sensor.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${safeName}-readings.csv"`);
+  res.send(rows.join("\n"));
+});
+
 const thresholdSchema = z.object({
   minTemp: z.number().nullable().optional(),
   maxTemp: z.number().nullable().optional(),
@@ -109,6 +131,7 @@ const thresholdSchema = z.object({
   hysteresis: z.number().min(0).optional(),
   cooldownMin: z.number().int().positive().optional(),
   enabled: z.boolean().optional(),
+  mutedUntil: z.coerce.date().nullable().optional(),
 });
 
 sensorsRouter.put("/:id/threshold", async (req, res) => {

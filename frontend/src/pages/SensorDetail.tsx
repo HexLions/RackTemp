@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from "recharts";
-import { api, Reading, Sensor, Threshold } from "../api/client";
+import { api, FirmwareRelease, Reading, Sensor, Threshold } from "../api/client";
 import CopyField from "../components/CopyField";
 
 export default function SensorDetail() {
@@ -17,6 +17,7 @@ export default function SensorDetail() {
   const [editLocation, setEditLocation] = useState("");
   const [editStaticIp, setEditStaticIp] = useState("");
   const [infoSaved, setInfoSaved] = useState(false);
+  const [latestFirmware, setLatestFirmware] = useState<FirmwareRelease | null>(null);
 
   async function load() {
     if (!id) return;
@@ -37,6 +38,23 @@ export default function SensorDetail() {
     const iv = setInterval(load, 20_000);
     return () => clearInterval(iv);
   }, [id, rangeHours]);
+
+  useEffect(() => {
+    api.get<FirmwareRelease>("/firmware/latest").then(setLatestFirmware).catch(() => setLatestFirmware(null));
+  }, []);
+
+  async function muteFor(hours: number) {
+    if (!id) return;
+    const until = new Date(Date.now() + hours * 3600_000).toISOString();
+    const updated = await api.put<Threshold>(`/sensors/${id}/threshold`, { mutedUntil: until });
+    setThreshold(updated);
+  }
+
+  async function unmute() {
+    if (!id) return;
+    const updated = await api.put<Threshold>(`/sensors/${id}/threshold`, { mutedUntil: null });
+    setThreshold(updated);
+  }
 
   async function saveInfo(e: FormEvent) {
     e.preventDefault();
@@ -103,8 +121,8 @@ export default function SensorDetail() {
       <h2>Collegamento sensore</h2>
       {!hasData && (
         <p className="hint" style={{ marginTop: -4 }}>
-          Nessun dato ricevuto. Flasha questi valori nel firmware dell'ESP32-S2 (<code>config.h</code>) e
-          comparirà qui alla prima lettura.
+          Nessun dato ricevuto. Configura questi valori nel portale di setup del sensore e comparirà qui alla
+          prima lettura.
         </p>
       )}
       <CopyField label="Endpoint ingest (POST JSON, header X-Api-Key)" value={ingestUrl} />
@@ -114,6 +132,17 @@ export default function SensorDetail() {
           Rigenera API key
         </button>
       </div>
+      {sensor.firmwareVersion && (
+        <p className="hint" style={{ marginBottom: 16 }}>
+          Firmware sul dispositivo: <code>{sensor.firmwareVersion}</code>
+          {latestFirmware && latestFirmware.version !== sensor.firmwareVersion && (
+            <>
+              {" "}
+              <span className="chip chip-warn">Aggiornamento disponibile: {latestFirmware.version}</span>
+            </>
+          )}
+        </p>
+      )}
       <p className="hint" style={{ marginBottom: 0 }}>
         Body POST atteso: <code>{`{"temperature": 23.4, "humidity": 45.0}`}</code>. Per collegare questo
         sensore a PRTG, Prometheus o altri strumenti di monitoring vedi la pagina{" "}
@@ -159,6 +188,13 @@ export default function SensorDetail() {
                 {opt.label}
               </button>
             ))}
+            <a
+              href={`/api/sensors/${id}/readings.csv?hours=${rangeHours}`}
+              className="btn-ghost"
+              style={{ textDecoration: "none", display: "inline-block" }}
+            >
+              Esporta CSV
+            </a>
           </span>
         </div>
         {chartData.length === 0 ? (
@@ -315,6 +351,28 @@ export default function SensorDetail() {
           />
           Notifiche attive per questo sensore
         </label>
+
+        {threshold.mutedUntil && new Date(threshold.mutedUntil).getTime() > Date.now() ? (
+          <p className="hint" style={{ color: "var(--warn)" }}>
+            🔇 Notifiche mutate fino alle{" "}
+            {new Date(threshold.mutedUntil).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+            .{" "}
+            <button type="button" className="btn-link" onClick={unmute}>
+              Riattiva ora
+            </button>
+          </p>
+        ) : (
+          <div className="row-actions" style={{ marginBottom: 16 }}>
+            <span className="muted small">Muta temporaneamente:</span>
+            <button type="button" className="btn-ghost" onClick={() => muteFor(1)}>
+              1h
+            </button>
+            <button type="button" className="btn-ghost" onClick={() => muteFor(24)}>
+              24h
+            </button>
+          </div>
+        )}
+
         <div className="row-actions">
           <button className="btn-primary" type="submit">
             Salva soglie

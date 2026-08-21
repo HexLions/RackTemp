@@ -16,6 +16,7 @@ model Sensor {
   staticIp    String?
   apiKey      String   @unique @default(cuid())
   chipId      String?  @unique
+  firmwareVersion String?
   createdAt   DateTime @default(now())
   lastSeenAt  DateTime?
 
@@ -48,6 +49,7 @@ model Threshold {
   hysteresis    Float    @default(0.5)
   cooldownMin   Int      @default(15)
   enabled       Boolean  @default(true)
+  mutedUntil    DateTime?
   updatedAt     DateTime @updatedAt
 }
 
@@ -96,6 +98,16 @@ model IntegrationSettings {
   id        Int      @id @default(1)
   prtgToken String   @default(cuid())
   updatedAt DateTime @updatedAt
+}
+
+// Single current firmware build available for sensors to self-update to.
+// The binary lives on disk (backend/data/firmware/latest.bin); this row is
+// just the version label devices compare against.
+model FirmwareRelease {
+  id         Int      @id @default(1)
+  version    String
+  notes      String?
+  uploadedAt DateTime @default(now())
 }
 
 model AdminUser {

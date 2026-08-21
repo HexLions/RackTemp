@@ -270,6 +270,27 @@ code {
   margin: 4px 0 0;
 }
 
+/* ---------- summary stats ---------- */
+
+.summary-stats {
+  display: flex;
+  gap: 28px;
+  margin-bottom: 20px;
+}
+
+.summary-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.summary-stat-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
 /* ---------- cards ---------- */
 
 .card {
@@ -747,4 +768,46 @@ input[type="checkbox"] {
   left: 0;
   right: 0;
   padding: 16px;
+}
+
+/* ---------- mobile ---------- */
+
+@media (max-width: 760px) {
+  .topbar {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 12px 16px;
+    row-gap: 10px;
+  }
+
+  .topbar nav {
+    order: 3;
+    width: 100%;
+    overflow-x: auto;
+    flex: none;
+  }
+
+  .content {
+    padding: 20px 16px 40px;
+  }
+
+  .page-header {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .summary-stats {
+    gap: 18px;
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .form-row > label {
+    min-width: 0;
+    flex-basis: 100%;
+  }
+
+  .card {
+    padding: 16px;
+  }
 }

@@ -11,6 +11,7 @@ const ingestSchema = z.object({
   humidity: z.number().optional(),
   rssi: z.number().int().optional(),
   chipId: z.string().optional(),
+  firmwareVersion: z.string().optional(),
 });
 
 ingestRouter.post("/", async (req, res) => {
@@ -23,14 +24,17 @@ ingestRouter.post("/", async (req, res) => {
   const parsed = ingestSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid body" });
 
-  const { chipId, ...readingData } = parsed.data;
+  const { chipId, firmwareVersion, ...readingData } = parsed.data;
 
   const reading = await prisma.reading.create({
     data: { sensorId: sensor.id, ...readingData },
   });
   await prisma.sensor.update({
     where: { id: sensor.id },
-    data: { lastSeenAt: new Date() },
+    data: {
+      lastSeenAt: new Date(),
+      ...(firmwareVersion ? { firmwareVersion } : {}),
+    },
   });
 
   // Device is now sending authenticated readings — it no longer belongs in

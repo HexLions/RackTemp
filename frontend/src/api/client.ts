@@ -39,6 +39,7 @@ export interface Sensor {
   staticIp: string | null;
   apiKey: string;
   chipId: string | null;
+  firmwareVersion: string | null;
   lastSeenAt: string | null;
   createdAt: string;
   threshold: Threshold | null;
@@ -56,6 +57,7 @@ export interface Threshold {
   hysteresis: number;
   cooldownMin: number;
   enabled: boolean;
+  mutedUntil: string | null;
 }
 
 export interface Reading {
@@ -106,4 +108,10 @@ export interface IntegrationSettings {
 export interface VersionInfo {
   version: string;
   commit: string;
+}
+
+export interface FirmwareRelease {
+  version: string;
+  notes: string | null;
+  uploadedAt: string;
 }

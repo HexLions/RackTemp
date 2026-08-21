@@ -15,6 +15,8 @@ import { discoveryRouter } from "./routes/discovery";
 import { metricsRouter } from "./routes/metrics";
 import { integrationsRouter } from "./routes/integrations";
 import { versionRouter } from "./routes/version";
+import { firmwareRouter } from "./routes/firmware";
+import { systemRouter } from "./routes/system";
 import { startOfflineWatcher } from "./services/thresholdEngine";
 import { startRetentionWatcher } from "./services/retention";
 import { initWs } from "./ws";
@@ -56,6 +58,8 @@ async function main() {
   app.use("/api/discovery", discoveryRouter);
   app.use("/api/integrations", integrationsRouter);
   app.use("/api/version", versionRouter);
+  app.use("/api/firmware", firmwareRouter);
+  app.use("/api/system", systemRouter);
   app.use("/metrics", metricsRouter);
 
   const frontendDist = path.join(__dirname, "../public");

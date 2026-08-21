@@ -110,6 +110,12 @@ export default function Dashboard() {
 
   if (!sensors) return <div className="center-screen">Caricamento…</div>;
 
+  const counts = { ok: 0, crit: 0, offline: 0, pending: 0 };
+  sensors.forEach((s) => {
+    const st = statusOf(s);
+    counts[st === "warn" ? "crit" : st]++;
+  });
+
   return (
     <div>
       <div className="page-header">
@@ -127,6 +133,29 @@ export default function Dashboard() {
           + Nuovo sensore
         </button>
       </div>
+
+      {sensors.length > 0 && (
+        <div className="summary-stats">
+          <div className="summary-stat">
+            <span className="summary-stat-num" style={{ color: "var(--ok)" }}>{counts.ok}</span>
+            <span className="muted small">OK</span>
+          </div>
+          <div className="summary-stat">
+            <span className="summary-stat-num" style={{ color: "var(--crit)" }}>{counts.crit}</span>
+            <span className="muted small">In allarme</span>
+          </div>
+          <div className="summary-stat">
+            <span className="summary-stat-num" style={{ color: "var(--offline)" }}>{counts.offline}</span>
+            <span className="muted small">Offline</span>
+          </div>
+          {counts.pending > 0 && (
+            <div className="summary-stat">
+              <span className="summary-stat-num" style={{ color: "var(--offline)" }}>{counts.pending}</span>
+              <span className="muted small">In attesa</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {discovered.length > 0 && (
         <div className="card setup-panel" style={{ marginBottom: 20 }}>

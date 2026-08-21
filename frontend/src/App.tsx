@@ -10,6 +10,7 @@ import SensorDetail from "./pages/SensorDetail";
 import NotificationSettings from "./pages/NotificationSettings";
 import Integrations from "./pages/Integrations";
 import BulkThresholds from "./pages/BulkThresholds";
+import Account from "./pages/Account";
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { username, mustChangePassword, loading, logout } = useAuth();
@@ -37,7 +38,9 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
         </nav>
         <div className="topbar-right">
           <ThemeToggle />
-          <span className="user">{username}</span>
+          <NavLink to="/account" className="user" style={{ textDecoration: "none" }}>
+            {username}
+          </NavLink>
           <button className="btn-link" onClick={() => logout()}>
             Esci
           </button>
@@ -91,6 +94,14 @@ export default function App() {
         element={
           <ProtectedLayout>
             <BulkThresholds />
+          </ProtectedLayout>
+        }
+      />
+      <Route
+        path="/account"
+        element={
+          <ProtectedLayout>
+            <Account />
           </ProtectedLayout>
         }
       />
