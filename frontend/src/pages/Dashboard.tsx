@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, DiscoveredDevice, Sensor } from "../api/client";
 import Sparkline from "../components/Sparkline";
+import ThermometerIcon from "../components/ThermometerIcon";
 
 type Status = "ok" | "warn" | "crit" | "offline" | "pending";
 
@@ -23,6 +24,10 @@ function statusOf(sensor: Sensor): Status {
   if (t?.enabled) {
     if (t.maxTemp !== null && reading.temperature > t.maxTemp) return "crit";
     if (t.minTemp !== null && reading.temperature < t.minTemp) return "crit";
+    if (reading.humidity != null) {
+      if (t.maxHumidity !== null && reading.humidity > t.maxHumidity) return "crit";
+      if (t.minHumidity !== null && reading.humidity < t.minHumidity) return "crit";
+    }
   }
   return "ok";
 }
@@ -36,9 +41,9 @@ const STATUS_LABEL: Record<Status, string> = {
 };
 
 const STATUS_COLOR: Record<Status, string> = {
-  ok: "#1c8a5b",
-  warn: "#b7791f",
-  crit: "#c42b3a",
+  ok: "#4c9a2a",
+  warn: "#c77700",
+  crit: "#d33c2c",
   offline: "#8a93a1",
   pending: "#8a93a1",
 };
@@ -229,11 +234,15 @@ export default function Dashboard() {
               className={`sensor-card${status === "pending" ? " pending-card" : ""}`}
             >
               <div className="sensor-card-top">
-                <span className={`led led-${status === "pending" ? "offline" : status}`} />
-                <strong>{s.name}</strong>
+                <span className={`tile-icon chip-${status === "pending" ? "offline" : status}`}>
+                  <ThermometerIcon />
+                </span>
+                <div className="tile-title">
+                  <strong>{s.name}</strong>
+                  {s.location && <div className="sensor-location" style={{ margin: 0 }}>{s.location}</div>}
+                </div>
                 <span className={`chip chip-${status === "pending" ? "offline" : status}`}>{STATUS_LABEL[status]}</span>
               </div>
-              {s.location && <div className="sensor-location">{s.location}</div>}
 
               {reading ? (
                 <div className="sensor-readout">

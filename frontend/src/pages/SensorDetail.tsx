@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
+import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from "recharts";
 import { api, Reading, Sensor, Threshold } from "../api/client";
 import CopyField from "../components/CopyField";
 
@@ -56,6 +56,8 @@ export default function SensorDetail() {
     const updated = await api.put<Threshold>(`/sensors/${id}/threshold`, {
       minTemp: threshold.minTemp,
       maxTemp: threshold.maxTemp,
+      minHumidity: threshold.minHumidity,
+      maxHumidity: threshold.maxHumidity,
       maxOfflineMin: threshold.maxOfflineMin,
       hysteresis: threshold.hysteresis,
       cooldownMin: threshold.cooldownMin,
@@ -85,7 +87,9 @@ export default function SensorDetail() {
   const chartData = readings.map((r) => ({
     time: new Date(r.createdAt).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
     temperature: r.temperature,
+    humidity: r.humidity,
   }));
+  const hasHumidity = readings.some((r) => r.humidity != null);
 
   const ingestUrl = `${window.location.origin}/api/ingest`;
   const hasData = readings.length > 0;
@@ -138,37 +142,73 @@ export default function SensorDetail() {
         ) : (
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={chartData}>
-              <CartesianGrid stroke="#e2e5ea" vertical={false} />
+              <CartesianGrid stroke="#dfe2e5" vertical={false} />
               <XAxis
                 dataKey="time"
                 minTickGap={30}
-                stroke="#8a93a1"
+                stroke="#98a1b0"
                 fontSize={11}
                 fontFamily="ui-monospace, monospace"
                 tickLine={false}
-                axisLine={{ stroke: "#e2e5ea" }}
+                axisLine={{ stroke: "#dfe2e5" }}
               />
               <YAxis
+                yAxisId="temp"
                 unit="°C"
                 domain={["auto", "auto"]}
-                stroke="#8a93a1"
+                stroke="#3d7dd3"
                 fontSize={11}
                 fontFamily="ui-monospace, monospace"
                 tickLine={false}
                 axisLine={false}
                 width={48}
               />
+              {hasHumidity && (
+                <YAxis
+                  yAxisId="humidity"
+                  orientation="right"
+                  unit="%"
+                  domain={[0, 100]}
+                  stroke="#4c9a2a"
+                  fontSize={11}
+                  fontFamily="ui-monospace, monospace"
+                  tickLine={false}
+                  axisLine={false}
+                  width={44}
+                />
+              )}
               <Tooltip
                 contentStyle={{
                   background: "#ffffff",
-                  border: "1px solid #e2e5ea",
-                  borderRadius: 8,
+                  border: "1px solid #dfe2e5",
+                  borderRadius: 10,
                   fontSize: 13,
-                  boxShadow: "0 4px 16px rgba(27,36,48,0.1)",
+                  boxShadow: "0 8px 20px rgba(32,36,42,0.12)",
                 }}
-                labelStyle={{ color: "#5b6472" }}
+                labelStyle={{ color: "#667085" }}
               />
-              <Line type="monotone" dataKey="temperature" stroke="#2455c7" dot={false} strokeWidth={2} />
+              {hasHumidity && <Legend wrapperStyle={{ fontSize: 12 }} />}
+              <Line
+                yAxisId="temp"
+                type="monotone"
+                dataKey="temperature"
+                name="Temperatura (°C)"
+                stroke="#3d7dd3"
+                dot={false}
+                strokeWidth={2}
+              />
+              {hasHumidity && (
+                <Line
+                  yAxisId="humidity"
+                  type="monotone"
+                  dataKey="humidity"
+                  name="Umidità (%)"
+                  stroke="#4c9a2a"
+                  dot={false}
+                  strokeWidth={2}
+                  connectNulls
+                />
+              )}
             </LineChart>
           </ResponsiveContainer>
         )}
@@ -193,6 +233,26 @@ export default function SensorDetail() {
               step="0.1"
               value={threshold.maxTemp ?? ""}
               onChange={(e) => setThreshold({ ...threshold, maxTemp: e.target.value === "" ? null : Number(e.target.value) })}
+            />
+          </label>
+        </div>
+        <div className="form-row">
+          <label>
+            Umidità minima (%)
+            <input
+              type="number"
+              step="1"
+              value={threshold.minHumidity ?? ""}
+              onChange={(e) => setThreshold({ ...threshold, minHumidity: e.target.value === "" ? null : Number(e.target.value) })}
+            />
+          </label>
+          <label>
+            Umidità massima (%)
+            <input
+              type="number"
+              step="1"
+              value={threshold.maxHumidity ?? ""}
+              onChange={(e) => setThreshold({ ...threshold, maxHumidity: e.target.value === "" ? null : Number(e.target.value) })}
             />
           </label>
         </div>

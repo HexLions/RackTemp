@@ -42,6 +42,8 @@ model Threshold {
   sensor        Sensor   @relation(fields: [sensorId], references: [id], onDelete: Cascade)
   minTemp       Float?
   maxTemp       Float?
+  minHumidity   Float?
+  maxHumidity   Float?
   maxOfflineMin Int      @default(15)
   hysteresis    Float    @default(0.5)
   cooldownMin   Int      @default(15)

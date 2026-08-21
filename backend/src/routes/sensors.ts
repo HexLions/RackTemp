@@ -103,6 +103,8 @@ sensorsRouter.get("/:id/readings", async (req, res) => {
 const thresholdSchema = z.object({
   minTemp: z.number().nullable().optional(),
   maxTemp: z.number().nullable().optional(),
+  minHumidity: z.number().nullable().optional(),
+  maxHumidity: z.number().nullable().optional(),
   maxOfflineMin: z.number().int().positive().optional(),
   hysteresis: z.number().min(0).optional(),
   cooldownMin: z.number().int().positive().optional(),

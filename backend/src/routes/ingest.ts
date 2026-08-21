@@ -44,7 +44,7 @@ ingestRouter.post("/", async (req, res) => {
   }
 
   broadcastReading(sensor.id, reading);
-  await checkReading(sensor.id, readingData.temperature);
+  await checkReading(sensor.id, readingData.temperature, readingData.humidity);
 
   res.status(201).json({ ok: true });
 });

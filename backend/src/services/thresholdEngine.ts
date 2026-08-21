@@ -24,43 +24,100 @@ async function lastAlertType(sensorId: string): Promise<string | null> {
   return last?.type ?? null;
 }
 
-export async function checkReading(sensorId: string, temperature: number) {
-  const threshold = await prisma.threshold.findUnique({ where: { sensorId } });
-  const sensor = await prisma.sensor.findUnique({ where: { id: sensorId } });
-  if (!threshold || !threshold.enabled || !sensor) return;
+async function lastAlertTypeAmong(sensorId: string, types: string[]): Promise<string | null> {
+  const last = await prisma.notificationLog.findFirst({
+    where: { sensorId, type: { in: types } },
+    orderBy: { sentAt: "desc" },
+  });
+  return last?.type ?? null;
+}
 
-  const { minTemp, maxTemp, hysteresis, cooldownMin } = threshold;
-  const isHigh = maxTemp !== null && temperature > maxTemp;
-  const isLow = minTemp !== null && temperature < minTemp;
-  const last = await lastAlertType(sensorId);
+interface MetricCheck {
+  sensorId: string;
+  sensorName: string;
+  value: number;
+  min: number | null;
+  max: number | null;
+  hysteresis: number;
+  cooldownMin: number;
+  label: string;
+  unit: string;
+  highType: string;
+  lowType: string;
+  recoveredType: string;
+}
+
+// Shared high/low/recovered logic for one metric (temperature or humidity) on
+// one sensor, so both can breach and recover independently in the same reading.
+async function evaluateMetric(m: MetricCheck) {
+  const { sensorId, sensorName, value, min, max, hysteresis, cooldownMin, label, unit, highType, lowType, recoveredType } = m;
+  const isHigh = max !== null && value > max;
+  const isLow = min !== null && value < min;
 
   if (isHigh) {
-    if (!(await recentlyNotified(sensorId, "high_temp", cooldownMin))) {
-      const msg = `[${sensor.name}] Temperatura alta: ${temperature.toFixed(1)}°C (soglia max ${maxTemp}°C)`;
-      await notifyAll(`Rack Temp - ALERT ${sensor.name}`, msg);
-      await logNotification(sensorId, "high_temp", msg);
+    if (!(await recentlyNotified(sensorId, highType, cooldownMin))) {
+      const msg = `[${sensorName}] ${label} alta: ${value.toFixed(1)}${unit} (soglia max ${max}${unit})`;
+      await notifyAll(`Rack Temp - ALERT ${sensorName}`, msg);
+      await logNotification(sensorId, highType, msg);
     }
     return;
   }
 
   if (isLow) {
-    if (!(await recentlyNotified(sensorId, "low_temp", cooldownMin))) {
-      const msg = `[${sensor.name}] Temperatura bassa: ${temperature.toFixed(1)}°C (soglia min ${minTemp}°C)`;
-      await notifyAll(`Rack Temp - ALERT ${sensor.name}`, msg);
-      await logNotification(sensorId, "low_temp", msg);
+    if (!(await recentlyNotified(sensorId, lowType, cooldownMin))) {
+      const msg = `[${sensorName}] ${label} bassa: ${value.toFixed(1)}${unit} (soglia min ${min}${unit})`;
+      await notifyAll(`Rack Temp - ALERT ${sensorName}`, msg);
+      await logNotification(sensorId, lowType, msg);
     }
     return;
   }
 
-  // Back within thresholds (with hysteresis margin) after a previous alert -> send recovery once.
   const backInRange =
-    (maxTemp === null || temperature <= maxTemp - hysteresis) &&
-    (minTemp === null || temperature >= minTemp + hysteresis);
+    (max === null || value <= max - hysteresis) && (min === null || value >= min + hysteresis);
 
-  if (backInRange && (last === "high_temp" || last === "low_temp")) {
-    const msg = `[${sensor.name}] Temperatura rientrata nella norma: ${temperature.toFixed(1)}°C`;
-    await notifyAll(`Rack Temp - OK ${sensor.name}`, msg);
-    await logNotification(sensorId, "recovered", msg);
+  const last = await lastAlertTypeAmong(sensorId, [highType, lowType]);
+  if (backInRange && last) {
+    const msg = `[${sensorName}] ${label} rientrata nella norma: ${value.toFixed(1)}${unit}`;
+    await notifyAll(`Rack Temp - OK ${sensorName}`, msg);
+    await logNotification(sensorId, recoveredType, msg);
+  }
+}
+
+export async function checkReading(sensorId: string, temperature: number, humidity?: number | null) {
+  const threshold = await prisma.threshold.findUnique({ where: { sensorId } });
+  const sensor = await prisma.sensor.findUnique({ where: { id: sensorId } });
+  if (!threshold || !threshold.enabled || !sensor) return;
+
+  await evaluateMetric({
+    sensorId,
+    sensorName: sensor.name,
+    value: temperature,
+    min: threshold.minTemp,
+    max: threshold.maxTemp,
+    hysteresis: threshold.hysteresis,
+    cooldownMin: threshold.cooldownMin,
+    label: "Temperatura",
+    unit: "°C",
+    highType: "high_temp",
+    lowType: "low_temp",
+    recoveredType: "recovered_temp",
+  });
+
+  if (humidity != null && (threshold.minHumidity !== null || threshold.maxHumidity !== null)) {
+    await evaluateMetric({
+      sensorId,
+      sensorName: sensor.name,
+      value: humidity,
+      min: threshold.minHumidity,
+      max: threshold.maxHumidity,
+      hysteresis: threshold.hysteresis,
+      cooldownMin: threshold.cooldownMin,
+      label: "Umidità",
+      unit: "%",
+      highType: "high_humidity",
+      lowType: "low_humidity",
+      recoveredType: "recovered_humidity",
+    });
   }
 }
 

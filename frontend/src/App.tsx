@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import SensorDetail from "./pages/SensorDetail";
 import NotificationSettings from "./pages/NotificationSettings";
 import Integrations from "./pages/Integrations";
+import BulkThresholds from "./pages/BulkThresholds";
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { username, mustChangePassword, loading, logout } = useAuth();
@@ -32,6 +33,7 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
           </NavLink>
           <NavLink to="/notifications">Notifiche</NavLink>
           <NavLink to="/integrazioni">Integrazioni</NavLink>
+          <NavLink to="/soglie-bulk">Soglie multiple</NavLink>
         </nav>
         <div className="topbar-right">
           <ThemeToggle />
@@ -81,6 +83,14 @@ export default function App() {
         element={
           <ProtectedLayout>
             <Integrations />
+          </ProtectedLayout>
+        }
+      />
+      <Route
+        path="/soglie-bulk"
+        element={
+          <ProtectedLayout>
+            <BulkThresholds />
           </ProtectedLayout>
         }
       />

@@ -50,6 +50,8 @@ export interface Threshold {
   sensorId: string;
   minTemp: number | null;
   maxTemp: number | null;
+  minHumidity: number | null;
+  maxHumidity: number | null;
   maxOfflineMin: number;
   hysteresis: number;
   cooldownMin: number;
