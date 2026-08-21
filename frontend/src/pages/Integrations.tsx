@@ -157,8 +157,10 @@ export default function Integrations() {
       <div className="card">
         <h2>Aggiornamento controller</h2>
         <p className="hint" style={{ marginTop: -4 }}>
-          Controlla automaticamente le release su GitHub e permette di far ripartire il container con l'ultima
-          immagine con un click. I dati (letture, sensori, soglie, login) vivono nel volume Docker e non vengono
+          Se lo stack include Watchtower (di default in <code>docker-compose.portainer.yml</code>), il controller
+          si aggiorna da solo entro poche ore da ogni nuova release, senza fare nulla qui. Questa sezione serve per
+          vedere a che versione sei e, se vuoi saltare l'attesa, per forzare subito un redeploy tramite un webhook
+          Portainer opzionale. I dati (letture, sensori, soglie, login) vivono nel volume Docker e non vengono
           toccati dall'aggiornamento.
         </p>
 

@@ -108,9 +108,15 @@ l'immagine già pronta da `ghcr.io/hexlions/racktemp`, pubblicata automaticament
 4. **Deploy the stack**.
 
 Apri `http://<ip-del-pc>:7431` — stesso comportamento del deploy via CLI, incluso il primo
-accesso `admin`/`admin` da cambiare subito. Per aggiornamenti automatici a ogni push, usa il
-metodo **Repository** di Portainer puntato a questo repo + `docker-compose.portainer.yml`,
-con **GitOps update** attivo.
+accesso `admin`/`admin` da cambiare subito.
+
+Lo stack include già **Watchtower**: appena esce una nuova immagine su GHCR (ogni push su
+`main`), il container si aggiorna e riavvia da solo entro 6 ore, senza bisogno di toccare
+Portainer. I dati restano intatti (vivono nel volume `rack-temp-data`, non nell'immagine). In
+**Integrazioni** trovi comunque un indicatore di versione con link alla release e un bottone per
+forzare subito un redeploy tramite un webhook Portainer opzionale, se non vuoi aspettare il poll
+di Watchtower. Per disattivare gli aggiornamenti automatici, rimuovi il servizio `watchtower` (e
+il relativo label su `rack-temp-monitor`) dallo stack.
 
 ---
 

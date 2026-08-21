@@ -7,6 +7,11 @@
 # In Portainer, alla creazione dello stack aggiungi la variabile d'ambiente
 # SESSION_SECRET (Environment variables) con una stringa lunga e casuale,
 # altrimenti resta il valore di default sotto (da cambiare comunque).
+#
+# Include anche Watchtower: appena esce una nuova immagine su GHCR il
+# controller si aggiorna e riavvia da solo, senza bisogno di webhook
+# o click manuali. Se non lo vuoi, cancella il servizio "watchtower"
+# e il label "com.centurylinklabs.watchtower.enable" sotto.
 
 services:
   rack-temp-monitor:
@@ -21,6 +26,23 @@ services:
       SESSION_SECRET: ${SESSION_SECRET:-change-me-to-a-long-random-string}
     volumes:
       - rack-temp-data:/app/backend/data
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  # Aggiorna automaticamente SOLO rack-temp-monitor (grazie al label sopra)
+  # ogni volta che esce una nuova immagine su GHCR: nessun click, nessun
+  # webhook da configurare. Il volume dati non viene toccato dal riavvio.
+  # Per disattivare: rimuovi questo servizio dallo stack.
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: rack-temp-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_POLL_INTERVAL: "21600" # 6 ore
 
 volumes:
   rack-temp-data:
