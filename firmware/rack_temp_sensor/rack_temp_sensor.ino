@@ -24,6 +24,10 @@
 #define I2C_SDA_PIN 8
 #define I2C_SCL_PIN 9
 
+// Aggiornata ad ogni modifica del firmware — stampata via seriale al boot,
+// così sai al volo se il device sta girando con l'ultima versione flashata.
+#define FIRMWARE_VERSION "2026-08-21.1"
+
 // Pulsante BOOT, tenuto premuto all'accensione per rientrare nel setup WiFi. Su molti
 // cloni "Super Mini" è sullo stesso GPIO9 usato sopra per SCL: lo leggiamo solo all'avvio,
 // PRIMA di Wire.begin(), quindi non confligge — ma se sulla tua scheda BOOT è su un altro
@@ -228,7 +232,7 @@ void announceDiscovery() {
   HTTPClient http;
   http.begin(cfgServerUrl + "/api/discovery/announce");
   http.addHeader("Content-Type", "application/json");
-  String body = "{\"chipId\":\"" + chipId() + "\",\"firmware\":\"rack_temp_sensor\"}";
+  String body = "{\"chipId\":\"" + chipId() + "\",\"firmware\":\"rack_temp_sensor@" FIRMWARE_VERSION "\"}";
   int code = http.POST(body);
   Serial.printf("POST /api/discovery/announce -> %d\n", code);
 
@@ -279,6 +283,7 @@ void sendReading(float temperature, float humidity) {
 void setup() {
   Serial.begin(115200);
   delay(500);
+  Serial.println("=== RackTemp ESP32-C3/SHT31-D - firmware " FIRMWARE_VERSION " ===");
 
   pinMode(BOOT_BUTTON_PIN, INPUT_PULLUP);
   bool forceSetup = (digitalRead(BOOT_BUTTON_PIN) == LOW);
