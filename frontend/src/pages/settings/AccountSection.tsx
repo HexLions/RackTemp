@@ -1,5 +1,6 @@
 import { FormEvent, useState } from "react";
 import { api, ApiError } from "../../api/client";
+import WindowsAppCard from "./WindowsAppCard";
 
 export default function AccountSection() {
   const [currentPassword, setCurrentPassword] = useState("");
@@ -34,33 +35,36 @@ export default function AccountSection() {
   }
 
   return (
-    <form className="card" onSubmit={submit} style={{ maxWidth: 420 }}>
-      <h2>Cambia password</h2>
-      <label>
-        Password attuale
-        <input
-          type="password"
-          value={currentPassword}
-          onChange={(e) => setCurrentPassword(e.target.value)}
-          required
-          autoFocus
-        />
-      </label>
-      <label>
-        Nuova password
-        <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} />
-      </label>
-      <label>
-        Conferma nuova password
-        <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} />
-      </label>
-      {error && <div className="error">{error}</div>}
-      <div className="row-actions">
-        <button className="btn-primary" type="submit" disabled={busy}>
-          {busy ? "Salvataggio…" : "Cambia password"}
-        </button>
-        {saved && <span className="success-text">✓ password aggiornata</span>}
-      </div>
-    </form>
+    <>
+      <WindowsAppCard />
+      <form className="card" onSubmit={submit} style={{ maxWidth: 420 }}>
+        <h2>Cambia password</h2>
+        <label>
+          Password attuale
+          <input
+            type="password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+            required
+            autoFocus
+          />
+        </label>
+        <label>
+          Nuova password
+          <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} />
+        </label>
+        <label>
+          Conferma nuova password
+          <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} />
+        </label>
+        {error && <div className="error">{error}</div>}
+        <div className="row-actions">
+          <button className="btn-primary" type="submit" disabled={busy}>
+            {busy ? "Salvataggio…" : "Cambia password"}
+          </button>
+          {saved && <span className="success-text">✓ password aggiornata</span>}
+        </div>
+      </form>
+    </>
   );
 }

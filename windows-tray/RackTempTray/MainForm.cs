@@ -72,10 +72,15 @@ public class MainForm : Form
         var menu = new ContextMenuStrip();
         menu.Items.Add("Apri RackTemp", null, (_, _) => ShowMainWindow());
         menu.Items.Add(new ToolStripSeparator());
-        _autostartMenuItem = new ToolStripMenuItem("Avvia con Windows all'accesso", null, (_, _) => ToggleAutostart())
+        _autostartMenuItem = new ToolStripMenuItem("Avvia con Windows all'accesso", null, (_, _) =>
         {
-            Checked = IsAutostartEnabled(),
+            SetAutostart(!_autostartMenuItem.Checked);
+            _autostartMenuItem.Checked = GetAutostart();
+        })
+        {
+            Checked = GetAutostart(),
         };
+        menu.Opening += (_, _) => _autostartMenuItem.Checked = GetAutostart();
         menu.Items.Add(_autostartMenuItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Esci e ferma il servizio", null, (_, _) =>
@@ -89,16 +94,17 @@ public class MainForm : Form
 
     // Chiave in HKCU, non serve elevazione per leggerla/scriverla — a
     // differenza di avviare/fermare il servizio, questa è una preferenza
-    // dell'utente corrente, non un'azione di sistema.
-    private static bool IsAutostartEnabled()
+    // dell'utente corrente, non un'azione di sistema. Condivisa tra il menu
+    // tray e il bridge WebView2 verso la pagina Impostazioni: stessa fonte
+    // di verità qualunque sia l'interfaccia usata per cambiarla.
+    internal static bool GetAutostart()
     {
         using var key = Registry.CurrentUser.OpenSubKey(AutostartRunKey, writable: false);
         return key?.GetValue(AutostartValueName) != null;
     }
 
-    private void ToggleAutostart()
+    internal static void SetAutostart(bool enable)
     {
-        var enable = !_autostartMenuItem.Checked;
         using var key = Registry.CurrentUser.CreateSubKey(AutostartRunKey, writable: true);
         if (enable)
         {
@@ -108,7 +114,6 @@ public class MainForm : Form
         {
             key.DeleteValue(AutostartValueName, throwOnMissingValue: false);
         }
-        _autostartMenuItem.Checked = enable;
     }
 
     // Se l'utente ha chiuso tutto con "Esci" (che ferma anche il servizio) e
@@ -204,6 +209,13 @@ public class MainForm : Form
         var environment = await CoreWebView2Environment.CreateAsync(userDataFolder: userDataFolder);
         await _webView.EnsureCoreWebView2Async(environment);
 
+        // Espone il toggle "avvia con Windows" alla pagina Impostazioni —
+        // window.chrome.webview.hostObjects.racktempHost lato JS. Funziona
+        // solo qui dentro (questa finestra), mai da un browser normale o da
+        // remoto: è esattamente il comportamento voluto, l'autostart è per
+        // definizione una preferenza di questo utente su questa macchina.
+        _webView.CoreWebView2.AddHostObjectToScript("racktempHost", new RackTempHostObject());
+
         await TryNavigateWhenReadyAsync();
         if (!_navigatedOnce)
         {
@@ -251,4 +263,13 @@ public class MainForm : Form
             ToolTipIcon.Info
         );
     }
+}
+
+// Oggetto esposto alla pagina web tramite CoreWebView2.AddHostObjectToScript.
+// Metodi pubblici con soli tipi primitivi — WebView2 li marshalla verso JS
+// automaticamente, ogni chiamata lato pagina restituisce una Promise.
+public class RackTempHostObject
+{
+    public bool GetAutostart() => MainForm.GetAutostart();
+    public void SetAutostart(bool enable) => MainForm.SetAutostart(enable);
 }
