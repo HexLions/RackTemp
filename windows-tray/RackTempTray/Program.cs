@@ -10,8 +10,8 @@ internal static class Program
         using var mutex = new Mutex(true, "RackTempTray_SingleInstance", out var isFirstInstance);
         if (!isFirstInstance)
         {
-            // Già in esecuzione (tray icon già visibile): non aprire una seconda
-            // finestra, esci silenziosamente.
+            // Already running (tray icon already visible): don't open a second
+            // window, exit silently.
             return;
         }
 

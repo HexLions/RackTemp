@@ -9,9 +9,9 @@ type Status = "ok" | "warn" | "crit" | "offline" | "pending";
 function timeAgo(iso: string | null) {
   if (!iso) return null;
   const sec = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (sec < 60) return `${Math.round(sec)}s fa`;
-  if (sec < 3600) return `${Math.round(sec / 60)}m fa`;
-  return `${Math.round(sec / 3600)}h fa`;
+  if (sec < 60) return `${Math.round(sec)}s ago`;
+  if (sec < 3600) return `${Math.round(sec / 60)}m ago`;
+  return `${Math.round(sec / 3600)}h ago`;
 }
 
 function statusOf(sensor: Sensor): Status {
@@ -34,10 +34,10 @@ function statusOf(sensor: Sensor): Status {
 
 const STATUS_LABEL: Record<Status, string> = {
   ok: "OK",
-  warn: "Attenzione",
-  crit: "Allarme",
+  warn: "Warning",
+  crit: "Alarm",
   offline: "Offline",
-  pending: "In attesa",
+  pending: "Pending",
 };
 
 const STATUS_COLOR: Record<Status, string> = {
@@ -95,7 +95,7 @@ export default function Dashboard() {
   }
 
   function startFromDiscovered(device: DiscoveredDevice) {
-    setName(`Sensore ${device.chipId.slice(-6)}`);
+    setName(`Sensor ${device.chipId.slice(-6)}`);
     setStaticIp(device.ip ?? "");
     setPendingChipId(device.chipId);
     setShowAdd(true);
@@ -108,7 +108,7 @@ export default function Dashboard() {
     load();
   }
 
-  if (!sensors) return <div className="center-screen">Caricamento…</div>;
+  if (!sensors) return <div className="center-screen">Loading…</div>;
 
   const counts = { ok: 0, crit: 0, offline: 0, pending: 0 };
   sensors.forEach((s) => {
@@ -120,17 +120,17 @@ export default function Dashboard() {
     <div>
       <div className="page-header">
         <div>
-          <h1>Sensori</h1>
+          <h1>Sensors</h1>
           <p className="page-sub">
             {sensors.length === 0
-              ? "Nessun sensore configurato"
+              ? "No sensors configured"
               : sensors.length === 1
-                ? "1 sensore configurato"
-                : `${sensors.length} sensori configurati`}
+                ? "1 sensor configured"
+                : `${sensors.length} sensors configured`}
           </p>
         </div>
         <button className="btn-primary" onClick={() => setShowAdd((v) => !v)}>
-          + Nuovo sensore
+          + New sensor
         </button>
       </div>
 
@@ -142,7 +142,7 @@ export default function Dashboard() {
           </div>
           <div className="summary-stat">
             <span className="summary-stat-num" style={{ color: "var(--crit)" }}>{counts.crit}</span>
-            <span className="muted small">In allarme</span>
+            <span className="muted small">In alarm</span>
           </div>
           <div className="summary-stat">
             <span className="summary-stat-num" style={{ color: "var(--offline)" }}>{counts.offline}</span>
@@ -151,7 +151,7 @@ export default function Dashboard() {
           {counts.pending > 0 && (
             <div className="summary-stat">
               <span className="summary-stat-num" style={{ color: "var(--offline)" }}>{counts.pending}</span>
-              <span className="muted small">In attesa</span>
+              <span className="muted small">Pending</span>
             </div>
           )}
         </div>
@@ -159,11 +159,11 @@ export default function Dashboard() {
 
       {discovered.length > 0 && (
         <div className="card setup-panel" style={{ marginBottom: 20 }}>
-          <h2>Sensori rilevati in rete ({discovered.length})</h2>
+          <h2>Sensors discovered on the network ({discovered.length})</h2>
           <p className="hint" style={{ marginTop: -4 }}>
-            Questi dispositivi si sono annunciati ma non hanno ancora un'API key. Crea un sensore nuovo, oppure
-            collegali a uno già esistente: il dispositivo prende la key da solo al prossimo annuncio, senza
-            toccarlo di nuovo.
+            These devices have announced themselves but don't have an API key yet. Create a new sensor, or
+            link them to an existing one: the device will pick up the key on its own at the next announcement,
+            with no need to touch it again.
           </p>
           <div className="stack-tight">
             {discovered.map((d) => {
@@ -172,14 +172,14 @@ export default function Dashboard() {
                 <div key={d.id} style={{ borderTop: "1px solid var(--line)", paddingTop: 10, marginTop: 10 }}>
                   <div className="row-actions" style={{ justifyContent: "space-between" }}>
                     <span className="mono small">
-                      chip {d.chipId.slice(-8)} {d.ip && `· ${d.ip}`} · visto {timeAgo(d.lastSeenAt)}
+                      chip {d.chipId.slice(-8)} {d.ip && `· ${d.ip}`} · last seen {timeAgo(d.lastSeenAt)}
                     </span>
                     <span className="row-actions">
                       <button type="button" className="btn-link" onClick={() => startFromDiscovered(d)}>
-                        Nuovo sensore
+                        New sensor
                       </button>
                       <button type="button" className="btn-ghost" onClick={() => dismissDiscovered(d.id)}>
-                        Ignora
+                        Ignore
                       </button>
                     </span>
                   </div>
@@ -189,7 +189,7 @@ export default function Dashboard() {
                         value={linkTarget[d.id] ?? ""}
                         onChange={(e) => setLinkTarget({ ...linkTarget, [d.id]: e.target.value })}
                       >
-                        <option value="">Collega a sensore esistente…</option>
+                        <option value="">Link to existing sensor…</option>
                         {unlinkedSensors.map((s) => (
                           <option key={s.id} value={s.id}>
                             {s.name}
@@ -202,7 +202,7 @@ export default function Dashboard() {
                         disabled={!linkTarget[d.id]}
                         onClick={() => linkExisting(d.id)}
                       >
-                        Collega
+                        Link
                       </button>
                     </div>
                   )}
@@ -215,38 +215,38 @@ export default function Dashboard() {
 
       {showAdd && (
         <form className="card" onSubmit={addSensor} style={{ marginBottom: 20 }}>
-          <h2>Nuovo sensore</h2>
+          <h2>New sensor</h2>
           <div className="form-row">
             <label>
-              Nome
+              Name
               <input value={name} onChange={(e) => setName(e.target.value)} required placeholder="Rack A - top" autoFocus />
             </label>
             <label>
-              Posizione (opzionale)
-              <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Sala server 1" />
+              Location (optional)
+              <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Server room 1" />
             </label>
             <label>
-              IP statico (opzionale)
+              Static IP (optional)
               <input value={staticIp} onChange={(e) => setStaticIp(e.target.value)} placeholder="192.168.1.50" />
             </label>
           </div>
           <p className="hint" style={{ marginTop: -8 }}>
-            L'IP è solo un promemoria per te (es. se l'hai fissato via DHCP reservation): il sensore comunque
-            invia i dati al server, non è il server a raggiungerlo.
+            The IP is just a reminder for you (e.g. if you fixed it via a DHCP reservation): the sensor still
+            sends data to the server, the server doesn't reach out to it.
           </p>
           <button className="btn-primary" type="submit">
-            Crea sensore
+            Create sensor
           </button>
         </form>
       )}
 
       {sensors.length === 0 && discovered.length === 0 && (
         <div className="empty-state">
-          <h3>Ancora nessun sensore</h3>
+          <h3>No sensors yet</h3>
           <p>
-            Crea un sensore per ottenere la sua API key e l'URL a cui inviare le letture. Se l'ESP32 è già
-            acceso e configurato con l'indirizzo del server, comparirà qui sopra come "rilevato in rete" non
-            appena si annuncia.
+            Create a sensor to get its API key and the URL to send readings to. If the ESP32 is already
+            powered on and configured with the server's address, it will show up above as "discovered on the
+            network" as soon as it announces itself.
           </p>
         </div>
       )}
@@ -289,7 +289,7 @@ export default function Dashboard() {
 
               <div className="sensor-meta">
                 <span>{reading?.humidity != null ? `${reading.humidity.toFixed(0)}% RH` : ""}</span>
-                <span>{ago ?? "nessun dato"}</span>
+                <span>{ago ?? "no data"}</span>
               </div>
             </Link>
           );

@@ -17,7 +17,7 @@ export default function FirmwareSection() {
     e.preventDefault();
     const file = fileInput.current?.files?.[0];
     if (!file || !fwVersion.trim()) {
-      setFwMsg({ ok: false, text: "Versione e file .bin sono obbligatori." });
+      setFwMsg({ ok: false, text: "Version and .bin file are required." });
       return;
     }
 
@@ -38,9 +38,9 @@ export default function FirmwareSection() {
       setFwVersion("");
       setFwNotes("");
       if (fileInput.current) fileInput.current.value = "";
-      setFwMsg({ ok: true, text: "Firmware caricato." });
+      setFwMsg({ ok: true, text: "Firmware uploaded." });
     } catch (err) {
-      setFwMsg({ ok: false, text: err instanceof ApiError ? err.message : "Errore di rete" });
+      setFwMsg({ ok: false, text: err instanceof ApiError ? err.message : "Network error" });
     } finally {
       setFwBusy(false);
     }
@@ -48,35 +48,35 @@ export default function FirmwareSection() {
 
   return (
     <form className="card" onSubmit={uploadFirmware}>
-      <h2>Aggiornamento firmware sensori</h2>
+      <h2>Sensor firmware update</h2>
       <p className="hint" style={{ marginTop: -4 }}>
-        Carica qui il <code>.bin</code> compilato: i sensori già collegati lo scaricano da soli entro 24h
-        (o al prossimo riavvio) via OTA, senza bisogno di ricollegarli via USB. La configurazione salvata sul
-        dispositivo (WiFi, server, API key) non viene toccata dall'aggiornamento.
+        Upload the compiled <code>.bin</code> here: sensors already connected download it on their own within
+        24h (or at the next reboot) via OTA, with no need to reconnect them via USB. The configuration saved on
+        the device (WiFi, server, API key) is not touched by the update.
       </p>
       {firmware && (
         <p className="hint">
-          Versione attuale disponibile: <code>{firmware.version}</code>
+          Currently available version: <code>{firmware.version}</code>
           {firmware.notes && <> — {firmware.notes}</>}
         </p>
       )}
       <div className="form-row">
         <label>
-          Versione
+          Version
           <input value={fwVersion} onChange={(e) => setFwVersion(e.target.value)} placeholder="2026-08-22.1" required />
         </label>
         <label>
-          Note (opzionale)
+          Notes (optional)
           <input value={fwNotes} onChange={(e) => setFwNotes(e.target.value)} placeholder="Fix reconnect WiFi" />
         </label>
       </div>
       <label>
-        File firmware (.bin)
+        Firmware file (.bin)
         <input type="file" accept=".bin" ref={fileInput} required />
       </label>
       <div className="row-actions">
         <button className="btn-primary" type="submit" disabled={fwBusy}>
-          {fwBusy ? "Carico…" : "Carica firmware"}
+          {fwBusy ? "Uploading…" : "Upload firmware"}
         </button>
         {fwMsg && <span className={fwMsg.ok ? "success-text" : "error"}>{fwMsg.text}</span>}
       </div>

@@ -7,14 +7,14 @@ Type=simple
 User=racktemp
 Group=racktemp
 WorkingDirectory=/opt/racktemp/backend
-# Stesso comando che gira nel container Docker a ogni avvio: crea/sincronizza
-# le tabelle SQLite se mancano (idempotente). Senza, il servizio parte ma
-# crasha subito con "table AdminUser does not exist" su un database nuovo.
+# Same command that runs in the Docker container on every start: creates/syncs
+# the SQLite tables if missing (idempotent). Without this, the service starts but
+# immediately crashes with "table AdminUser does not exist" on a fresh database.
 ExecStartPre=/opt/racktemp/node/bin/node node_modules/prisma/build/index.js db push --skip-generate
 ExecStart=/opt/racktemp/node/bin/node dist/index.js
 Restart=on-failure
 RestartSec=5
-# Il servizio non ha bisogno di scrivere altro che qui dentro: dati e log.
+# The service doesn't need to write anywhere but in here: data and logs.
 ReadWritePaths=/var/lib/racktemp
 
 [Install]

@@ -19,7 +19,7 @@ import BackupSection from "./pages/settings/BackupSection";
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { username, mustChangePassword, loading, logout } = useAuth();
 
-  if (loading) return <div className="center-screen">Caricamento…</div>;
+  if (loading) return <div className="center-screen">Loading…</div>;
   if (!username) return <Navigate to="/login" replace />;
   if (mustChangePassword) return <Navigate to="/first-login" replace />;
 
@@ -36,8 +36,8 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
           <NavLink to="/" end>
             Dashboard
           </NavLink>
-          <NavLink to="/soglie-bulk">Soglie multiple</NavLink>
-          <NavLink to="/impostazioni">Impostazioni</NavLink>
+          <NavLink to="/soglie-bulk">Multiple thresholds</NavLink>
+          <NavLink to="/impostazioni">Settings</NavLink>
         </nav>
         <div className="topbar-right">
           <ThemeToggle />
@@ -45,7 +45,7 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
             {username}
           </NavLink>
           <button className="btn-link" onClick={() => logout()}>
-            Esci
+            Log out
           </button>
         </div>
       </header>
@@ -101,7 +101,7 @@ export default function App() {
         <Route path="backup" element={<BackupSection />} />
       </Route>
 
-      {/* Vecchi indirizzi, per link/segnalibri esistenti */}
+      {/* Legacy paths, for existing links/bookmarks */}
       <Route path="/account" element={<Navigate to="/impostazioni/account" replace />} />
       <Route path="/notifications" element={<Navigate to="/impostazioni/notifiche" replace />} />
       <Route path="/integrazioni" element={<Navigate to="/impostazioni/integrazioni" replace />} />

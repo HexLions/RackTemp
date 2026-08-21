@@ -11,7 +11,7 @@ export default function IntegrationsSection() {
   }, []);
 
   async function regenerate() {
-    if (!confirm("Rigenerare il token PRTG? Il sensore PRTG aggregato esistente smetterà di funzionare finché non aggiorni l'URL.")) return;
+    if (!confirm("Regenerate the PRTG token? The existing aggregated PRTG sensor will stop working until you update the URL.")) return;
     setBusy(true);
     try {
       const updated = await api.post<IntegrationSettings>("/integrations/regenerate-prtg-token");
@@ -21,7 +21,7 @@ export default function IntegrationsSection() {
     }
   }
 
-  if (!settings) return <div className="center-screen">Caricamento…</div>;
+  if (!settings) return <div className="center-screen">Loading…</div>;
 
   const origin = window.location.origin;
   const prtgUrl = `${origin}/api/prtg/all?key=${settings.prtgToken}`;
@@ -32,14 +32,14 @@ export default function IntegrationsSection() {
       <div className="card">
         <h2>PRTG</h2>
         <p className="hint" style={{ marginTop: -4 }}>
-          Crea un solo sensore <strong>"HTTP Data Advanced"</strong> (o "REST Custom") in PRTG puntato a questo
-          URL: ogni sensore rack configurato compare come coppia di canali Temperature/Humidity/Age, senza
-          crearne uno per dispositivo.
+          Create a single <strong>"HTTP Data Advanced"</strong> sensor (or "REST Custom") in PRTG pointed at
+          this URL: every configured rack sensor shows up as a Temperature/Humidity/Age channel pair, with no
+          need to create one per device.
         </p>
-        <CopyField label="URL sensore PRTG aggregato" value={prtgUrl} />
+        <CopyField label="Aggregated PRTG sensor URL" value={prtgUrl} />
         <div className="row-actions">
           <button type="button" className="btn-ghost" onClick={regenerate} disabled={busy}>
-            Rigenera token
+            Regenerate token
           </button>
         </div>
       </div>
@@ -47,12 +47,12 @@ export default function IntegrationsSection() {
       <div className="card">
         <h2>Prometheus, Grafana, Zabbix, Uptime Kuma</h2>
         <p className="hint" style={{ marginTop: -4 }}>
-          Endpoint standard in formato Prometheus: aggiungilo come scrape target e ogni sensore compare da solo
-          al primo dato, senza configurazione per-sensore nel tool di monitoring.
+          Standard Prometheus-format endpoint: add it as a scrape target and every sensor shows up on its own
+          at the first data point, with no per-sensor configuration in the monitoring tool.
         </p>
-        <CopyField label="Endpoint metriche" value={metricsUrl} />
+        <CopyField label="Metrics endpoint" value={metricsUrl} />
         <p className="hint" style={{ marginBottom: 6 }}>
-          Esempio <code>prometheus.yml</code>:
+          Example <code>prometheus.yml</code>:
         </p>
         <pre className="code-block">
           <code>{`scrape_configs:\n  - job_name: rack-temp-monitor\n    static_configs:\n      - targets: ["${window.location.host}"]`}</code>

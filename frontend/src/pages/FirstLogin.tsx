@@ -26,7 +26,7 @@ export default function FirstLogin() {
     setError(null);
 
     if (newPassword !== confirm) {
-      setError("Le password non coincidono");
+      setError("Passwords do not match");
       return;
     }
 
@@ -35,7 +35,7 @@ export default function FirstLogin() {
       const res = await api.post<{ username: string }>("/auth/first-login", { newUsername, newPassword });
       completeFirstLogin(res.username);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Errore di rete");
+      setError(err instanceof ApiError ? err.message : "Network error");
     } finally {
       setBusy(false);
     }
@@ -46,7 +46,7 @@ export default function FirstLogin() {
     setError(null);
     const file = fileInput.current?.files?.[0];
     if (!file) {
-      setError("Seleziona un file di backup (.sqlite)");
+      setError("Select a backup file (.sqlite)");
       return;
     }
 
@@ -61,7 +61,7 @@ export default function FirstLogin() {
       }
       setMode("restore-done");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Errore di rete");
+      setError(err instanceof ApiError ? err.message : "Network error");
     } finally {
       setBusy(false);
     }
@@ -79,18 +79,18 @@ export default function FirstLogin() {
             <span className="logo-mark">
               <Logo size={20} />
             </span>
-            Nuova installazione
+            New installation
           </div>
           <p className="subtitle">
-            Stai usando le credenziali di default (<code>admin</code> / <code>admin</code>). Vuoi ripristinare
-            sensori e impostazioni da un backup, o partire da zero?
+            You're using the default credentials (<code>admin</code> / <code>admin</code>). Do you want to restore
+            sensors and settings from a backup, or start from scratch?
           </p>
           <div className="row-actions" style={{ flexDirection: "column", gap: 10 }}>
             <button className="btn-primary" type="button" onClick={() => setMode("fresh")} style={{ width: "100%" }}>
-              Configura da zero
+              Set up from scratch
             </button>
             <button className="btn-ghost" type="button" onClick={() => setMode("restore")} style={{ width: "100%" }}>
-              Ripristina da un backup
+              Restore from a backup
             </button>
           </div>
         </div>
@@ -102,15 +102,15 @@ export default function FirstLogin() {
             <span className="logo-mark">
               <Logo size={20} />
             </span>
-            Primo accesso
+            First login
           </div>
-          <p className="subtitle">Scegli username e password definitivi per continuare.</p>
+          <p className="subtitle">Choose your final username and password to continue.</p>
           <label>
-            Nuovo username
+            New username
             <input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} autoFocus required minLength={3} />
           </label>
           <label>
-            Nuova password
+            New password
             <input
               type="password"
               value={newPassword}
@@ -120,16 +120,16 @@ export default function FirstLogin() {
             />
           </label>
           <label>
-            Conferma password
+            Confirm password
             <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} />
           </label>
           {error && <div className="error">{error}</div>}
           <div className="row-actions">
             <button className="btn-primary" type="submit" disabled={busy}>
-              {busy ? "Salvataggio…" : "Imposta credenziali"}
+              {busy ? "Saving…" : "Set credentials"}
             </button>
             <button type="button" className="btn-link" onClick={() => setMode("choice")}>
-              Indietro
+              Back
             </button>
           </div>
         </form>
@@ -141,23 +141,23 @@ export default function FirstLogin() {
             <span className="logo-mark">
               <Logo size={20} />
             </span>
-            Ripristina da backup
+            Restore from backup
           </div>
           <p className="subtitle">
-            Carica un file <code>.sqlite</code> scaricato da Impostazioni → Backup di un'altra installazione
-            RackTemp. Username e password saranno quelli del backup, non admin/admin.
+            Upload a <code>.sqlite</code> file downloaded from Settings → Backup on another RackTemp
+            installation. Username and password will be those from the backup, not admin/admin.
           </p>
           <label>
-            File di backup
+            Backup file
             <input type="file" accept=".sqlite" ref={fileInput} required />
           </label>
           {error && <div className="error">{error}</div>}
           <div className="row-actions">
             <button className="btn-primary" type="submit" disabled={busy}>
-              {busy ? "Ripristino…" : "Ripristina"}
+              {busy ? "Restoring…" : "Restore"}
             </button>
             <button type="button" className="btn-link" onClick={() => setMode("choice")}>
-              Indietro
+              Back
             </button>
           </div>
         </form>
@@ -169,14 +169,14 @@ export default function FirstLogin() {
             <span className="logo-mark">
               <Logo size={20} />
             </span>
-            Ripristino completato
+            Restore complete
           </div>
           <p className="subtitle">
-            Il server si sta riavviando con i dati ripristinati. Ricarica la pagina tra qualche secondo e accedi
-            con le credenziali del backup.
+            The server is restarting with the restored data. Reload the page in a few seconds and log in
+            with the backup's credentials.
           </p>
           <button className="btn-primary" type="button" onClick={() => window.location.reload()} style={{ width: "100%" }}>
-            Ricarica ora
+            Reload now
           </button>
         </div>
       )}

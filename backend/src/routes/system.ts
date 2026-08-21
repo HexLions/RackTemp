@@ -70,28 +70,28 @@ systemRouter.get("/update-check", async (_req, res) => {
       downloadUrl: pickDownloadUrl(latest.assets, platform),
     });
   } catch {
-    res.status(502).json({ error: "impossibile controllare le release su GitHub" });
+    res.status(502).json({ error: "unable to check releases on GitHub" });
   }
 });
 
 systemRouter.post("/trigger-update", async (_req, res) => {
   const settings = await prisma.integrationSettings.findUnique({ where: { id: 1 } });
   if (!settings?.portainerWebhookUrl) {
-    return res.status(400).json({ error: "nessun webhook Portainer configurato in Integrazioni" });
+    return res.status(400).json({ error: "no Portainer webhook configured in Integrations" });
   }
   try {
     const hookRes = await fetch(settings.portainerWebhookUrl, { method: "POST" });
-    if (!hookRes.ok) throw new Error(`webhook risposto ${hookRes.status}`);
+    if (!hookRes.ok) throw new Error(`webhook responded ${hookRes.status}`);
     res.json({ ok: true });
   } catch (err) {
-    res.status(502).json({ error: err instanceof Error ? err.message : "webhook fallito" });
+    res.status(502).json({ error: err instanceof Error ? err.message : "webhook failed" });
   }
 });
 
 systemRouter.get("/backup", (_req, res) => {
   const dbPath = resolveDbPath();
   if (!dbPath || !fs.existsSync(dbPath)) {
-    return res.status(404).json({ error: "database non trovato" });
+    return res.status(404).json({ error: "database not found" });
   }
   const stamp = new Date().toISOString().slice(0, 10);
   res.setHeader("Content-Type", "application/octet-stream");
@@ -126,10 +126,10 @@ systemRouter.post("/backups/run", async (req, res) => {
   const emailIt = req.body?.email === true;
   try {
     const result = await performBackup(emailIt);
-    if (!result) return res.status(404).json({ error: "database non trovato" });
+    if (!result) return res.status(404).json({ error: "database not found" });
     res.json(result);
   } catch (err) {
-    res.status(500).json({ error: err instanceof Error ? err.message : "backup fallito" });
+    res.status(500).json({ error: err instanceof Error ? err.message : "backup failed" });
   }
 });
 

@@ -25,8 +25,8 @@ export default function ThemeToggle() {
       type="button"
       className="theme-toggle"
       onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-      title={theme === "dark" ? "Passa al tema chiaro" : "Passa al tema scuro"}
-      aria-label={theme === "dark" ? "Passa al tema chiaro" : "Passa al tema scuro"}
+      title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+      aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
     >
       {theme === "dark" ? (
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">

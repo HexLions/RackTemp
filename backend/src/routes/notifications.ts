@@ -74,12 +74,12 @@ notificationsRouter.post("/test", async (req, res) => {
 
   try {
     if (parsed.data.channel === "smtp") {
-      await sendEmail("Rack Temp Monitor - Test", "Messaggio di test SMTP riuscito.");
+      await sendEmail("Rack Temp Monitor - Test", "SMTP test message succeeded.");
     } else {
-      await sendTelegram("Rack Temp Monitor - Messaggio di test Telegram riuscito.");
+      await sendTelegram("Rack Temp Monitor - Telegram test message succeeded.");
     }
     res.json({ ok: true });
   } catch (err: any) {
-    res.status(500).json({ error: err?.message ?? "invio fallito" });
+    res.status(500).json({ error: err?.message ?? "send failed" });
   }
 });

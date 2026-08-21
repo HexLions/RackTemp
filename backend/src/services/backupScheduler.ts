@@ -35,8 +35,8 @@ function pruneOldBackups(retentionCount: number) {
   }
 }
 
-// Usato sia dallo scheduler che dal bottone "Backup ora" nelle Impostazioni:
-// stessa logica, unica differenza è chi la richiama.
+// Used both by the scheduler and by the "Backup now" button in Settings:
+// same logic, the only difference is who calls it.
 export async function performBackup(emailIt: boolean): Promise<{ name: string } | null> {
   const dbPath = resolveDbPath();
   if (!dbPath || !fs.existsSync(dbPath)) return null;
@@ -52,8 +52,8 @@ export async function performBackup(emailIt: boolean): Promise<{ name: string } 
 
   if (emailIt) {
     await sendEmail(
-      "RackTemp — backup impostazioni",
-      `Backup automatico allegato (${name}). Contiene sensori, soglie, notifiche e login — non le letture storiche complete se hai attivato la retention.`,
+      "RackTemp — settings backup",
+      `Automatic backup attached (${name}). Contains sensors, thresholds, notifications and login — not the full historical readings if you have retention enabled.`,
       [{ filename: name, path: dest }]
     );
   }

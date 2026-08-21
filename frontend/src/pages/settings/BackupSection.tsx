@@ -37,10 +37,10 @@ export default function BackupSection() {
     setRunMsg(null);
     try {
       await api.post("/system/backups/run", { email });
-      setRunMsg({ ok: true, text: email ? "Backup creato e inviato via email." : "Backup creato." });
+      setRunMsg({ ok: true, text: email ? "Backup created and sent via email." : "Backup created." });
       loadFiles();
     } catch (err) {
-      setRunMsg({ ok: false, text: err instanceof ApiError ? err.message : "Errore di rete" });
+      setRunMsg({ ok: false, text: err instanceof ApiError ? err.message : "Network error" });
     } finally {
       setRunBusy(false);
     }
@@ -49,31 +49,31 @@ export default function BackupSection() {
   return (
     <>
       <div className="card">
-        <h2>Backup su richiesta</h2>
+        <h2>On-demand backup</h2>
         <p className="hint" style={{ marginTop: -4, marginBottom: 12 }}>
-          I dati sopravvivono automaticamente a un aggiornamento del container/servizio (vivono in un volume/cartella
-          dati separata, non nell'immagine o nella cartella del programma). Questo scarica un backup completo
-          (sensori, soglie, notifiche, login) al volo.
+          The data automatically survives a container/service update (it lives in a separate volume/data
+          folder, not in the image or the program folder). This downloads a full backup (sensors, thresholds,
+          notifications, login) on the spot.
         </p>
         <a href="/api/system/backup" className="btn-primary" style={{ textDecoration: "none", display: "inline-block" }}>
-          Scarica backup ora
+          Download backup now
         </a>
       </div>
 
       {cfg && (
         <form className="card" onSubmit={save}>
-          <h2>Backup automatico programmato</h2>
+          <h2>Scheduled automatic backup</h2>
           <p className="hint" style={{ marginTop: -4 }}>
-            Crea copie periodiche nella cartella dati del server. Puoi anche farle inviare via email (usa la
-            configurazione SMTP in Notifiche).
+            Creates periodic copies in the server's data folder. You can also have them sent via email (uses
+            the SMTP configuration in Notifications).
           </p>
           <label className="checkbox-row">
             <input type="checkbox" checked={cfg.enabled} onChange={(e) => setCfg({ ...cfg, enabled: e.target.checked })} />
-            Attiva backup automatico
+            Enable automatic backup
           </label>
           <div className="form-row">
             <label>
-              Ogni quante ore
+              Every how many hours
               <input
                 type="number"
                 min={1}
@@ -83,7 +83,7 @@ export default function BackupSection() {
               />
             </label>
             <label>
-              Quanti tenerne (i più vecchi vengono cancellati)
+              How many to keep (oldest ones get deleted)
               <input
                 type="number"
                 min={1}
@@ -99,30 +99,30 @@ export default function BackupSection() {
               checked={cfg.emailOnBackup}
               onChange={(e) => setCfg({ ...cfg, emailOnBackup: e.target.checked })}
             />
-            Invia ogni backup automatico anche via email
+            Also send every automatic backup via email
           </label>
           {cfg.lastBackupAt && (
-            <p className="hint">Ultimo backup automatico: {new Date(cfg.lastBackupAt).toLocaleString("it-IT")}</p>
+            <p className="hint">Last automatic backup: {new Date(cfg.lastBackupAt).toLocaleString("it-IT")}</p>
           )}
           <div className="row-actions">
             <button className="btn-primary" type="submit">
-              Salva
+              Save
             </button>
             <button type="button" className="btn-ghost" onClick={() => runNow(cfg.emailOnBackup)} disabled={runBusy}>
-              {runBusy ? "Creo…" : "Backup ora"}
+              {runBusy ? "Creating…" : "Backup now"}
             </button>
-            {saved && <span className="success-text">✓ salvato</span>}
+            {saved && <span className="success-text">✓ saved</span>}
             {runMsg && <span className={runMsg.ok ? "success-text" : "error"}>{runMsg.text}</span>}
           </div>
         </form>
       )}
 
       <div className="card">
-        <h2>Backup salvati</h2>
+        <h2>Saved backups</h2>
         {!files ? (
-          <p className="muted">Caricamento…</p>
+          <p className="muted">Loading…</p>
         ) : files.length === 0 ? (
-          <p className="muted">Nessun backup ancora — attiva quello automatico sopra o scaricane uno manuale.</p>
+          <p className="muted">No backups yet — enable the automatic one above or download a manual one.</p>
         ) : (
           <div className="stack-tight">
             {files.map((f) => (
@@ -132,7 +132,7 @@ export default function BackupSection() {
                   {formatSize(f.size)} — {new Date(f.createdAt).toLocaleString("it-IT")}
                 </span>
                 <a href={`/api/system/backups/${encodeURIComponent(f.name)}/download`} className="btn-link">
-                  Scarica
+                  Download
                 </a>
               </div>
             ))}

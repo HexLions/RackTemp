@@ -89,19 +89,19 @@ export default function SensorDetail() {
 
   async function regenerateKey() {
     if (!id) return;
-    if (!confirm("Rigenerare la API key? Il vecchio ESP32 smetterà di funzionare finché non aggiorni il firmware.")) return;
+    if (!confirm("Regenerate the API key? The old ESP32 will stop working until you update its firmware.")) return;
     const updated = await api.post<Sensor>(`/sensors/${id}/regenerate-key`);
     setSensor(updated);
   }
 
   async function deleteSensor() {
     if (!id) return;
-    if (!confirm("Eliminare definitivamente questo sensore e tutto lo storico?")) return;
+    if (!confirm("Permanently delete this sensor and all its history?")) return;
     await api.delete(`/sensors/${id}`);
     navigate("/");
   }
 
-  if (!sensor || !threshold) return <div className="center-screen">Caricamento…</div>;
+  if (!sensor || !threshold) return <div className="center-screen">Loading…</div>;
 
   const chartData = readings.map((r) => ({
     time:
@@ -118,38 +118,38 @@ export default function SensorDetail() {
 
   const connectionPanel = (
     <div className={`card${hasData ? "" : " setup-panel"}`}>
-      <h2>Collegamento sensore</h2>
+      <h2>Sensor connection</h2>
       {!hasData && (
         <p className="hint" style={{ marginTop: -4 }}>
-          Nessun dato ricevuto. Configura questi valori nel portale di setup del sensore e comparirà qui alla
-          prima lettura.
+          No data received yet. Configure these values in the sensor's setup portal and it will show up here
+          on the first reading.
         </p>
       )}
-      <CopyField label="Endpoint ingest (POST JSON, header X-Api-Key)" value={ingestUrl} />
-      <CopyField label="API key sensore" value={sensor.apiKey} />
+      <CopyField label="Ingest endpoint (POST JSON, X-Api-Key header)" value={ingestUrl} />
+      <CopyField label="Sensor API key" value={sensor.apiKey} />
       <div className="row-actions" style={{ margin: "-10px 0 16px" }}>
         <button type="button" className="btn-link" onClick={regenerateKey}>
-          Rigenera API key
+          Regenerate API key
         </button>
       </div>
       {sensor.firmwareVersion && (
         <p className="hint" style={{ marginBottom: 16 }}>
-          Firmware sul dispositivo: <code>{sensor.firmwareVersion}</code>
+          Firmware on the device: <code>{sensor.firmwareVersion}</code>
           {latestFirmware && latestFirmware.version !== sensor.firmwareVersion && (
             <>
               {" "}
-              <span className="chip chip-warn">Aggiornamento disponibile: {latestFirmware.version}</span>
+              <span className="chip chip-warn">Update available: {latestFirmware.version}</span>
             </>
           )}
         </p>
       )}
       <p className="hint" style={{ marginBottom: 0 }}>
-        Body POST atteso: <code>{`{"temperature": 23.4, "humidity": 45.0}`}</code>. Per collegare questo
-        sensore a PRTG, Prometheus o altri strumenti di monitoring vedi la pagina{" "}
+        Expected POST body: <code>{`{"temperature": 23.4, "humidity": 45.0}`}</code>. To connect this
+        sensor to PRTG, Prometheus or other monitoring tools see the{" "}
         <Link to="/impostazioni/integrazioni" className="btn-link" style={{ display: "inline" }}>
-          Integrazioni
+          Integrations
         </Link>{" "}
-        — è configurata una volta sola per tutti i sensori, non per singolo dispositivo.
+        page — it's configured once for all sensors, not per device.
       </p>
     </div>
   );
@@ -162,7 +162,7 @@ export default function SensorDetail() {
           {sensor.location && <p className="page-sub">{sensor.location}</p>}
         </div>
         <button className="btn-danger" onClick={deleteSensor}>
-          Elimina sensore
+          Delete sensor
         </button>
       </div>
 
@@ -170,12 +170,12 @@ export default function SensorDetail() {
 
       <div className="card">
         <div className="row-actions" style={{ justifyContent: "space-between", marginBottom: 16 }}>
-          <h2 style={{ margin: 0 }}>Andamento</h2>
+          <h2 style={{ margin: 0 }}>Trend</h2>
           <span className="row-actions" style={{ gap: 6 }}>
             {[
               { label: "24h", hours: 24 },
-              { label: "7g", hours: 24 * 7 },
-              { label: "30g", hours: 24 * 30 },
+              { label: "7d", hours: 24 * 7 },
+              { label: "30d", hours: 24 * 30 },
             ].map((opt) => (
               <button
                 key={opt.hours}
@@ -193,12 +193,12 @@ export default function SensorDetail() {
               className="btn-ghost"
               style={{ textDecoration: "none", display: "inline-block" }}
             >
-              Esporta CSV
+              Export CSV
             </a>
           </span>
         </div>
         {chartData.length === 0 ? (
-          <p className="muted">Ancora nessuna lettura.</p>
+          <p className="muted">No readings yet.</p>
         ) : (
           <ResponsiveContainer width="100%" height={260}>
             <LineChart data={chartData}>
@@ -252,7 +252,7 @@ export default function SensorDetail() {
                 yAxisId="temp"
                 type="monotone"
                 dataKey="temperature"
-                name="Temperatura (°C)"
+                name="Temperature (°C)"
                 stroke="#3d7dd3"
                 dot={false}
                 strokeWidth={2}
@@ -262,7 +262,7 @@ export default function SensorDetail() {
                   yAxisId="humidity"
                   type="monotone"
                   dataKey="humidity"
-                  name="Umidità (%)"
+                  name="Humidity (%)"
                   stroke="#4c9a2a"
                   dot={false}
                   strokeWidth={2}
@@ -275,10 +275,10 @@ export default function SensorDetail() {
       </div>
 
       <form className="card" onSubmit={saveThreshold}>
-        <h2>Soglie e notifiche</h2>
+        <h2>Thresholds and notifications</h2>
         <div className="form-row">
           <label>
-            Temp. minima (°C)
+            Min temp. (°C)
             <input
               type="number"
               step="0.1"
@@ -287,7 +287,7 @@ export default function SensorDetail() {
             />
           </label>
           <label>
-            Temp. massima (°C)
+            Max temp. (°C)
             <input
               type="number"
               step="0.1"
@@ -298,7 +298,7 @@ export default function SensorDetail() {
         </div>
         <div className="form-row">
           <label>
-            Umidità minima (%)
+            Min humidity (%)
             <input
               type="number"
               step="1"
@@ -307,7 +307,7 @@ export default function SensorDetail() {
             />
           </label>
           <label>
-            Umidità massima (%)
+            Max humidity (%)
             <input
               type="number"
               step="1"
@@ -318,7 +318,7 @@ export default function SensorDetail() {
         </div>
         <div className="form-row">
           <label>
-            Isteresi (°C)
+            Hysteresis (°C)
             <input
               type="number"
               step="0.1"
@@ -327,7 +327,7 @@ export default function SensorDetail() {
             />
           </label>
           <label>
-            Cooldown notifiche (min)
+            Notification cooldown (min)
             <input
               type="number"
               value={threshold.cooldownMin}
@@ -335,7 +335,7 @@ export default function SensorDetail() {
             />
           </label>
           <label>
-            Offline dopo (min)
+            Offline after (min)
             <input
               type="number"
               value={threshold.maxOfflineMin}
@@ -349,21 +349,21 @@ export default function SensorDetail() {
             checked={threshold.enabled}
             onChange={(e) => setThreshold({ ...threshold, enabled: e.target.checked })}
           />
-          Notifiche attive per questo sensore
+          Notifications active for this sensor
         </label>
 
         {threshold.mutedUntil && new Date(threshold.mutedUntil).getTime() > Date.now() ? (
           <p className="hint" style={{ color: "var(--warn)" }}>
-            🔇 Notifiche mutate fino alle{" "}
+            🔇 Notifications muted until{" "}
             {new Date(threshold.mutedUntil).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
             .{" "}
             <button type="button" className="btn-link" onClick={unmute}>
-              Riattiva ora
+              Unmute now
             </button>
           </p>
         ) : (
           <div className="row-actions" style={{ marginBottom: 16 }}>
-            <span className="muted small">Muta temporaneamente:</span>
+            <span className="muted small">Mute temporarily:</span>
             <button type="button" className="btn-ghost" onClick={() => muteFor(1)}>
               1h
             </button>
@@ -375,35 +375,35 @@ export default function SensorDetail() {
 
         <div className="row-actions">
           <button className="btn-primary" type="submit">
-            Salva soglie
+            Save thresholds
           </button>
-          {saved && <span className="success-text">✓ salvato</span>}
+          {saved && <span className="success-text">✓ saved</span>}
         </div>
       </form>
 
       {hasData && connectionPanel}
 
       <form className="card" onSubmit={saveInfo}>
-        <h2>Info sensore</h2>
+        <h2>Sensor info</h2>
         <div className="form-row">
           <label>
-            Nome
+            Name
             <input value={editName} onChange={(e) => setEditName(e.target.value)} required />
           </label>
           <label>
-            Posizione (opzionale)
-            <input value={editLocation} onChange={(e) => setEditLocation(e.target.value)} placeholder="Sala server 1" />
+            Location (optional)
+            <input value={editLocation} onChange={(e) => setEditLocation(e.target.value)} placeholder="Server room 1" />
           </label>
           <label>
-            IP statico (opzionale)
+            Static IP (optional)
             <input value={editStaticIp} onChange={(e) => setEditStaticIp(e.target.value)} placeholder="192.168.1.50" />
           </label>
         </div>
         <div className="row-actions">
           <button className="btn-primary" type="submit">
-            Salva info
+            Save info
           </button>
-          {infoSaved && <span className="success-text">✓ salvato</span>}
+          {infoSaved && <span className="success-text">✓ saved</span>}
         </div>
       </form>
     </div>

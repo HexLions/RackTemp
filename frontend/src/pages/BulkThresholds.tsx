@@ -55,39 +55,39 @@ export default function BulkThresholds() {
     setResult(null);
     try {
       await Promise.all(selectedIds.map((id) => api.put(`/sensors/${id}/threshold`, values)));
-      setResult(`✓ Soglie applicate a ${selectedIds.length} sensori.`);
+      setResult(`✓ Thresholds applied to ${selectedIds.length} sensors.`);
     } catch {
-      setResult("Errore durante l'applicazione — riprova.");
+      setResult("Error while applying — try again.");
     } finally {
       setApplying(false);
     }
   }
 
-  if (!sensors) return <div className="center-screen">Caricamento…</div>;
+  if (!sensors) return <div className="center-screen">Loading…</div>;
 
   return (
     <div>
       <div className="page-header">
         <div>
-          <h1>Soglie multiple</h1>
+          <h1>Multiple thresholds</h1>
           <p className="page-sub">
-            Imposta le stesse soglie su più sensori in un colpo solo, invece di ripetere la configurazione uno
-            per uno.
+            Set the same thresholds on multiple sensors at once, instead of repeating the configuration one
+            by one.
           </p>
         </div>
       </div>
 
       {sensors.length === 0 ? (
         <div className="empty-state">
-          <h3>Nessun sensore configurato</h3>
-          <p>Crea almeno un sensore dalla dashboard prima di usare questa pagina.</p>
+          <h3>No sensors configured</h3>
+          <p>Create at least one sensor from the dashboard before using this page.</p>
         </div>
       ) : (
         <form className="card" onSubmit={apply}>
-          <h2>Valori da applicare</h2>
+          <h2>Values to apply</h2>
           <div className="form-row">
             <label>
-              Temp. minima (°C)
+              Min temp. (°C)
               <input
                 type="number"
                 step="0.1"
@@ -96,7 +96,7 @@ export default function BulkThresholds() {
               />
             </label>
             <label>
-              Temp. massima (°C)
+              Max temp. (°C)
               <input
                 type="number"
                 step="0.1"
@@ -107,7 +107,7 @@ export default function BulkThresholds() {
           </div>
           <div className="form-row">
             <label>
-              Umidità minima (%)
+              Min humidity (%)
               <input
                 type="number"
                 step="1"
@@ -116,7 +116,7 @@ export default function BulkThresholds() {
               />
             </label>
             <label>
-              Umidità massima (%)
+              Max humidity (%)
               <input
                 type="number"
                 step="1"
@@ -127,7 +127,7 @@ export default function BulkThresholds() {
           </div>
           <div className="form-row">
             <label>
-              Isteresi (°C)
+              Hysteresis (°C)
               <input
                 type="number"
                 step="0.1"
@@ -136,7 +136,7 @@ export default function BulkThresholds() {
               />
             </label>
             <label>
-              Cooldown notifiche (min)
+              Notification cooldown (min)
               <input
                 type="number"
                 value={values.cooldownMin}
@@ -144,7 +144,7 @@ export default function BulkThresholds() {
               />
             </label>
             <label>
-              Offline dopo (min)
+              Offline after (min)
               <input
                 type="number"
                 value={values.maxOfflineMin}
@@ -158,16 +158,16 @@ export default function BulkThresholds() {
               checked={values.enabled}
               onChange={(e) => setValues({ ...values, enabled: e.target.checked })}
             />
-            Notifiche attive
+            Notifications active
           </label>
 
-          <h2 style={{ marginTop: 24 }}>Sensori ({selectedIds.length}/{sensors.length} selezionati)</h2>
+          <h2 style={{ marginTop: 24 }}>Sensors ({selectedIds.length}/{sensors.length} selected)</h2>
           <div className="row-actions" style={{ marginBottom: 10 }}>
             <button type="button" className="btn-link" onClick={() => toggleAll(true)}>
-              Seleziona tutti
+              Select all
             </button>
             <button type="button" className="btn-link" onClick={() => toggleAll(false)}>
-              Deseleziona tutti
+              Deselect all
             </button>
           </div>
           <div className="stack-tight" style={{ marginBottom: 20 }}>
@@ -186,7 +186,7 @@ export default function BulkThresholds() {
 
           <div className="row-actions">
             <button className="btn-primary" type="submit" disabled={applying || selectedIds.length === 0}>
-              {applying ? "Applico…" : `Applica a ${selectedIds.length} sensori`}
+              {applying ? "Applying…" : `Apply to ${selectedIds.length} sensors`}
             </button>
             {result && <span className={result.startsWith("✓") ? "success-text" : "error"}>{result}</span>}
           </div>

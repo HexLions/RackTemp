@@ -32,66 +32,67 @@ export default function UpdatesSection() {
         portainerWebhookUrl: webhookUrl.trim() || null,
       });
       setSettings(updated);
-      setWebhookMsg({ ok: true, text: "Webhook salvato." });
+      setWebhookMsg({ ok: true, text: "Webhook saved." });
     } catch (err) {
-      setWebhookMsg({ ok: false, text: err instanceof ApiError ? err.message : "Errore di rete" });
+      setWebhookMsg({ ok: false, text: err instanceof ApiError ? err.message : "Network error" });
     } finally {
       setWebhookBusy(false);
     }
   }
 
   async function triggerUpdate() {
-    if (!confirm("Il controller verrà riavviato con l'ultima immagine. Le letture e le impostazioni non vengono toccate (vivono nel volume dati). Procedere?")) return;
+    if (!confirm("The controller will be restarted with the latest image. Readings and settings are not touched (they live in the data volume). Proceed?")) return;
     setUpdateBusy(true);
     setUpdateMsg(null);
     try {
       await api.post("/system/trigger-update");
-      setUpdateMsg({ ok: true, text: "Aggiornamento avviato. Il container si riavvierà a breve." });
+      setUpdateMsg({ ok: true, text: "Update started. The container will restart shortly." });
     } catch (err) {
-      setUpdateMsg({ ok: false, text: err instanceof ApiError ? err.message : "Errore di rete" });
+      setUpdateMsg({ ok: false, text: err instanceof ApiError ? err.message : "Network error" });
     } finally {
       setUpdateBusy(false);
     }
   }
 
-  if (!settings) return <div className="center-screen">Caricamento…</div>;
+  if (!settings) return <div className="center-screen">Loading…</div>;
 
   const isNative = updateCheck?.platform === "windows" || updateCheck?.platform === "linux";
 
   return (
     <div className="card">
-      <h2>Aggiornamento controller</h2>
+      <h2>Controller update</h2>
       {isNative ? (
         <p className="hint" style={{ marginTop: -4 }}>
-          Installazione {updateCheck!.platform === "windows" ? "Windows" : "Linux"} nativa: qui vedi se c'è una
-          release più recente di quella installata, con link per scaricarla. L'aggiornamento resta manuale — scarica
-          {updateCheck!.platform === "windows" ? " ed esegui il nuovo installer" : " ed esegui di nuovo install.sh"},
-          i dati non vengono toccati.
+          Native {updateCheck!.platform === "windows" ? "Windows" : "Linux"} installation: here you can see if
+          there's a release newer than the one installed, with a link to download it. The update stays manual —
+          download
+          {updateCheck!.platform === "windows" ? " and run the new installer" : " and run install.sh again"},
+          the data is not touched.
         </p>
       ) : (
         <p className="hint" style={{ marginTop: -4 }}>
-          Se lo stack include Watchtower (di default in <code>docker-compose.portainer.yml</code>), il controller
-          si aggiorna da solo entro poche ore da ogni nuova release, senza fare nulla qui. Questa sezione serve per
-          vedere a che versione sei e, se vuoi saltare l'attesa, per forzare subito un redeploy tramite un webhook
-          Portainer opzionale. I dati (letture, sensori, soglie, login) vivono nel volume Docker e non vengono
-          toccati dall'aggiornamento.
+          If the stack includes Watchtower (default in <code>docker-compose.portainer.yml</code>), the controller
+          updates itself within a few hours of every new release, with nothing to do here. This section is for
+          seeing which version you're on and, if you want to skip the wait, for forcing an immediate redeploy via
+          an optional Portainer webhook. The data (readings, sensors, thresholds, login) lives in the Docker
+          volume and is not touched by the update.
         </p>
       )}
 
-      {updateCheckError && <p className="hint">Impossibile controllare le release su GitHub in questo momento.</p>}
+      {updateCheckError && <p className="hint">Unable to check releases on GitHub right now.</p>}
       {updateCheck && (
         <p className="hint">
-          Versione in esecuzione: <code>{updateCheck.currentVersion}</code> — ultima release:{" "}
+          Running version: <code>{updateCheck.currentVersion}</code> — latest release:{" "}
           <a href={updateCheck.releaseUrl} target="_blank" rel="noreferrer">
             <code>{updateCheck.latestVersion}</code>
           </a>
           {updateCheck.updateAvailable ? (
             <span className="chip chip-warn" style={{ marginLeft: 8 }}>
-              Aggiornamento disponibile
+              Update available
             </span>
           ) : (
             <span className="chip chip-ok" style={{ marginLeft: 8 }}>
-              Aggiornato
+              Up to date
             </span>
           )}
         </p>
@@ -102,11 +103,11 @@ export default function UpdatesSection() {
           <div className="row-actions" style={{ marginTop: 12 }}>
             {updateCheck!.downloadUrl ? (
               <a href={updateCheck!.downloadUrl} className="btn-primary" style={{ textDecoration: "none" }}>
-                Scarica {updateCheck!.platform === "windows" ? "installer" : "pacchetto"} v{updateCheck!.latestVersion}
+                Download {updateCheck!.platform === "windows" ? "installer" : "package"} v{updateCheck!.latestVersion}
               </a>
             ) : (
               <a href={updateCheck!.releaseUrl} target="_blank" rel="noreferrer" className="btn-primary" style={{ textDecoration: "none" }}>
-                Apri la release su GitHub
+                Open the release on GitHub
               </a>
             )}
           </div>
@@ -116,8 +117,8 @@ export default function UpdatesSection() {
           <form onSubmit={saveWebhook} className="form-row" style={{ alignItems: "flex-end" }}>
             <label style={{ flex: 1 }}>
               <span>
-                Webhook Portainer (Container/Stack → Aggiungi webhook, in Portainer). Serve per far ripartire il
-                controller da qui.
+                Portainer webhook (Container/Stack → Add webhook, in Portainer). Needed to restart the
+                controller from here.
               </span>
               <input
                 value={webhookUrl}
@@ -126,7 +127,7 @@ export default function UpdatesSection() {
               />
             </label>
             <button className="btn-ghost" type="submit" disabled={webhookBusy}>
-              {webhookBusy ? "Salvo…" : "Salva webhook"}
+              {webhookBusy ? "Saving…" : "Save webhook"}
             </button>
           </form>
           {webhookMsg && <p className={webhookMsg.ok ? "success-text" : "error"}>{webhookMsg.text}</p>}
@@ -138,9 +139,9 @@ export default function UpdatesSection() {
               onClick={triggerUpdate}
               disabled={updateBusy || !settings.portainerWebhookUrl}
             >
-              {updateBusy ? "Aggiorno…" : "Aggiorna ora"}
+              {updateBusy ? "Updating…" : "Update now"}
             </button>
-            {!settings.portainerWebhookUrl && <span className="hint">Configura prima il webhook sopra.</span>}
+            {!settings.portainerWebhookUrl && <span className="hint">Configure the webhook above first.</span>}
             {updateMsg && <span className={updateMsg.ok ? "success-text" : "error"}>{updateMsg.text}</span>}
           </div>
         </>

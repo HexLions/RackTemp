@@ -3,21 +3,21 @@ import { api, NotificationConfig, NotificationLogEntry, ApiError } from "../../a
 
 function timeAgo(iso: string) {
   const sec = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (sec < 60) return `${Math.round(sec)}s fa`;
-  if (sec < 3600) return `${Math.round(sec / 60)}m fa`;
-  if (sec < 86400) return `${Math.round(sec / 3600)}h fa`;
-  return `${Math.round(sec / 86400)}g fa`;
+  if (sec < 60) return `${Math.round(sec)}s ago`;
+  if (sec < 3600) return `${Math.round(sec / 60)}m ago`;
+  if (sec < 86400) return `${Math.round(sec / 3600)}h ago`;
+  return `${Math.round(sec / 86400)}d ago`;
 }
 
 const TYPE_LABEL: Record<string, string> = {
-  high_temp: "Temp. alta",
-  low_temp: "Temp. bassa",
-  high_humidity: "Umidità alta",
-  low_humidity: "Umidità bassa",
+  high_temp: "High temp.",
+  low_temp: "Low temp.",
+  high_humidity: "High humidity",
+  low_humidity: "Low humidity",
   offline: "Offline",
-  recovered: "Rientrato",
-  recovered_temp: "Rientrato",
-  recovered_humidity: "Rientrato",
+  recovered: "Recovered",
+  recovered_temp: "Recovered",
+  recovered_humidity: "Recovered",
 };
 
 const TYPE_CHIP: Record<string, string> = {
@@ -55,13 +55,13 @@ export default function NotificationsSection() {
     setTestMsg(null);
     try {
       await api.post("/notifications/test", { channel });
-      setTestMsg({ channel, ok: true, text: "Messaggio di test inviato." });
+      setTestMsg({ channel, ok: true, text: "Test message sent." });
     } catch (err) {
-      setTestMsg({ channel, ok: false, text: err instanceof ApiError ? err.message : "Errore" });
+      setTestMsg({ channel, ok: false, text: err instanceof ApiError ? err.message : "Error" });
     }
   }
 
-  if (!cfg) return <div className="center-screen">Caricamento…</div>;
+  if (!cfg) return <div className="center-screen">Loading…</div>;
 
   return (
     <>
@@ -69,7 +69,7 @@ export default function NotificationsSection() {
         <h2>
           Email (SMTP)
           <span className={`chip ${cfg.smtpEnabled ? "chip-ok" : "chip-offline"}`}>
-            {cfg.smtpEnabled ? "Attivo" : "Disattivo"}
+            {cfg.smtpEnabled ? "Active" : "Inactive"}
           </span>
         </h2>
         <label className="checkbox-row">
@@ -78,15 +78,15 @@ export default function NotificationsSection() {
             checked={cfg.smtpEnabled}
             onChange={(e) => setCfg({ ...cfg, smtpEnabled: e.target.checked })}
           />
-          Attiva notifiche via email
+          Enable email notifications
         </label>
         <div className="form-row">
           <label>
-            Host SMTP
+            SMTP host
             <input value={cfg.smtpHost ?? ""} onChange={(e) => setCfg({ ...cfg, smtpHost: e.target.value })} placeholder="smtp.gmail.com" />
           </label>
           <label>
-            Porta
+            Port
             <input
               type="number"
               value={cfg.smtpPort ?? ""}
@@ -101,7 +101,7 @@ export default function NotificationsSection() {
         </div>
         <div className="form-row">
           <label>
-            Utente
+            User
             <input value={cfg.smtpUser ?? ""} onChange={(e) => setCfg({ ...cfg, smtpUser: e.target.value })} />
           </label>
           <label>
@@ -110,29 +110,29 @@ export default function NotificationsSection() {
               type="password"
               value={cfg.smtpPass ?? ""}
               onChange={(e) => setCfg({ ...cfg, smtpPass: e.target.value })}
-              placeholder="lascia vuoto per non modificare"
+              placeholder="leave empty to keep unchanged"
             />
           </label>
         </div>
         <div className="form-row">
           <label>
-            Mittente
-            <input value={cfg.smtpFrom ?? ""} onChange={(e) => setCfg({ ...cfg, smtpFrom: e.target.value })} placeholder="rack@tuodominio.it" />
+            From
+            <input value={cfg.smtpFrom ?? ""} onChange={(e) => setCfg({ ...cfg, smtpFrom: e.target.value })} placeholder="rack@yourdomain.com" />
           </label>
           <label>
-            Destinatario
-            <input value={cfg.smtpTo ?? ""} onChange={(e) => setCfg({ ...cfg, smtpTo: e.target.value })} placeholder="allarmi@tuodominio.it" />
+            To
+            <input value={cfg.smtpTo ?? ""} onChange={(e) => setCfg({ ...cfg, smtpTo: e.target.value })} placeholder="alerts@yourdomain.com" />
           </label>
         </div>
         <div className="row-actions">
           <button className="btn-primary" type="submit">
-            Salva
+            Save
           </button>
           <button type="button" className="btn-link" onClick={() => test("smtp")}>
-            Invia test
+            Send test
           </button>
         </div>
-        {saved && <span className="success-text"> ✓ salvato</span>}
+        {saved && <span className="success-text"> ✓ saved</span>}
         {testMsg?.channel === "smtp" && <div className={testMsg.ok ? "success-text" : "error"}>{testMsg.text}</div>}
       </form>
 
@@ -140,7 +140,7 @@ export default function NotificationsSection() {
         <h2>
           Telegram
           <span className={`chip ${cfg.telegramEnabled ? "chip-ok" : "chip-offline"}`}>
-            {cfg.telegramEnabled ? "Attivo" : "Disattivo"}
+            {cfg.telegramEnabled ? "Active" : "Inactive"}
           </span>
         </h2>
         <label className="checkbox-row">
@@ -149,7 +149,7 @@ export default function NotificationsSection() {
             checked={cfg.telegramEnabled}
             onChange={(e) => setCfg({ ...cfg, telegramEnabled: e.target.checked })}
           />
-          Attiva notifiche via Telegram
+          Enable Telegram notifications
         </label>
         <div className="form-row">
           <label>
@@ -157,7 +157,7 @@ export default function NotificationsSection() {
             <input
               value={cfg.telegramToken ?? ""}
               onChange={(e) => setCfg({ ...cfg, telegramToken: e.target.value })}
-              placeholder="123456:ABC-DEF... (da @BotFather)"
+              placeholder="123456:ABC-DEF... (from @BotFather)"
             />
           </label>
           <label>
@@ -165,31 +165,31 @@ export default function NotificationsSection() {
             <input
               value={cfg.telegramChatId ?? ""}
               onChange={(e) => setCfg({ ...cfg, telegramChatId: e.target.value })}
-              placeholder="es. -1001234567890"
+              placeholder="e.g. -1001234567890"
             />
           </label>
         </div>
         <p className="muted small">
-          Crea un bot con @BotFather su Telegram, ottieni il token, aggiungi il bot alla chat/gruppo e recupera
-          il Chat ID (es. con @userinfobot o l'API <code>getUpdates</code>).
+          Create a bot with @BotFather on Telegram, get the token, add the bot to the chat/group and retrieve
+          the Chat ID (e.g. with @userinfobot or the <code>getUpdates</code> API).
         </p>
         <div className="row-actions">
           <button className="btn-primary" type="submit">
-            Salva
+            Save
           </button>
           <button type="button" className="btn-link" onClick={() => test("telegram")}>
-            Invia test
+            Send test
           </button>
         </div>
         {testMsg?.channel === "telegram" && <div className={testMsg.ok ? "success-text" : "error"}>{testMsg.text}</div>}
       </form>
 
       <div className="card">
-        <h2>Storico avvisi</h2>
+        <h2>Alert history</h2>
         {!log ? (
-          <p className="muted">Caricamento…</p>
+          <p className="muted">Loading…</p>
         ) : log.length === 0 ? (
-          <p className="muted">Nessun avviso inviato finora.</p>
+          <p className="muted">No alerts sent so far.</p>
         ) : (
           <div className="stack-tight">
             {log.map((entry) => (

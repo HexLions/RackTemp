@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Installa RackTemp come servizio systemd. Va eseguito (come root) dalla
-# cartella estratta dal tarball racktemp-linux-x64.tar.gz — usa i percorsi
-# relativi a se stesso (node/, backend/, racktemp.service accanto a questo
-# script), non serve essere in una posizione particolare del filesystem.
+# Installs RackTemp as a systemd service. Must be run (as root) from the
+# folder extracted from the racktemp-linux-x64.tar.gz tarball — it uses paths
+# relative to itself (node/, backend/, racktemp.service next to this
+# script), there's no need to be in any particular location on the filesystem.
 #
-# Idempotente: rieseguirlo (es. dopo aver estratto una versione più recente
-# del tarball) aggiorna il programma senza toccare i dati esistenti in
-# /var/lib/racktemp né rigenerare il SESSION_SECRET già presente.
+# Idempotent: rerunning it (e.g. after extracting a newer version
+# of the tarball) updates the program without touching the existing data in
+# /var/lib/racktemp nor regenerating the SESSION_SECRET that's already there.
 
 set -euo pipefail
 
 if [ "$(id -u)" -ne 0 ]; then
-  echo "Serve root: sudo ./install.sh" >&2
+  echo "Root required: sudo ./install.sh" >&2
   exit 1
 fi
 
@@ -20,15 +20,15 @@ INSTALL_DIR="/opt/racktemp"
 DATA_DIR="/var/lib/racktemp/data"
 ENV_FILE="$INSTALL_DIR/backend/.env"
 
-echo "== Utente di servizio =="
+echo "== Service user =="
 if ! id racktemp >/dev/null 2>&1; then
   useradd --system --no-create-home --shell /usr/sbin/nologin racktemp
-  echo "Creato utente di sistema 'racktemp'."
+  echo "Created system user 'racktemp'."
 else
-  echo "Utente 'racktemp' già presente."
+  echo "User 'racktemp' already present."
 fi
 
-echo "== Copia file programma in $INSTALL_DIR =="
+echo "== Copying program files to $INSTALL_DIR =="
 mkdir -p "$INSTALL_DIR"
 cp -r "$SCRIPT_DIR/node" "$INSTALL_DIR/"
 mkdir -p "$INSTALL_DIR/backend"
@@ -38,11 +38,11 @@ cp -r "$SCRIPT_DIR/backend/node_modules" "$INSTALL_DIR/backend/"
 cp -r "$SCRIPT_DIR/backend/prisma" "$INSTALL_DIR/backend/"
 cp "$SCRIPT_DIR/backend/package.json" "$INSTALL_DIR/backend/package.json"
 
-echo "== Dati in $DATA_DIR =="
+echo "== Data in $DATA_DIR =="
 mkdir -p "$DATA_DIR"
 
 if [ ! -f "$ENV_FILE" ]; then
-  echo "== Genero configurazione (.env) =="
+  echo "== Generating configuration (.env) =="
   SESSION_SECRET="$(openssl rand -hex 32 2>/dev/null || head -c48 /dev/urandom | base64)"
   cat > "$ENV_FILE" <<EOF
 PORT=7431
@@ -52,12 +52,12 @@ DEPLOY_TARGET=linux
 EOF
   chmod 600 "$ENV_FILE"
 else
-  echo ".env esistente, non lo tocco (aggiornamento, non prima installazione)."
+  echo "Existing .env, leaving it alone (update, not first install)."
 fi
 
 chown -R racktemp:racktemp "$INSTALL_DIR" /var/lib/racktemp
 
-echo "== Servizio systemd =="
+echo "== systemd service =="
 cp "$SCRIPT_DIR/racktemp.service" /etc/systemd/system/racktemp.service
 systemctl daemon-reload
 systemctl enable --now racktemp
@@ -71,7 +71,7 @@ elif command -v firewall-cmd >/dev/null 2>&1; then
 fi
 
 echo ""
-echo "Fatto. RackTemp su http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo localhost):7431"
-echo "Stato:      systemctl status racktemp"
+echo "Done. RackTemp at http://$(hostname -I 2>/dev/null | awk '{print $1}' || echo localhost):7431"
+echo "Status:     systemctl status racktemp"
 echo "Log:        journalctl -u racktemp -f"
-echo "Primo accesso: admin / admin (te lo fa cambiare subito)."
+echo "First login: admin / admin (you'll be asked to change it right away)."

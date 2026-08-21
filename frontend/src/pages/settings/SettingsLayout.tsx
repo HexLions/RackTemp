@@ -2,10 +2,10 @@ import { NavLink, Outlet } from "react-router-dom";
 
 const SECTIONS = [
   { to: "/impostazioni/account", label: "Account" },
-  { to: "/impostazioni/notifiche", label: "Notifiche" },
-  { to: "/impostazioni/integrazioni", label: "Integrazioni" },
-  { to: "/impostazioni/aggiornamenti", label: "Aggiornamenti" },
-  { to: "/impostazioni/firmware", label: "Firmware sensori" },
+  { to: "/impostazioni/notifiche", label: "Notifications" },
+  { to: "/impostazioni/integrazioni", label: "Integrations" },
+  { to: "/impostazioni/aggiornamenti", label: "Updates" },
+  { to: "/impostazioni/firmware", label: "Sensor firmware" },
   { to: "/impostazioni/backup", label: "Backup" },
 ];
 
@@ -14,8 +14,8 @@ export default function SettingsLayout() {
     <div>
       <div className="page-header">
         <div>
-          <h1>Impostazioni</h1>
-          <p className="page-sub">Account, notifiche, integrazioni, aggiornamenti, firmware e backup.</p>
+          <h1>Settings</h1>
+          <p className="page-sub">Account, notifications, integrations, updates, firmware and backup.</p>
         </div>
       </div>
 

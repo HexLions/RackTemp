@@ -21,7 +21,7 @@ export default function Login() {
     try {
       await login(user, pass);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Errore di rete");
+      setError(err instanceof ApiError ? err.message : "Network error");
     } finally {
       setBusy(false);
     }
@@ -39,7 +39,7 @@ export default function Login() {
           </span>
           Rack Temp Monitor
         </div>
-        <p className="subtitle">Accedi per gestire sensori e notifiche.</p>
+        <p className="subtitle">Log in to manage sensors and notifications.</p>
         <label>
           Username
           <input value={user} onChange={(e) => setUser(e.target.value)} autoFocus required />
@@ -50,7 +50,7 @@ export default function Login() {
         </label>
         {error && <div className="error">{error}</div>}
         <button className="btn-primary" type="submit" disabled={busy}>
-          {busy ? "Accesso…" : "Accedi"}
+          {busy ? "Logging in…" : "Log in"}
         </button>
       </form>
       <Footer />

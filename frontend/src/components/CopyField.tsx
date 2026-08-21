@@ -15,7 +15,7 @@ export default function CopyField({ label, value, hint }: { label: string; value
       <div className="field-with-action">
         <input readOnly value={value} onFocus={(e) => e.target.select()} />
         <button type="button" className="btn-ghost" onClick={copy}>
-          {copied ? "Copiato" : "Copia"}
+          {copied ? "Copied" : "Copy"}
         </button>
       </div>
       {hint && (

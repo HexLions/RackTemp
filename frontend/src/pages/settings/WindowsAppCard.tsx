@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 
-// Bridge esposto solo dalla finestra tray Windows (windows-tray/RackTempTray),
-// via CoreWebView2.AddHostObjectToScript — non esiste in un browser normale
-// né quando la pagina è aperta da remoto, quindi questa card si nasconde da
-// sola ovunque tranne che dentro quella finestra specifica.
+// Bridge exposed only by the Windows tray window (windows-tray/RackTempTray),
+// via CoreWebView2.AddHostObjectToScript — it doesn't exist in a normal browser
+// nor when the page is opened remotely, so this card hides itself everywhere
+// except inside that specific window.
 interface RackTempHost {
   GetAutostart(): Promise<boolean>;
   SetAutostart(enable: boolean): Promise<void>;
@@ -38,14 +38,14 @@ export default function WindowsAppCard() {
 
   return (
     <div className="card">
-      <h2>Applicazione Windows</h2>
+      <h2>Windows application</h2>
       <p className="hint" style={{ marginTop: -4 }}>
-        Il servizio RackTemp gira comunque in background indipendentemente da questa finestra. Questa opzione
-        riguarda solo se la finestra/icona in tray si apre da sola all'accesso a Windows.
+        The RackTemp service keeps running in the background regardless of this window. This option only
+        affects whether the window/tray icon opens on its own when you log into Windows.
       </p>
       <label className="checkbox-row">
         <input type="checkbox" checked={autostart ?? false} disabled={autostart === null || busy} onChange={toggle} />
-        Avvia RackTemp con Windows all'accesso
+        Start RackTemp with Windows at login
       </label>
     </div>
   );

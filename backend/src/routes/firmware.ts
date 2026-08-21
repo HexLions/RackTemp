@@ -38,7 +38,7 @@ firmwareRouter.post("/", requireAuth, upload.single("firmware"), async (req, res
   const version = (req.body.version || "").trim();
   const notes = (req.body.notes || "").trim() || null;
   if (!version || !req.file) {
-    return res.status(400).json({ error: "version e file .bin sono obbligatori" });
+    return res.status(400).json({ error: "version and .bin file are required" });
   }
   const release = await prisma.firmwareRelease.upsert({
     where: { id: 1 },

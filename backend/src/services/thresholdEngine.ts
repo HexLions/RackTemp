@@ -56,7 +56,7 @@ async function evaluateMetric(m: MetricCheck) {
 
   if (isHigh) {
     if (!(await recentlyNotified(sensorId, highType, cooldownMin))) {
-      const msg = `[${sensorName}] ${label} alta: ${value.toFixed(1)}${unit} (soglia max ${max}${unit})`;
+      const msg = `[${sensorName}] ${label} high: ${value.toFixed(1)}${unit} (max threshold ${max}${unit})`;
       await notifyAll(`Rack Temp - ALERT ${sensorName}`, msg);
       await logNotification(sensorId, highType, msg);
     }
@@ -65,7 +65,7 @@ async function evaluateMetric(m: MetricCheck) {
 
   if (isLow) {
     if (!(await recentlyNotified(sensorId, lowType, cooldownMin))) {
-      const msg = `[${sensorName}] ${label} bassa: ${value.toFixed(1)}${unit} (soglia min ${min}${unit})`;
+      const msg = `[${sensorName}] ${label} low: ${value.toFixed(1)}${unit} (min threshold ${min}${unit})`;
       await notifyAll(`Rack Temp - ALERT ${sensorName}`, msg);
       await logNotification(sensorId, lowType, msg);
     }
@@ -80,7 +80,7 @@ async function evaluateMetric(m: MetricCheck) {
   // reading after that re-fires a recovery notification instead of once.
   const last = await lastAlertTypeAmong(sensorId, [highType, lowType, recoveredType]);
   if (backInRange && (last === highType || last === lowType)) {
-    const msg = `[${sensorName}] ${label} rientrata nella norma: ${value.toFixed(1)}${unit}`;
+    const msg = `[${sensorName}] ${label} back to normal: ${value.toFixed(1)}${unit}`;
     await notifyAll(`Rack Temp - OK ${sensorName}`, msg);
     await logNotification(sensorId, recoveredType, msg);
   }
@@ -104,7 +104,7 @@ export async function checkReading(sensorId: string, temperature: number, humidi
     max: threshold.maxTemp,
     hysteresis: threshold.hysteresis,
     cooldownMin: threshold.cooldownMin,
-    label: "Temperatura",
+    label: "Temperature",
     unit: "°C",
     highType: "high_temp",
     lowType: "low_temp",
@@ -120,7 +120,7 @@ export async function checkReading(sensorId: string, temperature: number, humidi
       max: threshold.maxHumidity,
       hysteresis: threshold.hysteresis,
       cooldownMin: threshold.cooldownMin,
-      label: "Umidità",
+      label: "Humidity",
       unit: "%",
       highType: "high_humidity",
       lowType: "low_humidity",
@@ -142,11 +142,11 @@ async function checkOffline() {
     const last = await lastAlertType(sensor.id);
 
     if (isOffline && last !== "offline") {
-      const msg = `[${sensor.name}] Sensore offline da oltre ${t.maxOfflineMin} minuti`;
+      const msg = `[${sensor.name}] Sensor offline for over ${t.maxOfflineMin} minutes`;
       await notifyAll(`Rack Temp - OFFLINE ${sensor.name}`, msg);
       await logNotification(sensor.id, "offline", msg);
     } else if (!isOffline && last === "offline") {
-      const msg = `[${sensor.name}] Sensore tornato online`;
+      const msg = `[${sensor.name}] Sensor back online`;
       await notifyAll(`Rack Temp - OK ${sensor.name}`, msg);
       await logNotification(sensor.id, "recovered", msg);
     }

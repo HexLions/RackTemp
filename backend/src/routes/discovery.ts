@@ -45,8 +45,8 @@ discoveryRouter.post("/announce", async (req, res) => {
 
   if (!existing) {
     await notifyAll(
-      "Rack Temp Monitor - nuovo sensore rilevato",
-      `Rilevato un nuovo ESP32 sulla rete (chip ${chipId}${ip ? `, IP ${ip}` : ""}). Crea un sensore nella dashboard e collegalo per farlo partire in automatico.`
+      "Rack Temp Monitor - new sensor detected",
+      `A new ESP32 was detected on the network (chip ${chipId}${ip ? `, IP ${ip}` : ""}). Create a sensor in the dashboard and link it to get it started automatically.`
     );
   }
 
@@ -88,6 +88,6 @@ discoveryRouter.post("/:id/claim", requireAuth, async (req, res) => {
     await prisma.discoveredDevice.delete({ where: { id: device.id } });
     res.json(sensor);
   } catch {
-    res.status(409).json({ error: "sensore non trovato o già collegato a un altro chip" });
+    res.status(409).json({ error: "sensor not found or already linked to another chip" });
   }
 });

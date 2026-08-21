@@ -15,7 +15,7 @@ export default function AccountSection() {
     setError(null);
 
     if (newPassword !== confirm) {
-      setError("Le password non coincidono");
+      setError("Passwords do not match");
       return;
     }
 
@@ -28,7 +28,7 @@ export default function AccountSection() {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Errore di rete");
+      setError(err instanceof ApiError ? err.message : "Network error");
     } finally {
       setBusy(false);
     }
@@ -38,9 +38,9 @@ export default function AccountSection() {
     <>
       <WindowsAppCard />
       <form className="card" onSubmit={submit} style={{ maxWidth: 420 }}>
-        <h2>Cambia password</h2>
+        <h2>Change password</h2>
         <label>
-          Password attuale
+          Current password
           <input
             type="password"
             value={currentPassword}
@@ -50,19 +50,19 @@ export default function AccountSection() {
           />
         </label>
         <label>
-          Nuova password
+          New password
           <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required minLength={8} />
         </label>
         <label>
-          Conferma nuova password
+          Confirm new password
           <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} required minLength={8} />
         </label>
         {error && <div className="error">{error}</div>}
         <div className="row-actions">
           <button className="btn-primary" type="submit" disabled={busy}>
-            {busy ? "Salvataggio…" : "Cambia password"}
+            {busy ? "Saving…" : "Change password"}
           </button>
-          {saved && <span className="success-text">✓ password aggiornata</span>}
+          {saved && <span className="success-text">✓ password updated</span>}
         </div>
       </form>
     </>

@@ -1,17 +1,17 @@
-# Stack per Portainer (Stacks -> Add stack -> Web editor / Upload).
-# A differenza di docker-compose.yml usa un'immagine pre-buildata da GHCR
-# invece di "build: .", perché Portainer (Web editor/Upload) non builda da
-# Dockerfile locale. L'immagine viene pubblicata da .github/workflows/docker-publish.yml
-# ad ogni push su main.
+# Stack for Portainer (Stacks -> Add stack -> Web editor / Upload).
+# Unlike docker-compose.yml this uses a pre-built image from GHCR
+# instead of "build: .", because Portainer (Web editor/Upload) doesn't build from
+# a local Dockerfile. The image is published by .github/workflows/docker-publish.yml
+# on every push to main.
 #
-# In Portainer, alla creazione dello stack aggiungi la variabile d'ambiente
-# SESSION_SECRET (Environment variables) con una stringa lunga e casuale,
-# altrimenti resta il valore di default sotto (da cambiare comunque).
+# In Portainer, when creating the stack add the SESSION_SECRET environment
+# variable (Environment variables) with a long, random string,
+# otherwise the default value below stays in place (change it anyway).
 #
-# Include anche Watchtower: appena esce una nuova immagine su GHCR il
-# controller si aggiorna e riavvia da solo, senza bisogno di webhook
-# o click manuali. Se non lo vuoi, cancella il servizio "watchtower"
-# e il label "com.centurylinklabs.watchtower.enable" sotto.
+# Also includes Watchtower: as soon as a new image is out on GHCR the
+# controller updates and restarts itself, with no need for a webhook
+# or manual clicks. If you don't want it, delete the "watchtower" service
+# and the "com.centurylinklabs.watchtower.enable" label below.
 
 services:
   rack-temp-monitor:
@@ -29,15 +29,15 @@ services:
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
 
-  # Aggiorna automaticamente SOLO rack-temp-monitor (grazie al label sopra)
-  # ogni volta che esce una nuova immagine su GHCR: nessun click, nessun
-  # webhook da configurare. Il volume dati non viene toccato dal riavvio.
-  # Per disattivare: rimuovi questo servizio dallo stack.
+  # Automatically updates ONLY rack-temp-monitor (thanks to the label above)
+  # every time a new image is out on GHCR: no clicks, no
+  # webhook to configure. The data volume is not touched by the restart.
+  # To disable: remove this service from the stack.
   watchtower:
-    # containrrr/watchtower è fermo al 2023 (progetto archiviato) e negozia
-    # una versione dell'API Docker così vecchia (1.25) che i daemon Docker
-    # recenti la rifiutano ("client version too old"). nickfedor/watchtower
-    # è la continuazione mantenuta dello stesso progetto, stessa config.
+    # containrrr/watchtower has been stuck at 2023 (archived project) and negotiates
+    # a Docker API version so old (1.25) that recent Docker daemons
+    # reject it ("client version too old"). nickfedor/watchtower
+    # is the maintained continuation of the same project, same config.
     image: nickfedor/watchtower:latest
     container_name: rack-temp-watchtower
     restart: unless-stopped
@@ -46,11 +46,11 @@ services:
     environment:
       WATCHTOWER_LABEL_ENABLE: "true"
       WATCHTOWER_CLEANUP: "true"
-      WATCHTOWER_POLL_INTERVAL: "21600" # 6 ore
-      # Anche l'immagine aggiornata negozia comunque una versione API troppo
-      # bassa su alcuni host (bug noto del client Docker Go SDK quando la
-      # negoziazione automatica fallisce) — forzala esplicitamente a una
-      # versione recente invece di lasciarla decidere da sola.
+      WATCHTOWER_POLL_INTERVAL: "21600" # 6 hours
+      # Even the updated image still negotiates too low an API
+      # version on some hosts (a known Docker Go SDK client bug when the
+      # automatic negotiation fails) — force it explicitly to a
+      # recent version instead of letting it decide on its own.
       DOCKER_API_VERSION: "1.44"
 
 volumes:

@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
-# Disinstalla il servizio RackTemp. Per i dati in /var/lib/racktemp chiede
-# conferma (se il terminale è interattivo); di default li mantiene.
+# Uninstalls the RackTemp service. For the data in /var/lib/racktemp it asks
+# for confirmation (if the terminal is interactive); by default it keeps it.
 
 set -euo pipefail
 
 if [ "$(id -u)" -ne 0 ]; then
-  echo "Serve root: sudo ./uninstall.sh" >&2
+  echo "Root required: sudo ./uninstall.sh" >&2
   exit 1
 fi
 
-echo "== Fermo e rimuovo il servizio =="
+echo "== Stopping and removing the service =="
 systemctl disable --now racktemp 2>/dev/null || true
 rm -f /etc/systemd/system/racktemp.service
 systemctl daemon-reload
 
-echo "== Rimuovo /opt/racktemp =="
+echo "== Removing /opt/racktemp =="
 rm -rf /opt/racktemp
 
 KEEP_DATA=1
 if [ -t 0 ]; then
-  read -r -p "Cancellare anche i dati in /var/lib/racktemp (letture, sensori, soglie, login)? [y/N] " ans
+  read -r -p "Also delete the data in /var/lib/racktemp (readings, sensors, thresholds, login)? [y/N] " ans
   case "$ans" in
     [yY]*) KEEP_DATA=0 ;;
   esac
@@ -27,9 +27,9 @@ fi
 
 if [ "$KEEP_DATA" -eq 0 ]; then
   rm -rf /var/lib/racktemp
-  echo "Dati cancellati."
+  echo "Data deleted."
 else
-  echo "Dati mantenuti in /var/lib/racktemp (reinstallando li ritrovi)."
+  echo "Data kept in /var/lib/racktemp (you'll find it again if you reinstall)."
 fi
 
 userdel racktemp 2>/dev/null || true
@@ -41,4 +41,4 @@ elif command -v firewall-cmd >/dev/null 2>&1; then
   firewall-cmd --reload || true
 fi
 
-echo "Fatto."
+echo "Done."

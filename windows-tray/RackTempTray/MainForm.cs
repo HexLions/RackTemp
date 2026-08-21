@@ -10,14 +10,14 @@ using Microsoft.Win32;
 
 namespace RackTempTray;
 
-// Finestra unica dell'app: mostra RackTemp (WebView2 verso http://localhost:7431)
-// dentro una vera finestra invece che nel browser di default. Chiudendola con la
-// X non esce dall'app: la nasconde e resta nella tray, esattamente come Discord/
-// Slack, e il servizio Windows "RackTemp" (nssm) resta attivo. "Esci" dal menu
-// tray invece ferma anche il servizio (richiede UAC, fermare un servizio
-// Windows serve elevazione) — è la vera uscita, non solo chiudere la finestra.
-// Riaprendo l'app dopo un'uscita completa, il servizio viene fatto ripartire
-// da solo se risulta fermo.
+// The app's single window: shows RackTemp (WebView2 pointed at http://localhost:7431)
+// inside a real window instead of the default browser. Closing it with the
+// X doesn't exit the app: it hides it and it stays in the tray, exactly like Discord/
+// Slack, and the Windows "RackTemp" service (nssm) stays running. "Exit" from the
+// tray menu instead also stops the service (requires UAC, stopping a
+// Windows service needs elevation) — that's the real exit, not just closing the window.
+// Reopening the app after a full exit makes the service start back up
+// on its own if it's found stopped.
 public class MainForm : Form
 {
     private const string BackendUrl = "http://localhost:7431";
@@ -59,10 +59,10 @@ public class MainForm : Form
             await InitializeWebViewAsync();
         };
 
-        // Il servizio potrebbe non essere ancora pronto appena il processo nssm
-        // parte (bind della porta, avvio Prisma): riprova finché non risponde
-        // invece di mostrare subito un errore, a differenza di "apri nel browser"
-        // che falliva se il servizio non era ancora su.
+        // The service might not be ready yet as soon as the nssm process
+        // starts (port binding, Prisma startup): keep retrying until it responds
+        // instead of showing an error right away, unlike "open in browser"
+        // which used to fail if the service wasn't up yet.
         _readyTimer = new System.Windows.Forms.Timer { Interval = 1000 };
         _readyTimer.Tick += async (_, _) => await TryNavigateWhenReadyAsync();
     }
@@ -70,9 +70,9 @@ public class MainForm : Form
     private ContextMenuStrip BuildTrayMenu()
     {
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Apri RackTemp", null, (_, _) => ShowMainWindow());
+        menu.Items.Add("Open RackTemp", null, (_, _) => ShowMainWindow());
         menu.Items.Add(new ToolStripSeparator());
-        _autostartMenuItem = new ToolStripMenuItem("Avvia con Windows all'accesso", null, (_, _) =>
+        _autostartMenuItem = new ToolStripMenuItem("Start with Windows at login", null, (_, _) =>
         {
             SetAutostart(!_autostartMenuItem.Checked);
             _autostartMenuItem.Checked = GetAutostart();
@@ -83,7 +83,7 @@ public class MainForm : Form
         menu.Opening += (_, _) => _autostartMenuItem.Checked = GetAutostart();
         menu.Items.Add(_autostartMenuItem);
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Esci e ferma il servizio", null, (_, _) =>
+        menu.Items.Add("Exit and stop the service", null, (_, _) =>
         {
             StopServiceElevated();
             _reallyExit = true;
@@ -92,11 +92,11 @@ public class MainForm : Form
         return menu;
     }
 
-    // Chiave in HKCU, non serve elevazione per leggerla/scriverla — a
-    // differenza di avviare/fermare il servizio, questa è una preferenza
-    // dell'utente corrente, non un'azione di sistema. Condivisa tra il menu
-    // tray e il bridge WebView2 verso la pagina Impostazioni: stessa fonte
-    // di verità qualunque sia l'interfaccia usata per cambiarla.
+    // Key in HKCU, no elevation needed to read/write it — unlike
+    // starting/stopping the service, this is a preference of the
+    // current user, not a system action. Shared between the tray menu
+    // and the WebView2 bridge to the Settings page: same source
+    // of truth regardless of which interface is used to change it.
     internal static bool GetAutostart()
     {
         using var key = Registry.CurrentUser.OpenSubKey(AutostartRunKey, writable: false);
@@ -116,10 +116,10 @@ public class MainForm : Form
         }
     }
 
-    // Se l'utente ha chiuso tutto con "Esci" (che ferma anche il servizio) e
-    // poi riapre l'app, il servizio va fatto ripartire — altrimenti la
-    // finestra resta bloccata in attesa per sempre. Avviare un servizio
-    // richiede elevazione quanto fermarlo.
+    // If the user closed everything with "Exit" (which also stops the service) and
+    // then reopens the app, the service needs to be started back up — otherwise the
+    // window stays stuck waiting forever. Starting a service
+    // requires as much elevation as stopping it.
     private static async Task EnsureServiceRunningAsync()
     {
         try
@@ -138,8 +138,8 @@ public class MainForm : Form
         }
         catch
         {
-            // Servizio non trovato o query fallita: non c'è altro da fare
-            // qui, la finestra resterà comunque in attesa via TryNavigateWhenReadyAsync.
+            // Service not found or query failed: there's nothing more to do
+            // here, the window will keep waiting anyway via TryNavigateWhenReadyAsync.
         }
     }
 
@@ -160,9 +160,9 @@ public class MainForm : Form
         }
         catch (Win32Exception)
         {
-            // UAC annullato: il servizio resta fermo, il retry di rete in
-            // TryNavigateWhenReadyAsync continuerà a fallire finché non
-            // riparte (manualmente o riaprendo l'app).
+            // UAC cancelled: the service stays stopped, the network retry in
+            // TryNavigateWhenReadyAsync will keep failing until it
+            // starts back up (manually or by reopening the app).
         }
     }
 
@@ -183,8 +183,8 @@ public class MainForm : Form
         }
         catch (Win32Exception)
         {
-            // UAC annullato dall'utente: la finestra si chiude comunque,
-            // il servizio resta attivo (nessun danno, solo non fermato).
+            // UAC cancelled by the user: the window closes anyway,
+            // the service stays running (no harm, just not stopped).
         }
     }
 
@@ -197,10 +197,10 @@ public class MainForm : Form
 
     private async Task InitializeWebViewAsync()
     {
-        // Il profilo WebView2 non può stare nella cartella dell'exe: siamo
-        // dentro Program Files, un utente normale non ha permessi di
-        // scrittura lì e CreateAsync fallisce con Accesso negato. Serve una
-        // cartella dati scrivibile esplicita (AppData dell'utente corrente).
+        // The WebView2 profile can't live in the exe's folder: we're
+        // inside Program Files, a normal user has no write
+        // permissions there and CreateAsync fails with Access denied. An explicit
+        // writable data folder is needed (the current user's AppData).
         var userDataFolder = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "RackTemp", "WebView2"
@@ -209,11 +209,11 @@ public class MainForm : Form
         var environment = await CoreWebView2Environment.CreateAsync(userDataFolder: userDataFolder);
         await _webView.EnsureCoreWebView2Async(environment);
 
-        // Espone il toggle "avvia con Windows" alla pagina Impostazioni —
-        // window.chrome.webview.hostObjects.racktempHost lato JS. Funziona
-        // solo qui dentro (questa finestra), mai da un browser normale o da
-        // remoto: è esattamente il comportamento voluto, l'autostart è per
-        // definizione una preferenza di questo utente su questa macchina.
+        // Exposes the "start with Windows" toggle to the Settings page —
+        // window.chrome.webview.hostObjects.racktempHost on the JS side. Works
+        // only in here (this window), never from a normal browser or
+        // remotely: that's exactly the intended behavior, autostart is by
+        // definition a preference of this user on this machine.
         _webView.CoreWebView2.AddHostObjectToScript("racktempHost", new RackTempHostObject());
 
         await TryNavigateWhenReadyAsync();
@@ -235,7 +235,7 @@ public class MainForm : Form
         }
         catch
         {
-            return; // non ancora pronto, il timer riprova
+            return; // not ready yet, the timer will retry
         }
 
         _navigatedOnce = true;
@@ -252,22 +252,22 @@ public class MainForm : Form
             return;
         }
 
-        // Click sulla X: nascondi invece di chiudere, come le app "tray-first".
-        // Per fermare davvero il servizio serve "Esci" dal menu tray.
+        // Click on the X: hide instead of closing, like "tray-first" apps.
+        // To really stop the service use "Exit" from the tray menu.
         e.Cancel = true;
         Hide();
         _trayIcon.ShowBalloonTip(
             3000,
             "RackTemp",
-            "Continua a girare in background. Doppio click sull'icona per riaprirlo, tasto destro per uscire davvero.",
+            "Still running in the background. Double-click the icon to reopen it, right-click to really exit.",
             ToolTipIcon.Info
         );
     }
 }
 
-// Oggetto esposto alla pagina web tramite CoreWebView2.AddHostObjectToScript.
-// Metodi pubblici con soli tipi primitivi — WebView2 li marshalla verso JS
-// automaticamente, ogni chiamata lato pagina restituisce una Promise.
+// Object exposed to the web page via CoreWebView2.AddHostObjectToScript.
+// Public methods with primitive types only — WebView2 marshals them to JS
+// automatically, every call on the page side returns a Promise.
 public class RackTempHostObject
 {
     public bool GetAutostart() => MainForm.GetAutostart();

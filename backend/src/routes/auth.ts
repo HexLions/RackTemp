@@ -43,8 +43,8 @@ authRouter.get("/me", async (req, res) => {
   res.json({ username: user.username, mustChangePassword: user.mustChangePassword });
 });
 
-// Usato solo al primo accesso (credenziali di default admin/admin): l'utente
-// sceglie username e password definitivi prima di poter usare il resto dell'app.
+// Used only at first login (default admin/admin credentials): the user
+// chooses a final username and password before they can use the rest of the app.
 const firstLoginSchema = z.object({
   newUsername: z.string().min(3),
   newPassword: z.string().min(8),
@@ -63,7 +63,7 @@ authRouter.post("/first-login", async (req, res) => {
 
   const existing = await prisma.adminUser.findUnique({ where: { username: parsed.data.newUsername } });
   if (existing && existing.id !== user.id) {
-    return res.status(400).json({ error: "username già in uso" });
+    return res.status(400).json({ error: "username already in use" });
   }
 
   const passwordHash = await bcrypt.hash(parsed.data.newPassword, 10);
@@ -76,11 +76,11 @@ authRouter.post("/first-login", async (req, res) => {
   res.json({ ok: true, username: updated.username, mustChangePassword: false });
 });
 
-// Solo al primissimo accesso (mustChangePassword ancora true, prima che
-// l'utente scelga credenziali vere): permette di sostituire il database
-// appena creato con un backup .sqlite caricato, invece di configurare tutto
-// da zero. Gate doppio — sessione autenticata + mustChangePassword ancora
-// true — così non è mai invocabile su un'istanza già configurata.
+// Only at the very first login (mustChangePassword still true, before the
+// user picks real credentials): allows replacing the freshly created database
+// with an uploaded .sqlite backup, instead of configuring everything from
+// scratch. Double gate — authenticated session + mustChangePassword still
+// true — so it can never be invoked on an already-configured instance.
 const RESTORE_TMP_DIR = path.join(__dirname, "../../data/restore-tmp");
 fs.mkdirSync(RESTORE_TMP_DIR, { recursive: true });
 const restoreUpload = multer({
@@ -105,28 +105,28 @@ authRouter.post("/restore-backup", restoreUpload.single("backup"), async (req, r
   const user = await prisma.adminUser.findUnique({ where: { id: session.userId } });
   if (!user || !user.mustChangePassword) {
     cleanup();
-    return res.status(403).json({ error: "ripristino disponibile solo al primo accesso" });
+    return res.status(403).json({ error: "restore available only at first login" });
   }
 
-  if (!req.file) return res.status(400).json({ error: "file di backup mancante" });
+  if (!req.file) return res.status(400).json({ error: "missing backup file" });
 
-  // Verifica che sia davvero un database RackTemp prima di sovrascrivere
-  // quello attuale — apre il file caricato con un client separato invece
-  // di fidarsi solo dell'estensione.
+  // Verify that it's really a RackTemp database before overwriting the
+  // current one — opens the uploaded file with a separate client instead
+  // of trusting the extension alone.
   const testClient = new PrismaClient({ datasources: { db: { url: `file:${req.file.path}` } } });
   try {
     await testClient.adminUser.findFirst();
   } catch {
     await testClient.$disconnect();
     cleanup();
-    return res.status(400).json({ error: "file non valido: non è un backup RackTemp riconoscibile" });
+    return res.status(400).json({ error: "invalid file: not a recognizable RackTemp backup" });
   }
   await testClient.$disconnect();
 
   const dbPath = resolveDbPath();
   if (!dbPath) {
     cleanup();
-    return res.status(500).json({ error: "percorso database non configurato" });
+    return res.status(500).json({ error: "database path not configured" });
   }
 
   await prisma.$disconnect();
@@ -134,9 +134,9 @@ authRouter.post("/restore-backup", restoreUpload.single("backup"), async (req, r
   cleanup();
 
   res.json({ ok: true, restarting: true });
-  // Il processo deve riavviarsi per riconnettersi puliti al db sostituito —
-  // Docker/nssm/systemd lo fanno ripartire da soli (restart:unless-stopped /
-  // default nssm / Restart=on-failure, tutti coprono l'exit code 1).
+  // The process needs to restart to reconnect cleanly to the replaced db —
+  // Docker/nssm/systemd bring it back up on their own (restart:unless-stopped /
+  // default nssm / Restart=on-failure, all of which cover exit code 1).
   setTimeout(() => process.exit(1), 500);
 });
 

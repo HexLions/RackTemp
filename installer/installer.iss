@@ -44,7 +44,7 @@ Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "autostart"; Description: "Avvia RackTemp (finestra/tray) automaticamente all'accesso a Windows (si può cambiare in qualsiasi momento dal menu tray)"; GroupDescription: "Opzioni aggiuntive:"
+Name: "autostart"; Description: "Start RackTemp (window/tray) automatically when logging into Windows (can be changed anytime from the tray menu)"; GroupDescription: "Additional options:"
 
 [Files]
 Source: "{#StagedApp}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
@@ -56,27 +56,27 @@ Name: "{commonappdata}\RackTemp\data"; Permissions: users-modify
 
 [Icons]
 Name: "{group}\RackTemp"; Filename: "{app}\tray\RackTempTray.exe"; IconFilename: "{app}\racktemp.ico"
-Name: "{group}\Disinstalla RackTemp"; Filename: "{uninstallexe}"; IconFilename: "{app}\racktemp.ico"
+Name: "{group}\Uninstall RackTemp"; Filename: "{uninstallexe}"; IconFilename: "{app}\racktemp.ico"
 
-; Stessa chiave HKCU\...\Run che il menu tray (voce "Avvia con Windows
-; all'accesso") legge e scrive: install-time e toggle a runtime restano
-; sempre sincronizzati sull'unica fonte di verità.
+; Same HKCU\...\Run key that the tray menu (item "Start with Windows
+; at login") reads and writes: install-time and runtime toggle stay
+; always synchronized on the single source of truth.
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "RackTemp"; ValueData: """{app}\tray\RackTempTray.exe"" --minimized"; Flags: uninsdeletevalue; Tasks: autostart
 
 [Run]
-Filename: "{app}\nssm.exe"; Parameters: "install RackTemp cmd.exe"; Flags: runhidden; StatusMsg: "Registro il servizio Windows..."
+Filename: "{app}\nssm.exe"; Parameters: "install RackTemp cmd.exe"; Flags: runhidden; StatusMsg: "Registering the Windows service..."
 Filename: "{app}\nssm.exe"; Parameters: "set RackTemp AppDirectory ""{app}\backend"""; Flags: runhidden
 Filename: "{app}\nssm.exe"; Parameters: "set RackTemp AppParameters ""/c start-service.cmd"""; Flags: runhidden
 Filename: "{app}\nssm.exe"; Parameters: "set RackTemp DisplayName ""RackTemp"""; Flags: runhidden
-Filename: "{app}\nssm.exe"; Parameters: "set RackTemp Description ""RackTemp - monitor temperatura/umidita rack (http://localhost:7431)"""; Flags: runhidden
+Filename: "{app}\nssm.exe"; Parameters: "set RackTemp Description ""RackTemp - rack temperature/humidity monitor (http://localhost:7431)"""; Flags: runhidden
 Filename: "{app}\nssm.exe"; Parameters: "set RackTemp Start SERVICE_AUTO_START"; Flags: runhidden
 Filename: "{app}\nssm.exe"; Parameters: "set RackTemp AppStdout ""{commonappdata}\RackTemp\service.log"""; Flags: runhidden
 Filename: "{app}\nssm.exe"; Parameters: "set RackTemp AppStderr ""{commonappdata}\RackTemp\service.log"""; Flags: runhidden
 Filename: "netsh"; Parameters: "advfirewall firewall add rule name=""RackTemp"" dir=in action=allow protocol=TCP localport=7431"; Flags: runhidden
-Filename: "{app}\nssm.exe"; Parameters: "start RackTemp"; Flags: runhidden; StatusMsg: "Avvio il servizio RackTemp..."
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile '{tmp}\MicrosoftEdgeWebView2Setup.exe'; Start-Process -FilePath '{tmp}\MicrosoftEdgeWebView2Setup.exe' -ArgumentList '/silent /install' -Wait"""; StatusMsg: "Installo Microsoft Edge WebView2 (serve alla finestra di RackTemp)..."; Flags: runhidden; Check: WebView2Missing
-Filename: "{app}\tray\RackTempTray.exe"; Description: "Avvia RackTemp"; Flags: postinstall skipifsilent nowait
+Filename: "{app}\nssm.exe"; Parameters: "start RackTemp"; Flags: runhidden; StatusMsg: "Starting the RackTemp service..."
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -Command ""Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile '{tmp}\MicrosoftEdgeWebView2Setup.exe'; Start-Process -FilePath '{tmp}\MicrosoftEdgeWebView2Setup.exe' -ArgumentList '/silent /install' -Wait"""; StatusMsg: "Installing Microsoft Edge WebView2 (needed by the RackTemp window)..."; Flags: runhidden; Check: WebView2Missing
+Filename: "{app}\tray\RackTempTray.exe"; Description: "Start RackTemp"; Flags: postinstall skipifsilent nowait
 
 [UninstallRun]
 Filename: "{app}\nssm.exe"; Parameters: "stop RackTemp"; Flags: runhidden; RunOnceId: "StopRackTemp"
@@ -95,10 +95,10 @@ begin
     Result := Result + Chars[Random(Length(Chars)) + 1];
 end;
 
-// Rilevamento standard Microsoft: il runtime WebView2 (Evergreen) scrive la
-// propria versione in una di queste chiavi. Se assente/vuota/0.0.0.0, il
-// componente non è installato e va scaricato prima che la finestra tray
-// possa mostrare qualcosa.
+// Standard Microsoft detection: the WebView2 (Evergreen) runtime writes its
+// own version into one of these keys. If missing/empty/0.0.0.0, the
+// component isn't installed and needs to be downloaded before the tray
+// window can show anything.
 function WebView2Missing(): Boolean;
 var
   Version, ClientKey, ClientKeyWow: String;
@@ -144,9 +144,9 @@ end;
 function InitializeUninstall(): Boolean;
 begin
   Result := True;
-  if MsgBox('Vuoi mantenere i dati (letture, sensori, soglie, login) in ' + ExpandConstant('{commonappdata}') + '\RackTemp\data ?' + #13#10 + #13#10 +
-     'Si = mantieni i dati (consigliato, utile se reinstalli dopo).' + #13#10 +
-     'No = cancella tutto insieme al programma.',
+  if MsgBox('Do you want to keep the data (readings, sensors, thresholds, login) in ' + ExpandConstant('{commonappdata}') + '\RackTemp\data ?' + #13#10 + #13#10 +
+     'Yes = keep the data (recommended, useful if you reinstall later).' + #13#10 +
+     'No = delete everything along with the program.',
      mbConfirmation, MB_YESNO) = IDNO then
   begin
     DelTree(ExpandConstant('{commonappdata}\RackTemp'), True, True, True);

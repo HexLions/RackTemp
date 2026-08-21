@@ -1,39 +1,39 @@
-// Firmware per ESP32-C3 Super Mini + sensore SHT31-D (I2C via jumper wire).
+// Firmware for ESP32-C3 Super Mini + SHT31-D sensor (I2C via jumper wire).
 //
-// Nessuna configurazione da compilare: lo stesso firmware va bene per tutti i sensori.
-// Al primo avvio (o tenendo premuto BOOT all'accensione) il device apre un access point
-// "RackTemp-XXXXXXXX" senza password. Connettiti e apri http://192.168.4.1 (o aspetta il
-// popup automatico "accedi alla rete"): lì inserisci WiFi, indirizzo del server RackTemp e,
-// se già la conosci, l'API key del sensore. Salva: il device si riavvia e prova a collegarsi.
-// Se lasci l'API key vuota, il sensore si annuncia sulla rete e compare nella dashboard sotto
-// "Sensori rilevati in rete" — vedi il README, sezione "Rilevamento sensori in rete".
+// No configuration to compile in: the same firmware works for every sensor.
+// On first boot (or by holding BOOT while powering on) the device opens an access point
+// "RackTemp-XXXXXXXX" with no password. Connect and open http://192.168.4.1 (or wait for the
+// automatic "sign in to network" popup): there you enter the WiFi, the RackTemp server address and,
+// if you already know it, the sensor's API key. Save: the device restarts and tries to connect.
+// If you leave the API key empty, the sensor announces itself on the network and shows up in the dashboard under
+// "Sensors discovered on the network" — see the README, section "Discovering sensors on the network".
 //
-// Librerie richieste (Arduino Library Manager):
+// Required libraries (Arduino Library Manager):
 //   - Adafruit SHT31 Library
 //   - Adafruit BusIO
-// (WiFi, WebServer, DNSServer, Preferences, HTTPClient, Wire sono già incluse nel core esp32)
+// (WiFi, WebServer, DNSServer, Preferences, HTTPClient, Wire are already included in the esp32 core)
 //
-// Board: "ESP32C3 Dev Module" (installabile da Boards Manager -> esp32 by Espressif).
-// Sulla maggior parte dei cloni "ESP32-C3 Super Mini" serve anche il driver USB-seriale
-// CH340 per vederla come porta COM/tty. Se il flash non parte, tieni premuto BOOT
-// mentre colleghi il cavo USB.
+// Board: "ESP32C3 Dev Module" (installable from Boards Manager -> esp32 by Espressif).
+// On most "ESP32-C3 Super Mini" clones you'll also need the CH340 USB-serial driver
+// to see it as a COM/tty port. If the flash doesn't start, hold BOOT
+// while plugging in the USB cable.
 //
-// Cablaggio SHT31-D -> ESP32-C3 Super Mini (verifica la piedinatura stampata sulla tua
-// scheda: i cloni non sono tutti identici; SDA/GPIO8 e SCL/GPIO9 sono i più comuni):
+// Wiring SHT31-D -> ESP32-C3 Super Mini (check the pinout printed on your
+// board: clones aren't all identical; SDA/GPIO8 and SCL/GPIO9 are the most common):
 //   VIN -> 3V3      GND -> GND      SCL -> GPIO9      SDA -> GPIO8
 #define I2C_SDA_PIN 8
 #define I2C_SCL_PIN 9
 
-// Aggiornata ad ogni modifica del firmware — stampata via seriale al boot,
-// così sai al volo se il device sta girando con l'ultima versione flashata.
-// Usata anche per l'auto-update OTA: se il server ne offre una diversa, il
-// device se la scarica e si flasha da solo (vedi checkFirmwareUpdate sotto).
+// Updated on every firmware change — printed over serial at boot,
+// so you can quickly tell if the device is running the latest flashed version.
+// Also used for OTA auto-update: if the server offers a different one, the
+// device downloads it and flashes itself (see checkFirmwareUpdate below).
 #define FIRMWARE_VERSION "2026-08-22.1"
 
-// Pulsante BOOT, tenuto premuto all'accensione per rientrare nel setup WiFi. Su molti
-// cloni "Super Mini" è sullo stesso GPIO9 usato sopra per SCL: lo leggiamo solo all'avvio,
-// PRIMA di Wire.begin(), quindi non confligge — ma se sulla tua scheda BOOT è su un altro
-// pin, cambia questo valore.
+// BOOT button, held down at power-on to re-enter WiFi setup. On many
+// "Super Mini" clones it's on the same GPIO9 used above for SCL: we only read it at startup,
+// BEFORE Wire.begin(), so it doesn't conflict — but if BOOT is on a different
+// pin on your board, change this value.
 #define BOOT_BUTTON_PIN 9
 
 #define SEND_INTERVAL_SEC 60
@@ -57,9 +57,9 @@ const unsigned long WIFI_CONNECT_TIMEOUT_MS = 15000UL;
 
 String cfgSsid, cfgPassword, cfgServerUrl, cfgApiKey;
 
-// Identificativo stabile del chip, usato per la discovery (POST /api/discovery/announce),
-// per il nome dell'access point di setup, e incluso in ogni lettura così il server può
-// ripulire la voce di discovery non appena arriva un dato autenticato con l'API key vera.
+// Stable chip identifier, used for discovery (POST /api/discovery/announce),
+// for the setup access point's name, and included in every reading so the server can
+// clear the discovery entry as soon as data arrives authenticated with the real API key.
 String chipId() {
   uint64_t mac = ESP.getEfuseMac();
   char buf[17];
@@ -67,7 +67,7 @@ String chipId() {
   return String(buf);
 }
 
-// ---------- configurazione salvata (NVS) ----------
+// ---------- saved configuration (NVS) ----------
 
 bool loadConfig() {
   prefs.begin("racktemp", true);
@@ -88,7 +88,7 @@ void saveConfig() {
   prefs.end();
 }
 
-// ---------- portale di setup (access point + pagina web) ----------
+// ---------- setup portal (access point + web page) ----------
 
 String htmlEscape(const String &s) {
   String out = s;
@@ -101,7 +101,7 @@ String htmlEscape(const String &s) {
 
 void handlePortalRoot() {
   int n = WiFi.scanComplete();
-  String options = "<option value=''>-- scegli dall'elenco o scrivi sotto --</option>";
+  String options = "<option value=''>-- choose from the list or type below --</option>";
   if (n > 0) {
     for (int i = 0; i < n; i++) {
       String ssid = htmlEscape(WiFi.SSID(i));
@@ -112,7 +112,7 @@ void handlePortalRoot() {
   String page =
     "<!doctype html><html><head><meta charset='utf-8'>"
     "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-    "<title>RackTemp - Setup sensore</title>"
+    "<title>RackTemp - Sensor setup</title>"
     "<style>"
     "body{font-family:system-ui,sans-serif;background:#0a0d12;color:#e6eaf0;padding:24px;max-width:420px;margin:0 auto}"
     "h1{font-size:1.2rem;margin-bottom:4px}"
@@ -123,20 +123,20 @@ void handlePortalRoot() {
     "small{color:#7c8797;display:block;margin-top:14px;line-height:1.4}"
     "</style></head><body>"
     "<h1>&#127777; RackTemp</h1>"
-    "<p class='sub'>Setup sensore &mdash; chip " + chipId().substring(8) + "</p>"
+    "<p class='sub'>Sensor setup &mdash; chip " + chipId().substring(8) + "</p>"
     "<form method='POST' action='/save'>"
-    "<label>Rete WiFi</label>"
+    "<label>WiFi network</label>"
     "<select onchange=\"document.getElementById('ssid').value=this.value\">" + options + "</select>"
-    "<input id='ssid' name='ssid' placeholder='Nome rete (SSID)' value='" + htmlEscape(cfgSsid) + "' required>"
-    "<label>Password WiFi</label>"
-    "<input type='password' name='password' placeholder='" + String(cfgPassword.length() > 0 ? "lascia vuoto per mantenere quella attuale" : "Password") + "'>"
-    "<label>Indirizzo server RackTemp</label>"
+    "<input id='ssid' name='ssid' placeholder='Network name (SSID)' value='" + htmlEscape(cfgSsid) + "' required>"
+    "<label>WiFi password</label>"
+    "<input type='password' name='password' placeholder='" + String(cfgPassword.length() > 0 ? "leave empty to keep the current one" : "Password") + "'>"
+    "<label>RackTemp server address</label>"
     "<input name='serverUrl' placeholder='http://192.168.1.50:7431' value='" + htmlEscape(cfgServerUrl) + "' required>"
-    "<label>API key sensore (opzionale)</label>"
-    "<input name='apiKey' placeholder='lasciala vuota per farti notificare in dashboard' value='" + htmlEscape(cfgApiKey) + "'>"
-    "<button type='submit'>Salva e riavvia</button>"
-    "<small>Il sensore si riavvia e prova a collegarsi. Se sbagli qualcosa, tieni premuto BOOT "
-    "all'accensione per rientrare in questa pagina.</small>"
+    "<label>Sensor API key (optional)</label>"
+    "<input name='apiKey' placeholder='leave it empty to get notified in the dashboard' value='" + htmlEscape(cfgApiKey) + "'>"
+    "<button type='submit'>Save and restart</button>"
+    "<small>The sensor restarts and tries to connect. If you got something wrong, hold BOOT "
+    "at power-on to come back to this page.</small>"
     "</form></body></html>";
 
   portalServer.send(200, "text/html", page);
@@ -152,12 +152,12 @@ void handlePortalSave() {
   newApiKey.trim();
 
   if (newSsid.length() == 0 || newServerUrl.length() == 0) {
-    portalServer.send(400, "text/plain", "SSID e indirizzo server sono obbligatori.");
+    portalServer.send(400, "text/plain", "SSID and server address are required.");
     return;
   }
 
   cfgSsid = newSsid;
-  if (newPassword.length() > 0) cfgPassword = newPassword; // vuoto = mantieni quella salvata
+  if (newPassword.length() > 0) cfgPassword = newPassword; // empty = keep the saved one
   cfgServerUrl = newServerUrl;
   cfgApiKey = newApiKey;
   saveConfig();
@@ -166,7 +166,7 @@ void handlePortalSave() {
     "<!doctype html><html><head><meta charset='utf-8'>"
     "<meta name='viewport' content='width=device-width,initial-scale=1'></head>"
     "<body style='font-family:system-ui,sans-serif;background:#0a0d12;color:#e6eaf0;padding:24px'>"
-    "<h1>Salvato &#10003;</h1><p>Il sensore si riavvia e prova a collegarsi a \"" + htmlEscape(cfgSsid) + "\".</p>"
+    "<h1>Saved &#10003;</h1><p>The sensor is restarting and will try to connect to \"" + htmlEscape(cfgSsid) + "\".</p>"
     "</body></html>");
 
   delay(800);
@@ -176,7 +176,7 @@ void handlePortalSave() {
 void runSetupPortal() {
   WiFi.mode(WIFI_AP_STA);
   int found = WiFi.scanNetworks();
-  Serial.printf("Reti WiFi trovate: %d\n", found);
+  Serial.printf("WiFi networks found: %d\n", found);
 
   String apName = "RackTemp-" + chipId().substring(8);
   WiFi.softAP(apName.c_str());
@@ -188,9 +188,9 @@ void runSetupPortal() {
   portalServer.onNotFound(handlePortalRoot);
   portalServer.begin();
 
-  Serial.println("=== Modalita' setup ===");
-  Serial.println("Connettiti alla rete WiFi \"" + apName + "\" (nessuna password)");
-  Serial.println("poi apri http://" + apIP.toString() + " (o aspetta il popup automatico).");
+  Serial.println("=== Setup mode ===");
+  Serial.println("Connect to the WiFi network \"" + apName + "\" (no password)");
+  Serial.println("then open http://" + apIP.toString() + " (or wait for the automatic popup).");
 
   while (true) {
     dnsServer.processNextRequest();
@@ -198,16 +198,16 @@ void runSetupPortal() {
   }
 }
 
-// ---------- funzionamento normale ----------
+// ---------- normal operation ----------
 
-// Prova a connettersi per un tempo limitato invece di bloccare all'infinito: se la rete
-// è giù, meglio riprovare al prossimo ciclo che restare impiccati qui.
+// Tries to connect for a limited time instead of blocking forever: if the network
+// is down, it's better to retry next cycle than get stuck here.
 bool connectWiFi() {
   if (WiFi.status() == WL_CONNECTED) return true;
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(cfgSsid.c_str(), cfgPassword.c_str());
-  Serial.print("Connessione WiFi");
+  Serial.print("Connecting to WiFi");
 
   unsigned long start = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - start < WIFI_CONNECT_TIMEOUT_MS) {
@@ -216,19 +216,19 @@ bool connectWiFi() {
   }
 
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println(" non riuscita, riprovo al prossimo ciclo.");
+    Serial.println(" failed, will retry next cycle.");
     return false;
   }
 
-  Serial.println(" connesso, IP: " + WiFi.localIP().toString());
+  Serial.println(" connected, IP: " + WiFi.localIP().toString());
   return true;
 }
 
-// Annuncia il chip al server finché non hai una API key: compare nella dashboard
-// come "sensore rilevato in rete" (notifica al primo avvistamento). Se nel
-// frattempo un admin ha collegato questo chip a un sensore — creandone uno nuovo
-// dal banner o linkandolo a uno esistente — il server risponde con la sua API
-// key: la salviamo da soli, senza dover riaprire il portale di setup a mano.
+// Announces the chip to the server until you have an API key: it shows up in the dashboard
+// as a "sensor discovered on the network" (notification on first sighting). If in the
+// meantime an admin has linked this chip to a sensor — by creating a new one
+// from the banner or linking it to an existing one — the server responds with its API
+// key: we save it on our own, with no need to reopen the setup portal by hand.
 void announceDiscovery() {
   if (cfgApiKey.length() > 0) return;
 
@@ -248,7 +248,7 @@ void announceDiscovery() {
       if (end > start) {
         cfgApiKey = payload.substring(start, end);
         saveConfig();
-        Serial.println("API key ricevuta dal server, salvata. Da ora invio i dati.");
+        Serial.println("API key received from the server, saved. Sending data from now on.");
       }
     }
   }
@@ -256,10 +256,10 @@ void announceDiscovery() {
   http.end();
 }
 
-// Confronta la versione con quella offerta dal server: se diversa, scarica il
-// nuovo .bin e si riflasha da sola (HTTPUpdate scrive solo la partizione OTA
-// dell'app — la NVS dove sono salvati WiFi/server/API key non viene toccata,
-// quindi la configurazione sopravvive intatta all'aggiornamento).
+// Compares the version with the one offered by the server: if different, downloads the
+// new .bin and reflashes itself (HTTPUpdate only writes the OTA app
+// partition — the NVS where WiFi/server/API key are saved is not touched,
+// so the configuration survives the update intact).
 void checkFirmwareUpdate() {
   HTTPClient http;
   http.begin(cfgServerUrl + "/api/firmware/latest");
@@ -279,24 +279,24 @@ void checkFirmwareUpdate() {
 
   if (latestVersion.length() == 0 || latestVersion == FIRMWARE_VERSION) return;
 
-  Serial.println("Nuovo firmware disponibile: " + latestVersion + " (attuale: " FIRMWARE_VERSION "). Aggiorno...");
+  Serial.println("New firmware available: " + latestVersion + " (current: " FIRMWARE_VERSION "). Updating...");
   WiFiClient client;
   httpUpdate.rebootOnUpdate(true);
   t_httpUpdate_return ret = httpUpdate.update(client, cfgServerUrl + "/api/firmware/latest.bin");
   if (ret != HTTP_UPDATE_OK) {
-    Serial.printf("OTA fallito: %s\n", httpUpdate.getLastErrorString().c_str());
+    Serial.printf("OTA failed: %s\n", httpUpdate.getLastErrorString().c_str());
   }
-  // Se ret == HTTP_UPDATE_OK il device si riavvia da solo (rebootOnUpdate).
+  // If ret == HTTP_UPDATE_OK the device restarts on its own (rebootOnUpdate).
 }
 
 void sendReading(float temperature, float humidity) {
   if (cfgApiKey.length() == 0) {
-    Serial.println("Nessuna API key configurata: in attesa di essere collegato dalla dashboard.");
+    Serial.println("No API key configured: waiting to be linked from the dashboard.");
     return;
   }
 
   if (!connectWiFi()) {
-    Serial.println("Salto invio: WiFi non disponibile.");
+    Serial.println("Skipping send: WiFi not available.");
     return;
   }
 
@@ -329,11 +329,11 @@ void setup() {
 
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
   if (!sht31.begin(0x44)) {
-    Serial.println("Sensore SHT31 non trovato, controlla il cablaggio I2C (SDA/SCL/3V3/GND).");
+    Serial.println("SHT31 sensor not found, check the I2C wiring (SDA/SCL/3V3/GND).");
   }
 
   if (!haveConfig || forceSetup) {
-    runSetupPortal(); // non ritorna: resta qui finché non salvi, poi riavvia il device
+    runSetupPortal(); // doesn't return: stays here until you save, then restarts the device
   }
 
   connectWiFi();
@@ -360,7 +360,7 @@ void loop() {
     Serial.printf("Temp: %.2f C  Hum: %.2f %%\n", temperature, humidity);
     sendReading(temperature, humidity);
   } else {
-    Serial.println("Lettura sensore fallita.");
+    Serial.println("Sensor reading failed.");
   }
 
   delay(SEND_INTERVAL_MS);
