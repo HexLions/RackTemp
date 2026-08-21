@@ -111,6 +111,8 @@ export interface UpdateCheck {
   latestVersion: string;
   updateAvailable: boolean;
   releaseUrl: string;
+  platform: "windows" | "linux" | "docker";
+  downloadUrl: string | null;
 }
 
 export interface VersionInfo {

@@ -48,6 +48,7 @@ if [ ! -f "$ENV_FILE" ]; then
 PORT=7431
 DATABASE_URL=file:$DATA_DIR/db.sqlite
 SESSION_SECRET=$SESSION_SECRET
+DEPLOY_TARGET=linux
 EOF
   chmod 600 "$ENV_FILE"
 else

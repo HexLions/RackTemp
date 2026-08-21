@@ -156,13 +156,22 @@ export default function Integrations() {
 
       <div className="card">
         <h2>Aggiornamento controller</h2>
-        <p className="hint" style={{ marginTop: -4 }}>
-          Se lo stack include Watchtower (di default in <code>docker-compose.portainer.yml</code>), il controller
-          si aggiorna da solo entro poche ore da ogni nuova release, senza fare nulla qui. Questa sezione serve per
-          vedere a che versione sei e, se vuoi saltare l'attesa, per forzare subito un redeploy tramite un webhook
-          Portainer opzionale. I dati (letture, sensori, soglie, login) vivono nel volume Docker e non vengono
-          toccati dall'aggiornamento.
-        </p>
+        {updateCheck?.platform === "windows" || updateCheck?.platform === "linux" ? (
+          <p className="hint" style={{ marginTop: -4 }}>
+            Installazione {updateCheck.platform === "windows" ? "Windows" : "Linux"} nativa: qui vedi se c'è una
+            release più recente di quella installata, con link per scaricarla. L'aggiornamento resta manuale — scarica
+            {updateCheck.platform === "windows" ? " ed esegui il nuovo installer" : " ed esegui di nuovo install.sh"},
+            i dati non vengono toccati.
+          </p>
+        ) : (
+          <p className="hint" style={{ marginTop: -4 }}>
+            Se lo stack include Watchtower (di default in <code>docker-compose.portainer.yml</code>), il controller
+            si aggiorna da solo entro poche ore da ogni nuova release, senza fare nulla qui. Questa sezione serve per
+            vedere a che versione sei e, se vuoi saltare l'attesa, per forzare subito un redeploy tramite un webhook
+            Portainer opzionale. I dati (letture, sensori, soglie, login) vivono nel volume Docker e non vengono
+            toccati dall'aggiornamento.
+          </p>
+        )}
 
         {updateCheckError && <p className="hint">Impossibile controllare le release su GitHub in questo momento.</p>}
         {updateCheck && (
@@ -183,36 +192,54 @@ export default function Integrations() {
           </p>
         )}
 
-        <form onSubmit={saveWebhook} className="form-row" style={{ alignItems: "flex-end" }}>
-          <label style={{ flex: 1 }}>
-            <span>
-              Webhook Portainer (Container/Stack → Aggiungi webhook, in Portainer). Serve per far ripartire il
-              controller da qui.
-            </span>
-            <input
-              value={webhookUrl}
-              onChange={(e) => setWebhookUrl(e.target.value)}
-              placeholder="https://portainer.local/api/webhooks/xxxxxxxx"
-            />
-          </label>
-          <button className="btn-ghost" type="submit" disabled={webhookBusy}>
-            {webhookBusy ? "Salvo…" : "Salva webhook"}
-          </button>
-        </form>
-        {webhookMsg && <p className={webhookMsg.ok ? "success-text" : "error"}>{webhookMsg.text}</p>}
+        {updateCheck?.platform === "windows" || updateCheck?.platform === "linux" ? (
+          updateCheck.updateAvailable && (
+            <div className="row-actions" style={{ marginTop: 12 }}>
+              {updateCheck.downloadUrl ? (
+                <a href={updateCheck.downloadUrl} className="btn-primary" style={{ textDecoration: "none" }}>
+                  Scarica {updateCheck.platform === "windows" ? "installer" : "pacchetto"} v{updateCheck.latestVersion}
+                </a>
+              ) : (
+                <a href={updateCheck.releaseUrl} target="_blank" rel="noreferrer" className="btn-primary" style={{ textDecoration: "none" }}>
+                  Apri la release su GitHub
+                </a>
+              )}
+            </div>
+          )
+        ) : (
+          <>
+            <form onSubmit={saveWebhook} className="form-row" style={{ alignItems: "flex-end" }}>
+              <label style={{ flex: 1 }}>
+                <span>
+                  Webhook Portainer (Container/Stack → Aggiungi webhook, in Portainer). Serve per far ripartire il
+                  controller da qui.
+                </span>
+                <input
+                  value={webhookUrl}
+                  onChange={(e) => setWebhookUrl(e.target.value)}
+                  placeholder="https://portainer.local/api/webhooks/xxxxxxxx"
+                />
+              </label>
+              <button className="btn-ghost" type="submit" disabled={webhookBusy}>
+                {webhookBusy ? "Salvo…" : "Salva webhook"}
+              </button>
+            </form>
+            {webhookMsg && <p className={webhookMsg.ok ? "success-text" : "error"}>{webhookMsg.text}</p>}
 
-        <div className="row-actions" style={{ marginTop: 12 }}>
-          <button
-            className="btn-primary"
-            type="button"
-            onClick={triggerUpdate}
-            disabled={updateBusy || !settings.portainerWebhookUrl}
-          >
-            {updateBusy ? "Aggiorno…" : "Aggiorna ora"}
-          </button>
-          {!settings.portainerWebhookUrl && <span className="hint">Configura prima il webhook sopra.</span>}
-          {updateMsg && <span className={updateMsg.ok ? "success-text" : "error"}>{updateMsg.text}</span>}
-        </div>
+            <div className="row-actions" style={{ marginTop: 12 }}>
+              <button
+                className="btn-primary"
+                type="button"
+                onClick={triggerUpdate}
+                disabled={updateBusy || !settings.portainerWebhookUrl}
+              >
+                {updateBusy ? "Aggiorno…" : "Aggiorna ora"}
+              </button>
+              {!settings.portainerWebhookUrl && <span className="hint">Configura prima il webhook sopra.</span>}
+              {updateMsg && <span className={updateMsg.ok ? "success-text" : "error"}>{updateMsg.text}</span>}
+            </div>
+          </>
+        )}
       </div>
 
       <form className="card" onSubmit={uploadFirmware}>

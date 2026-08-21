@@ -102,7 +102,8 @@ begin
     StringChangeEx(DataDir, '\', '/', True);
     Content := 'PORT=7431' + #13#10 +
       'DATABASE_URL=file:' + DataDir + '/db.sqlite' + #13#10 +
-      'SESSION_SECRET=' + GenerateRandomString(48) + #13#10;
+      'SESSION_SECRET=' + GenerateRandomString(48) + #13#10 +
+      'DEPLOY_TARGET=windows' + #13#10;
     SaveStringToFile(EnvPath, Content, False);
   end;
 end;

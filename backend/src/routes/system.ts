@@ -10,9 +10,31 @@ systemRouter.use(requireAuth);
 
 const GITHUB_REPO = "HexLions/RackTemp";
 const UPDATE_CHECK_TTL_MS = 6 * 60 * 60 * 1000;
-let updateCheckCache: { checkedAt: number; latestVersion: string; releaseUrl: string } | null = null;
 
-async function fetchLatestRelease() {
+// Set by the Windows installer / Linux install.sh in their generated .env
+// (DEPLOY_TARGET=windows / DEPLOY_TARGET=linux). Absent under Docker, where
+// there's no single file to hand back — Watchtower/the Portainer webhook
+// cover that case instead.
+type DeployTarget = "windows" | "linux" | "docker";
+function getDeployTarget(): DeployTarget {
+  const t = process.env.DEPLOY_TARGET;
+  if (t === "windows" || t === "linux") return t;
+  return "docker";
+}
+
+interface GithubAsset {
+  name: string;
+  browser_download_url: string;
+}
+interface ReleaseCache {
+  checkedAt: number;
+  latestVersion: string;
+  releaseUrl: string;
+  assets: GithubAsset[];
+}
+let updateCheckCache: ReleaseCache | null = null;
+
+async function fetchLatestRelease(): Promise<ReleaseCache> {
   if (updateCheckCache && Date.now() - updateCheckCache.checkedAt < UPDATE_CHECK_TTL_MS) {
     return updateCheckCache;
   }
@@ -20,20 +42,29 @@ async function fetchLatestRelease() {
     headers: { Accept: "application/vnd.github+json", "User-Agent": "rack-temp-monitor" },
   });
   if (!res.ok) throw new Error(`GitHub API ${res.status}`);
-  const body = (await res.json()) as { tag_name: string; html_url: string };
+  const body = (await res.json()) as { tag_name: string; html_url: string; assets: GithubAsset[] };
   const latestVersion = body.tag_name.replace(/^v/, "");
-  updateCheckCache = { checkedAt: Date.now(), latestVersion, releaseUrl: body.html_url };
+  updateCheckCache = { checkedAt: Date.now(), latestVersion, releaseUrl: body.html_url, assets: body.assets };
   return updateCheckCache;
+}
+
+function pickDownloadUrl(assets: GithubAsset[], target: DeployTarget): string | null {
+  const matcher = target === "windows" ? /\.exe$/ : target === "linux" ? /\.tar\.gz$/ : null;
+  if (!matcher) return null;
+  return assets.find((a) => matcher.test(a.name))?.browser_download_url ?? null;
 }
 
 systemRouter.get("/update-check", async (_req, res) => {
   try {
     const latest = await fetchLatestRelease();
+    const platform = getDeployTarget();
     res.json({
       currentVersion: pkg.version,
       latestVersion: latest.latestVersion,
       updateAvailable: latest.latestVersion !== pkg.version,
       releaseUrl: latest.releaseUrl,
+      platform,
+      downloadUrl: pickDownloadUrl(latest.assets, platform),
     });
   } catch {
     res.status(502).json({ error: "impossibile controllare le release su GitHub" });
