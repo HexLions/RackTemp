@@ -37,6 +37,10 @@ ingestRouter.post("/", async (req, res) => {
   // the "seen but not configured" discovery list.
   if (chipId) {
     await prisma.discoveredDevice.deleteMany({ where: { chipId } });
+
+    if (!sensor.chipId) {
+      await prisma.sensor.update({ where: { id: sensor.id }, data: { chipId } }).catch(() => {});
+    }
   }
 
   broadcastReading(sensor.id, reading);

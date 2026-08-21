@@ -21,6 +21,10 @@ const createSchema = z.object({
   name: z.string().min(1),
   location: z.string().optional(),
   staticIp: z.string().optional(),
+  // Set when created from a discovery banner entry ("Configura"): links the
+  // new sensor to that chip immediately, so the device picks up its API key
+  // on its next announce poll without any extra step.
+  chipId: z.string().optional(),
 });
 
 sensorsRouter.post("/", async (req, res) => {
@@ -32,10 +36,16 @@ sensorsRouter.post("/", async (req, res) => {
       name: parsed.data.name,
       location: parsed.data.location,
       staticIp: parsed.data.staticIp,
+      chipId: parsed.data.chipId,
       threshold: { create: {} },
     },
     include: { threshold: true },
   });
+
+  if (parsed.data.chipId) {
+    await prisma.discoveredDevice.deleteMany({ where: { chipId: parsed.data.chipId } });
+  }
+
   res.status(201).json(sensor);
 });
 

@@ -49,7 +49,6 @@ const unsigned long SEND_INTERVAL_MS = SEND_INTERVAL_SEC * 1000UL;
 const unsigned long WIFI_CONNECT_TIMEOUT_MS = 15000UL;
 
 String cfgSsid, cfgPassword, cfgServerUrl, cfgApiKey;
-bool announced = false;
 
 // Identificativo stabile del chip, usato per la discovery (POST /api/discovery/announce),
 // per il nome dell'access point di setup, e incluso in ogni lettura così il server può
@@ -218,9 +217,11 @@ bool connectWiFi() {
   return true;
 }
 
-// Annuncia il chip al server: se non hai ancora incollato una API key valida qui,
-// comparirà nella dashboard come "sensore rilevato in rete" con una notifica, per
-// evitare di dover cercare l'IP a mano.
+// Annuncia il chip al server finché non hai una API key: compare nella dashboard
+// come "sensore rilevato in rete" (notifica al primo avvistamento). Se nel
+// frattempo un admin ha collegato questo chip a un sensore — creandone uno nuovo
+// dal banner o linkandolo a uno esistente — il server risponde con la sua API
+// key: la salviamo da soli, senza dover riaprire il portale di setup a mano.
 void announceDiscovery() {
   if (cfgApiKey.length() > 0) return;
 
@@ -230,6 +231,21 @@ void announceDiscovery() {
   String body = "{\"chipId\":\"" + chipId() + "\",\"firmware\":\"rack_temp_sensor\"}";
   int code = http.POST(body);
   Serial.printf("POST /api/discovery/announce -> %d\n", code);
+
+  if (code == 200) {
+    String payload = http.getString();
+    int start = payload.indexOf("\"apiKey\":\"");
+    if (start >= 0) {
+      start += 10;
+      int end = payload.indexOf('"', start);
+      if (end > start) {
+        cfgApiKey = payload.substring(start, end);
+        saveConfig();
+        Serial.println("API key ricevuta dal server, salvata. Da ora invio i dati.");
+      }
+    }
+  }
+
   http.end();
 }
 
@@ -282,9 +298,8 @@ void setup() {
 }
 
 void loop() {
-  if (!announced && connectWiFi()) {
+  if (cfgApiKey.length() == 0 && connectWiFi()) {
     announceDiscovery();
-    announced = true;
   }
 
   float temperature = sht31.readTemperature();

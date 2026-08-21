@@ -50,6 +50,8 @@ export default function Dashboard() {
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
   const [staticIp, setStaticIp] = useState("");
+  const [pendingChipId, setPendingChipId] = useState<string | null>(null);
+  const [linkTarget, setLinkTarget] = useState<Record<string, string>>({});
 
   async function load() {
     const [s, d] = await Promise.all([
@@ -68,10 +70,16 @@ export default function Dashboard() {
 
   async function addSensor(e: FormEvent) {
     e.preventDefault();
-    await api.post("/sensors", { name, location: location || undefined, staticIp: staticIp || undefined });
+    await api.post("/sensors", {
+      name,
+      location: location || undefined,
+      staticIp: staticIp || undefined,
+      chipId: pendingChipId || undefined,
+    });
     setName("");
     setLocation("");
     setStaticIp("");
+    setPendingChipId(null);
     setShowAdd(false);
     load();
   }
@@ -84,7 +92,15 @@ export default function Dashboard() {
   function startFromDiscovered(device: DiscoveredDevice) {
     setName(`Sensore ${device.chipId.slice(-6)}`);
     setStaticIp(device.ip ?? "");
+    setPendingChipId(device.chipId);
     setShowAdd(true);
+  }
+
+  async function linkExisting(deviceId: string) {
+    const sensorId = linkTarget[deviceId];
+    if (!sensorId) return;
+    await api.post(`/discovery/${deviceId}/claim`, { sensorId });
+    load();
   }
 
   if (!sensors) return <div className="center-screen">Caricamento…</div>;
@@ -111,25 +127,54 @@ export default function Dashboard() {
         <div className="card setup-panel" style={{ marginBottom: 20 }}>
           <h2>Sensori rilevati in rete ({discovered.length})</h2>
           <p className="hint" style={{ marginTop: -4 }}>
-            Questi ESP32 si sono annunciati ma non hanno ancora un'API key valida. Crea un sensore e flasha la
-            sua API key sul dispositivo per collegarlo.
+            Questi dispositivi si sono annunciati ma non hanno ancora un'API key. Crea un sensore nuovo, oppure
+            collegali a uno già esistente: il dispositivo prende la key da solo al prossimo annuncio, senza
+            toccarlo di nuovo.
           </p>
           <div className="stack-tight">
-            {discovered.map((d) => (
-              <div key={d.id} className="row-actions" style={{ justifyContent: "space-between" }}>
-                <span className="mono small">
-                  chip {d.chipId.slice(-8)} {d.ip && `· ${d.ip}`} · visto {timeAgo(d.lastSeenAt)}
-                </span>
-                <span className="row-actions">
-                  <button type="button" className="btn-link" onClick={() => startFromDiscovered(d)}>
-                    Configura
-                  </button>
-                  <button type="button" className="btn-ghost" onClick={() => dismissDiscovered(d.id)}>
-                    Ignora
-                  </button>
-                </span>
-              </div>
-            ))}
+            {discovered.map((d) => {
+              const unlinkedSensors = sensors?.filter((s) => !s.chipId) ?? [];
+              return (
+                <div key={d.id} style={{ borderTop: "1px solid var(--line)", paddingTop: 10, marginTop: 10 }}>
+                  <div className="row-actions" style={{ justifyContent: "space-between" }}>
+                    <span className="mono small">
+                      chip {d.chipId.slice(-8)} {d.ip && `· ${d.ip}`} · visto {timeAgo(d.lastSeenAt)}
+                    </span>
+                    <span className="row-actions">
+                      <button type="button" className="btn-link" onClick={() => startFromDiscovered(d)}>
+                        Nuovo sensore
+                      </button>
+                      <button type="button" className="btn-ghost" onClick={() => dismissDiscovered(d.id)}>
+                        Ignora
+                      </button>
+                    </span>
+                  </div>
+                  {unlinkedSensors.length > 0 && (
+                    <div className="row-actions" style={{ marginTop: 8 }}>
+                      <select
+                        value={linkTarget[d.id] ?? ""}
+                        onChange={(e) => setLinkTarget({ ...linkTarget, [d.id]: e.target.value })}
+                      >
+                        <option value="">Collega a sensore esistente…</option>
+                        {unlinkedSensors.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="btn-ghost"
+                        disabled={!linkTarget[d.id]}
+                        onClick={() => linkExisting(d.id)}
+                      >
+                        Collega
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

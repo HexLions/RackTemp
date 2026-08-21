@@ -466,7 +466,8 @@ label > .label-text {
 input[type="text"],
 input[type="password"],
 input[type="number"],
-input:not([type]) {
+input:not([type]),
+select {
   background: var(--panel);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
@@ -476,16 +477,22 @@ input:not([type]) {
   transition: border-color 0.12s, box-shadow 0.12s;
 }
 
+select {
+  max-width: 240px;
+}
+
 input[type="number"] {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 
-input:hover {
+input:hover,
+select:hover {
   border-color: var(--dimmer);
 }
 
-input:focus {
+input:focus,
+select:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);

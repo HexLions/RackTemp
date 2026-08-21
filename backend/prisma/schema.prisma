@@ -15,6 +15,7 @@ model Sensor {
   location    String?
   staticIp    String?
   apiKey      String   @unique @default(cuid())
+  chipId      String?  @unique
   createdAt   DateTime @default(now())
   lastSeenAt  DateTime?
 

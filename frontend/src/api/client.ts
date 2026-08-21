@@ -38,6 +38,7 @@ export interface Sensor {
   location: string | null;
   staticIp: string | null;
   apiKey: string;
+  chipId: string | null;
   lastSeenAt: string | null;
   createdAt: string;
   threshold: Threshold | null;
