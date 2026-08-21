@@ -125,3 +125,17 @@ export interface FirmwareRelease {
   notes: string | null;
   uploadedAt: string;
 }
+
+export interface BackupSettings {
+  enabled: boolean;
+  intervalHours: number;
+  retentionCount: number;
+  emailOnBackup: boolean;
+  lastBackupAt: string | null;
+}
+
+export interface BackupFileInfo {
+  name: string;
+  size: number;
+  createdAt: string;
+}

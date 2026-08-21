@@ -118,3 +118,15 @@ model AdminUser {
   mustChangePassword Boolean  @default(true)
   updatedAt          DateTime @updatedAt
 }
+
+// Scheduled full-database backup (settings + sensors + thresholds + readings
+// history), independent of the on-demand download in Settings > Backup.
+model BackupSettings {
+  id             Int       @id @default(1)
+  enabled        Boolean   @default(false)
+  intervalHours  Int       @default(24)
+  retentionCount Int       @default(7)
+  emailOnBackup  Boolean   @default(false)
+  lastBackupAt   DateTime?
+  updatedAt      DateTime  @updatedAt
+}

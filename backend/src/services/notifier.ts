@@ -6,9 +6,13 @@ async function getConfig() {
   return prisma.notificationConfig.findUnique({ where: { id: 1 } });
 }
 
-export async function sendEmail(subject: string, text: string) {
+export async function sendEmail(
+  subject: string,
+  text: string,
+  attachments?: { filename: string; path: string }[]
+) {
   const cfg = await getConfig();
-  if (!cfg?.smtpEnabled || !cfg.smtpHost || !cfg.smtpTo) return;
+  if (!cfg?.smtpEnabled || !cfg.smtpHost || !cfg.smtpTo) return false;
 
   const transport = nodemailer.createTransport({
     host: cfg.smtpHost,
@@ -22,7 +26,9 @@ export async function sendEmail(subject: string, text: string) {
     to: cfg.smtpTo,
     subject,
     text,
+    attachments,
   });
+  return true;
 }
 
 export async function sendTelegram(text: string) {

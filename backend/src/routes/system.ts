@@ -1,8 +1,11 @@
 import { Router } from "express";
 import fs from "fs";
 import path from "path";
+import { z } from "zod";
 import { requireAuth } from "../middleware/auth";
 import { prisma } from "../db";
+import { resolveDbPath } from "../services/dbPath";
+import { BACKUPS_DIR, getBackupSettings, listBackups, performBackup } from "../services/backupScheduler";
 import pkg from "../../package.json";
 
 export const systemRouter = Router();
@@ -85,17 +88,6 @@ systemRouter.post("/trigger-update", async (_req, res) => {
   }
 });
 
-// DATABASE_URL is a "file:" path resolved by Prisma relative to
-// backend/prisma/ (not the process cwd) — see backend/prisma/schema.prisma.
-// Mirror that same resolution here so the backup always points at the real
-// database file regardless of how DATABASE_URL is written.
-function resolveDbPath(): string | null {
-  const url = process.env.DATABASE_URL;
-  if (!url || !url.startsWith("file:")) return null;
-  const relative = url.slice("file:".length);
-  return path.resolve(__dirname, "../../prisma", relative);
-}
-
 systemRouter.get("/backup", (_req, res) => {
   const dbPath = resolveDbPath();
   if (!dbPath || !fs.existsSync(dbPath)) {
@@ -105,4 +97,46 @@ systemRouter.get("/backup", (_req, res) => {
   res.setHeader("Content-Type", "application/octet-stream");
   res.setHeader("Content-Disposition", `attachment; filename="racktemp-backup-${stamp}.sqlite"`);
   res.sendFile(dbPath);
+});
+
+const backupSettingsSchema = z.object({
+  enabled: z.boolean(),
+  intervalHours: z.number().int().min(1).max(24 * 30),
+  retentionCount: z.number().int().min(1).max(365),
+  emailOnBackup: z.boolean(),
+});
+
+systemRouter.get("/backup-settings", async (_req, res) => {
+  res.json(await getBackupSettings());
+});
+
+systemRouter.put("/backup-settings", async (req, res) => {
+  const parsed = backupSettingsSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.message });
+  await getBackupSettings();
+  const updated = await prisma.backupSettings.update({ where: { id: 1 }, data: parsed.data });
+  res.json(updated);
+});
+
+systemRouter.get("/backups", (_req, res) => {
+  res.json(listBackups());
+});
+
+systemRouter.post("/backups/run", async (req, res) => {
+  const emailIt = req.body?.email === true;
+  try {
+    const result = await performBackup(emailIt);
+    if (!result) return res.status(404).json({ error: "database non trovato" });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "backup fallito" });
+  }
+});
+
+systemRouter.get("/backups/:name/download", (req, res) => {
+  const name = req.params.name;
+  if (!/^racktemp-backup-[\w-]+\.sqlite$/.test(name)) return res.status(400).end();
+  const filePath = path.join(BACKUPS_DIR, name);
+  if (!fs.existsSync(filePath)) return res.status(404).end();
+  res.download(filePath, name);
 });

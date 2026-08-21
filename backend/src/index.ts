@@ -19,6 +19,7 @@ import { firmwareRouter } from "./routes/firmware";
 import { systemRouter } from "./routes/system";
 import { startOfflineWatcher } from "./services/thresholdEngine";
 import { startRetentionWatcher } from "./services/retention";
+import { startBackupScheduler } from "./services/backupScheduler";
 import { initWs } from "./ws";
 
 const PORT = Number(process.env.PORT) || 7431;
@@ -73,6 +74,7 @@ async function main() {
   initWs(server);
   startOfflineWatcher();
   startRetentionWatcher();
+  startBackupScheduler();
 
   server.listen(PORT, () => console.log(`rack-temp-monitor listening on :${PORT}`));
 }
