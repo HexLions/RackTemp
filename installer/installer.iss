@@ -44,7 +44,7 @@ Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "autostart"; Description: "Avvia RackTemp (finestra/tray) automaticamente all'accesso a Windows"; GroupDescription: "Opzioni aggiuntive:"
+Name: "autostart"; Description: "Avvia RackTemp (finestra/tray) automaticamente all'accesso a Windows (si può cambiare in qualsiasi momento dal menu tray)"; GroupDescription: "Opzioni aggiuntive:"
 
 [Files]
 Source: "{#StagedApp}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
@@ -57,7 +57,12 @@ Name: "{commonappdata}\RackTemp\data"; Permissions: users-modify
 [Icons]
 Name: "{group}\RackTemp"; Filename: "{app}\tray\RackTempTray.exe"; IconFilename: "{app}\racktemp.ico"
 Name: "{group}\Disinstalla RackTemp"; Filename: "{uninstallexe}"; IconFilename: "{app}\racktemp.ico"
-Name: "{userstartup}\RackTemp"; Filename: "{app}\tray\RackTempTray.exe"; Parameters: "--minimized"; IconFilename: "{app}\racktemp.ico"; Tasks: autostart
+
+; Stessa chiave HKCU\...\Run che il menu tray (voce "Avvia con Windows
+; all'accesso") legge e scrive: install-time e toggle a runtime restano
+; sempre sincronizzati sull'unica fonte di verità.
+[Registry]
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "RackTemp"; ValueData: """{app}\tray\RackTempTray.exe"" --minimized"; Flags: uninsdeletevalue; Tasks: autostart
 
 [Run]
 Filename: "{app}\nssm.exe"; Parameters: "install RackTemp cmd.exe"; Flags: runhidden; StatusMsg: "Registro il servizio Windows..."

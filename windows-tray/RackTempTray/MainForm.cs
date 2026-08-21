@@ -2,9 +2,11 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.Net.Http;
+using System.ServiceProcess;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
+using Microsoft.Win32;
 
 namespace RackTempTray;
 
@@ -14,13 +16,19 @@ namespace RackTempTray;
 // Slack, e il servizio Windows "RackTemp" (nssm) resta attivo. "Esci" dal menu
 // tray invece ferma anche il servizio (richiede UAC, fermare un servizio
 // Windows serve elevazione) — è la vera uscita, non solo chiudere la finestra.
+// Riaprendo l'app dopo un'uscita completa, il servizio viene fatto ripartire
+// da solo se risulta fermo.
 public class MainForm : Form
 {
     private const string BackendUrl = "http://localhost:7431";
+    private const string ServiceName = "RackTemp";
+    private const string AutostartRunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+    private const string AutostartValueName = "RackTemp";
 
     private readonly NotifyIcon _trayIcon;
     private readonly WebView2 _webView;
     private readonly System.Windows.Forms.Timer _readyTimer;
+    private ToolStripMenuItem _autostartMenuItem = null!;
     private bool _navigatedOnce;
     private bool _reallyExit;
 
@@ -45,7 +53,11 @@ public class MainForm : Form
         _trayIcon.DoubleClick += (_, _) => ShowMainWindow();
 
         FormClosing += OnFormClosing;
-        Shown += async (_, _) => await InitializeWebViewAsync();
+        Shown += async (_, _) =>
+        {
+            _ = EnsureServiceRunningAsync();
+            await InitializeWebViewAsync();
+        };
 
         // Il servizio potrebbe non essere ancora pronto appena il processo nssm
         // parte (bind della porta, avvio Prisma): riprova finché non risponde
@@ -60,6 +72,12 @@ public class MainForm : Form
         var menu = new ContextMenuStrip();
         menu.Items.Add("Apri RackTemp", null, (_, _) => ShowMainWindow());
         menu.Items.Add(new ToolStripSeparator());
+        _autostartMenuItem = new ToolStripMenuItem("Avvia con Windows all'accesso", null, (_, _) => ToggleAutostart())
+        {
+            Checked = IsAutostartEnabled(),
+        };
+        menu.Items.Add(_autostartMenuItem);
+        menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Esci e ferma il servizio", null, (_, _) =>
         {
             StopServiceElevated();
@@ -69,6 +87,80 @@ public class MainForm : Form
         return menu;
     }
 
+    // Chiave in HKCU, non serve elevazione per leggerla/scriverla — a
+    // differenza di avviare/fermare il servizio, questa è una preferenza
+    // dell'utente corrente, non un'azione di sistema.
+    private static bool IsAutostartEnabled()
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(AutostartRunKey, writable: false);
+        return key?.GetValue(AutostartValueName) != null;
+    }
+
+    private void ToggleAutostart()
+    {
+        var enable = !_autostartMenuItem.Checked;
+        using var key = Registry.CurrentUser.CreateSubKey(AutostartRunKey, writable: true);
+        if (enable)
+        {
+            key.SetValue(AutostartValueName, $"\"{Application.ExecutablePath}\" --minimized");
+        }
+        else
+        {
+            key.DeleteValue(AutostartValueName, throwOnMissingValue: false);
+        }
+        _autostartMenuItem.Checked = enable;
+    }
+
+    // Se l'utente ha chiuso tutto con "Esci" (che ferma anche il servizio) e
+    // poi riapre l'app, il servizio va fatto ripartire — altrimenti la
+    // finestra resta bloccata in attesa per sempre. Avviare un servizio
+    // richiede elevazione quanto fermarlo.
+    private static async Task EnsureServiceRunningAsync()
+    {
+        try
+        {
+            using var sc = new ServiceController(ServiceName);
+            if (sc.Status is ServiceControllerStatus.Running or ServiceControllerStatus.StartPending) return;
+
+            StartServiceElevated();
+
+            for (var i = 0; i < 15; i++)
+            {
+                await Task.Delay(1000);
+                sc.Refresh();
+                if (sc.Status == ServiceControllerStatus.Running) return;
+            }
+        }
+        catch
+        {
+            // Servizio non trovato o query fallita: non c'è altro da fare
+            // qui, la finestra resterà comunque in attesa via TryNavigateWhenReadyAsync.
+        }
+    }
+
+    private static void StartServiceElevated()
+    {
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "sc.exe",
+                Arguments = $"start {ServiceName}",
+                UseShellExecute = true,
+                Verb = "runas",
+                WindowStyle = ProcessWindowStyle.Hidden,
+            };
+            using var proc = Process.Start(psi);
+            proc?.WaitForExit(8000);
+        }
+        catch (Win32Exception)
+        {
+            // UAC annullato: il servizio resta fermo, il retry di rete in
+            // TryNavigateWhenReadyAsync continuerà a fallire finché non
+            // riparte (manualmente o riaprendo l'app).
+        }
+    }
+
     private static void StopServiceElevated()
     {
         try
@@ -76,7 +168,7 @@ public class MainForm : Form
             var psi = new ProcessStartInfo
             {
                 FileName = "sc.exe",
-                Arguments = "stop RackTemp",
+                Arguments = $"stop {ServiceName}",
                 UseShellExecute = true,
                 Verb = "runas",
                 WindowStyle = ProcessWindowStyle.Hidden,
