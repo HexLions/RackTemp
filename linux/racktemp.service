@@ -1,0 +1,17 @@
+[Unit]
+Description=RackTemp - rack temperature/humidity monitor
+After=network.target
+
+[Service]
+Type=simple
+User=racktemp
+Group=racktemp
+WorkingDirectory=/opt/racktemp/backend
+ExecStart=/opt/racktemp/node/bin/node dist/index.js
+Restart=on-failure
+RestartSec=5
+# Il servizio non ha bisogno di scrivere altro che qui dentro: dati e log.
+ReadWritePaths=/var/lib/racktemp
+
+[Install]
+WantedBy=multi-user.target

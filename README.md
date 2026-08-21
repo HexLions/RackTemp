@@ -7,6 +7,7 @@
 [![Docker](https://img.shields.io/badge/docker-ready-2496ED.svg?logo=docker&logoColor=white)](#-avvio-rapido-docker)
 [![GHCR](https://img.shields.io/badge/ghcr.io-hexlions%2Fracktemp-blue.svg)](https://github.com/HexLions/RackTemp/pkgs/container/racktemp)
 [![Windows](https://img.shields.io/badge/windows-installer-0078D6.svg?logo=windows&logoColor=white)](#-avvio-su-windows-senza-docker)
+[![Linux](https://img.shields.io/badge/linux-systemd-FCC624.svg?logo=linux&logoColor=black)](#-avvio-su-linux-senza-docker)
 [![Self-hosted](https://img.shields.io/badge/self--hosted-yes-success.svg)](#-avvio-rapido-docker)
 [![Version](https://img.shields.io/badge/version-0.3.0-purple.svg)](#)
 
@@ -141,6 +142,37 @@ aggiornare (scaricando ed eseguendo un `Setup.exe` più recente) non tocca i dat
 ```powershell
 # Serve solo Node.js + Inno Setup 6 (winget install JRSoftware.InnoSetup) sulla macchina di build
 powershell -ExecutionPolicy Bypass -File scripts\build-installer-windows.ps1
+```
+
+---
+
+## 🐧 Avvio su Linux senza Docker
+
+Preferisci un servizio nativo invece di un container? `racktemp-linux-x64.tar.gz` (dalle
+[Release](../../releases), buildato automaticamente insieme a Docker e Windows) porta con sé
+un runtime Node.js portatile e uno script d'installazione che registra RackTemp come **servizio
+systemd**.
+
+```bash
+tar -xzf racktemp-linux-x64.tar.gz
+cd racktemp-linux-x64
+sudo ./install.sh
+```
+
+Crea un utente di sistema `racktemp` (non root), il servizio `racktemp.service` (auto-avvio al
+boot), e tiene il database in `/var/lib/racktemp/data/` — fuori da `/opt/racktemp`, così
+sopravvive a reinstallazioni. `SESSION_SECRET` viene generato una volta sola al primo install.
+
+```bash
+systemctl status racktemp     # stato
+journalctl -u racktemp -f     # log
+sudo ./uninstall.sh           # disinstalla (chiede se tenere i dati)
+```
+
+Per buildare il pacchetto da sorgente (richiede Node.js + npm su una macchina Linux x86_64):
+
+```bash
+bash scripts/build-package-linux.sh
 ```
 
 ---
@@ -294,8 +326,11 @@ RackTemp/
 ├── docker-compose.yml          ← deploy via CLI (build da sorgente)
 ├── docker-compose.portainer.yml ← deploy via Portainer (immagine da GHCR) + Watchtower
 ├── installer/installer.iss     ← installer Windows (Inno Setup)
+├── linux/                      ← systemd unit + install.sh/uninstall.sh
 ├── scripts/build-installer-windows.ps1 ← builda + compila l'installer Windows
-└── .github/workflows/          ← publish immagine Docker + installer Windows a ogni push/release
+├── scripts/build-package-linux.sh      ← builda il pacchetto nativo Linux
+└── .github/workflows/          ← publish immagine Docker + installer Windows + pacchetto Linux
+                                   a ogni push/release
 ```
 
 ---
