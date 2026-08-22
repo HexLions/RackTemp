@@ -28,7 +28,7 @@
 // so you can quickly tell if the device is running the latest flashed version.
 // Also used for OTA auto-update: if the server offers a different one, the
 // device downloads it and flashes itself (see checkFirmwareUpdate below).
-#define FIRMWARE_VERSION "2026-08-22.1"
+#define FIRMWARE_VERSION "2026-08-22.2"
 
 // BOOT button, held down at power-on to re-enter WiFi setup. On many
 // "Super Mini" clones it's on the same GPIO9 used above for SCL: we only read it at startup,
@@ -99,6 +99,47 @@ String htmlEscape(const String &s) {
   return out;
 }
 
+// Same color tokens and "card" shape as the web app (frontend/src/styles.css),
+// light by default with a prefers-color-scheme dark variant, so the setup
+// portal doesn't look like a different, older product from the dashboard
+// you land on right after saving.
+#define PORTAL_STYLE \
+  "<style>" \
+  ":root{--bg:#eef0f2;--panel:#fff;--line:#dfe2e5;--paper:#20242a;--dim:#667085;" \
+  "--accent:#4c9a2a;--accent-strong:#3d7d21;--accent-ink:#fff;--radius:14px;--radius-sm:10px;" \
+  "--font-ui:'Segoe UI',-apple-system,BlinkMacSystemFont,system-ui,sans-serif}" \
+  "@media (prefers-color-scheme:dark){:root{--bg:#1a1c20;--panel:#24262b;--line:#34373e;" \
+  "--paper:#f0f1f3;--dim:#9aa0aa;--accent:#6dc24b;--accent-strong:#85d467;--accent-ink:#0d1a08}}" \
+  "*{box-sizing:border-box}" \
+  "body{font-family:var(--font-ui);background:var(--bg);color:var(--paper);margin:0;padding:24px 16px}" \
+  ".card{max-width:400px;margin:0 auto;background:var(--panel);border:1px solid var(--line);" \
+  "border-radius:var(--radius);padding:24px;box-shadow:0 1px 2px rgba(0,0,0,.08)}" \
+  ".brand{display:flex;align-items:center;gap:10px;font-weight:650;font-size:1.05rem;margin-bottom:2px}" \
+  "p.sub{color:var(--dim);font-size:.85rem;margin:0 0 4px}" \
+  "label{display:block;margin:16px 0 4px;color:var(--dim);font-size:.85rem;font-weight:500}" \
+  "input,select{width:100%;padding:10px;border-radius:var(--radius-sm);border:1px solid var(--line);" \
+  "background:var(--bg);color:var(--paper);box-sizing:border-box;font-size:1rem;font-family:inherit}" \
+  "input:focus,select:focus{outline:2px solid var(--accent);outline-offset:-1px}" \
+  "button{margin-top:22px;width:100%;padding:12px;border:none;border-radius:var(--radius-sm);" \
+  "background:var(--accent);color:var(--accent-ink);font-weight:650;font-size:1rem}" \
+  "button:hover{background:var(--accent-strong)}" \
+  "small{color:var(--dim);display:block;margin-top:14px;line-height:1.4;font-size:.8rem}" \
+  "</style>"
+
+// Same brand mark as frontend/src/components/Logo.tsx and frontend/public/racktemp.svg.
+#define PORTAL_LOGO \
+  "<div class='brand'>" \
+  "<svg width='26' height='26' viewBox='0 0 64 64' role='img' aria-label='RackTemp'>" \
+  "<rect width='64' height='64' rx='14' fill='#0E1214'/>" \
+  "<rect x='9' y='13' width='28' height='9' rx='3' fill='#2A3338'/>" \
+  "<rect x='9' y='28' width='28' height='9' rx='3' fill='#2A3338'/>" \
+  "<rect x='9' y='43' width='46' height='9' rx='3' fill='#2A3338'/>" \
+  "<circle cx='31' cy='17.5' r='2' fill='#5A676D'/>" \
+  "<circle cx='31' cy='32.5' r='2' fill='#F0B429'/>" \
+  "<rect x='43' y='11' width='7' height='17' rx='3.5' fill='#2FD07A'/>" \
+  "<circle cx='46.5' cy='31' r='7.5' fill='#2FD07A'/>" \
+  "</svg>RackTemp</div>"
+
 void handlePortalRoot() {
   int n = WiFi.scanComplete();
   String options = "<option value=''>-- choose from the list or type below --</option>";
@@ -113,16 +154,9 @@ void handlePortalRoot() {
     "<!doctype html><html><head><meta charset='utf-8'>"
     "<meta name='viewport' content='width=device-width,initial-scale=1'>"
     "<title>RackTemp - Sensor setup</title>"
-    "<style>"
-    "body{font-family:system-ui,sans-serif;background:#0a0d12;color:#e6eaf0;padding:24px;max-width:420px;margin:0 auto}"
-    "h1{font-size:1.2rem;margin-bottom:4px}"
-    "p.sub{color:#7c8797;font-size:.85rem;margin-top:0}"
-    "label{display:block;margin:16px 0 4px;color:#9aa4b2;font-size:.85rem}"
-    "input,select{width:100%;padding:9px;border-radius:6px;border:1px solid #2a3345;background:#05070a;color:#e6eaf0;box-sizing:border-box;font-size:1rem}"
-    "button{margin-top:20px;width:100%;padding:12px;border:none;border-radius:6px;background:#4fb3a6;color:#06211d;font-weight:700;font-size:1rem}"
-    "small{color:#7c8797;display:block;margin-top:14px;line-height:1.4}"
-    "</style></head><body>"
-    "<h1>&#127777; RackTemp</h1>"
+    PORTAL_STYLE
+    "</head><body><div class='card'>"
+    PORTAL_LOGO
     "<p class='sub'>Sensor setup &mdash; chip " + chipId().substring(8) + "</p>"
     "<form method='POST' action='/save'>"
     "<label>WiFi network</label>"
@@ -137,7 +171,7 @@ void handlePortalRoot() {
     "<button type='submit'>Save and restart</button>"
     "<small>The sensor restarts and tries to connect. If you got something wrong, hold BOOT "
     "at power-on to come back to this page.</small>"
-    "</form></body></html>";
+    "</form></div></body></html>";
 
   portalServer.send(200, "text/html", page);
 }
@@ -164,10 +198,12 @@ void handlePortalSave() {
 
   portalServer.send(200, "text/html",
     "<!doctype html><html><head><meta charset='utf-8'>"
-    "<meta name='viewport' content='width=device-width,initial-scale=1'></head>"
-    "<body style='font-family:system-ui,sans-serif;background:#0a0d12;color:#e6eaf0;padding:24px'>"
-    "<h1>Saved &#10003;</h1><p>The sensor is restarting and will try to connect to \"" + htmlEscape(cfgSsid) + "\".</p>"
-    "</body></html>");
+    "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+    PORTAL_STYLE
+    "</head><body><div class='card'>"
+    PORTAL_LOGO
+    "<p class='sub'>Saved &#10003;</p><p>The sensor is restarting and will try to connect to \"" + htmlEscape(cfgSsid) + "\".</p>"
+    "</div></body></html>");
 
   delay(800);
   ESP.restart();
