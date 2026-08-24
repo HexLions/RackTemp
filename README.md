@@ -29,6 +29,15 @@ PRTG/Prometheus/Grafana/Zabbix, all configured from the same web page.
 
 ---
 
+## 📸 Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/dashboard.png" alt="RackTemp dashboard showing three sensors" width="49%" />
+  <img src="docs/screenshots/sensor-detail.png" alt="RackTemp sensor detail page with temperature/humidity trend chart and thresholds" width="49%" />
+</p>
+
+---
+
 ## ✨ Features
 
 **Monitoring**
