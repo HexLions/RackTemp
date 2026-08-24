@@ -1,0 +1,57 @@
+# Stack for Portainer (Stacks -> Add stack -> Web editor / Upload).
+# Unlike docker-compose.yml this uses a pre-built image from GHCR
+# instead of "build: .", because Portainer (Web editor/Upload) doesn't build from
+# a local Dockerfile. The image is published by .github/workflows/docker-publish.yml
+# on every push to main.
+#
+# In Portainer, when creating the stack add the SESSION_SECRET environment
+# variable (Environment variables) with a long, random string,
+# otherwise the default value below stays in place (change it anyway).
+#
+# Also includes Watchtower: as soon as a new image is out on GHCR the
+# controller updates and restarts itself, with no need for a webhook
+# or manual clicks. If you don't want it, delete the "watchtower" service
+# and the "com.centurylinklabs.watchtower.enable" label below.
+
+services:
+  rack-temp-monitor:
+    image: ghcr.io/hexlions/racktemp:latest
+    container_name: rack-temp-monitor
+    restart: unless-stopped
+    ports:
+      - "7431:7431"
+    environment:
+      PORT: 7431
+      DATABASE_URL: "file:../data/db.sqlite"
+      SESSION_SECRET: ${SESSION_SECRET:-change-me-to-a-long-random-string}
+    volumes:
+      - rack-temp-data:/app/backend/data
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  # Automatically updates ONLY rack-temp-monitor (thanks to the label above)
+  # every time a new image is out on GHCR: no clicks, no
+  # webhook to configure. The data volume is not touched by the restart.
+  # To disable: remove this service from the stack.
+  watchtower:
+    # containrrr/watchtower has been stuck at 2023 (archived project) and negotiates
+    # a Docker API version so old (1.25) that recent Docker daemons
+    # reject it ("client version too old"). nickfedor/watchtower
+    # is the maintained continuation of the same project, same config.
+    image: nickfedor/watchtower:latest
+    container_name: rack-temp-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_POLL_INTERVAL: "21600" # 6 hours
+      # Even the updated image still negotiates too low an API
+      # version on some hosts (a known Docker Go SDK client bug when the
+      # automatic negotiation fails) — force it explicitly to a
+      # recent version instead of letting it decide on its own.
+      DOCKER_API_VERSION: "1.44"
+
+volumes:
+  rack-temp-data:

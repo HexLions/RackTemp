@@ -1,0 +1,155 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  // Switch to "postgresql" + DATABASE_URL later for multi-instance / bigger deploys.
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Sensor {
+  id          String   @id @default(cuid())
+  name        String
+  location    String?
+  staticIp    String?
+  apiKey      String   @unique @default(cuid())
+  chipId      String?  @unique
+  firmwareVersion String?
+  rebootRequested Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  lastSeenAt  DateTime?
+
+  readings    Reading[]
+  threshold   Threshold?
+  notifLogs   NotificationLog[]
+}
+
+model Reading {
+  id          String   @id @default(cuid())
+  sensorId    String
+  sensor      Sensor   @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+  temperature Float
+  humidity    Float?
+  rssi        Int?
+  createdAt   DateTime @default(now())
+
+  @@index([sensorId, createdAt])
+}
+
+model Threshold {
+  id            String   @id @default(cuid())
+  sensorId      String   @unique
+  sensor        Sensor   @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+  minTemp       Float?
+  maxTemp       Float?
+  minHumidity   Float?
+  maxHumidity   Float?
+  maxOfflineMin Int      @default(15)
+  hysteresis    Float    @default(0.5)
+  cooldownMin   Int      @default(15)
+  enabled       Boolean  @default(true)
+  mutedUntil    DateTime?
+  updatedAt     DateTime @updatedAt
+}
+
+model NotificationLog {
+  id        String   @id @default(cuid())
+  sensorId  String
+  sensor    Sensor   @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+  type      String   // "high_temp" | "low_temp" | "offline" | "recovered"
+  message   String
+  sentAt    DateTime @default(now())
+}
+
+model NotificationConfig {
+  id            Int      @id @default(1)
+  smtpEnabled   Boolean  @default(false)
+  smtpHost      String?
+  smtpPort      Int?
+  smtpSecure    Boolean  @default(true)
+  smtpUser      String?
+  smtpPass      String?
+  smtpFrom      String?
+  smtpTo        String?
+
+  // "smtp" (username/password) or "graph" (Microsoft Graph API, OAuth2 client
+  // credentials) — Microsoft is retiring SMTP basic auth for Exchange
+  // Online/Outlook.com at the end of 2026, Graph is the replacement for
+  // anyone on those providers. smtpEnabled/smtpTo are shared by both; the
+  // rest of the smtp* fields are ignored when emailProvider is "graph".
+  emailProvider     String  @default("smtp")
+  graphTenantId     String?
+  graphClientId     String?
+  graphClientSecret String?
+  graphSenderEmail  String?
+
+  telegramEnabled Boolean @default(false)
+  telegramToken   String?
+  telegramChatId  String?
+
+  updatedAt     DateTime @updatedAt
+}
+
+// A device that announced itself via POST /api/discovery/announce but has
+// no matching Sensor yet (no reading has arrived with its chipId). Cleared
+// out automatically once a real ingest with that chipId succeeds.
+model DiscoveredDevice {
+  id          String   @id @default(cuid())
+  chipId      String   @unique
+  ip          String?
+  firmware    String?
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @updatedAt
+}
+
+// Controller-wide secrets for integrations that aggregate every sensor
+// (unlike the per-sensor apiKey/PRTG endpoint, these aren't tied to one device).
+model IntegrationSettings {
+  id                  Int      @id @default(1)
+  prtgToken           String   @default(cuid())
+  portainerWebhookUrl String?
+  updatedAt           DateTime @updatedAt
+}
+
+// Single current firmware build available for sensors to self-update to.
+// The binary lives on disk (backend/data/firmware/latest.bin); this row is
+// just the version label devices compare against.
+model FirmwareRelease {
+  id         Int      @id @default(1)
+  version    String
+  notes      String?
+  uploadedAt DateTime @default(now())
+}
+
+model AdminUser {
+  id                     Int       @id @default(1)
+  username               String    @unique
+  passwordHash           String
+  mustChangePassword     Boolean   @default(true)
+  resetTokenHash         String?
+  resetTokenExpiresAt    DateTime?
+  resetRequestedAt       DateTime?
+  // Offline account-recovery code, generated once at first login and
+  // re-rolled every time it's used. Lets the admin reset their password
+  // without SMTP configured, as long as they saved the code somewhere safe.
+  recoveryKeyHash        String?
+  // TOTP secret is written on /mfa/setup but totpEnabled only flips to true
+  // once the admin proves they scanned it right via /mfa/enable.
+  totpSecret             String?
+  totpEnabled            Boolean   @default(false)
+  updatedAt              DateTime  @updatedAt
+}
+
+// Scheduled full-database backup (settings + sensors + thresholds + readings
+// history), independent of the on-demand download in Settings > Backup.
+model BackupSettings {
+  id             Int       @id @default(1)
+  enabled        Boolean   @default(false)
+  intervalHours  Int       @default(24)
+  retentionCount Int       @default(7)
+  emailOnBackup  Boolean   @default(false)
+  lastBackupAt   DateTime?
+  updatedAt      DateTime  @updatedAt
+}

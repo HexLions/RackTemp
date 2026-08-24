@@ -1,0 +1,17 @@
+services:
+  rack-temp-monitor:
+    build: .
+    image: rack-temp-monitor:latest
+    container_name: rack-temp-monitor
+    restart: unless-stopped
+    ports:
+      - "7431:7431"
+    environment:
+      PORT: 7431
+      DATABASE_URL: "file:../data/db.sqlite"
+      SESSION_SECRET: ${SESSION_SECRET:-change-me-to-a-long-random-string}
+    volumes:
+      - rack-temp-data:/app/backend/data
+
+volumes:
+  rack-temp-data:

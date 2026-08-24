@@ -1,0 +1,20 @@
+node_modules/
+dist/
+*.tsbuildinfo
+backend/public/
+backend/data/
+backend/data.sqlite
+*.sqlite
+*.sqlite-journal
+.env
+.DS_Store
+.agents/
+.claude/
+skills-lock.json
+
+# Windows installer / Linux package build
+tools/
+dist-windows/
+dist-linux/
+windows-tray/**/bin/
+windows-tray/**/obj/
