@@ -88,7 +88,10 @@ systemRouter.post("/trigger-update", async (_req, res) => {
   }
 });
 
-systemRouter.get("/backup", (_req, res) => {
+// POST, not GET: this downloads the entire database (admin password hash,
+// sensor API keys, notification credentials) — a GET could be triggered by
+// mere navigation or an embedded resource, not just a deliberate click.
+systemRouter.post("/backup", (_req, res) => {
   const dbPath = resolveDbPath();
   if (!dbPath || !fs.existsSync(dbPath)) {
     return res.status(404).json({ error: "database not found" });
