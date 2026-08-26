@@ -1,5 +1,5 @@
 import nodemailer from "nodemailer";
-import TelegramBot from "node-telegram-bot-api";
+import { Api as TelegramApi } from "node-telegram-bot-api";
 import { prisma } from "../db";
 import { sendGraphMail } from "./graphMailer";
 
@@ -42,8 +42,12 @@ export async function sendTelegram(text: string) {
   const cfg = await getConfig();
   if (!cfg?.telegramEnabled || !cfg.telegramToken || !cfg.telegramChatId) return;
 
-  const bot = new TelegramBot(cfg.telegramToken, { polling: false });
-  await bot.sendMessage(cfg.telegramChatId, text);
+  // node-telegram-bot-api v2 is a from-scratch rewrite (no v1 compat) — the
+  // old TelegramBot(token, {polling:false}) constructor no longer exists.
+  // Api is v2's direct REST client with no polling loop, the right
+  // replacement for a fire-and-forget outbound message.
+  const api = new TelegramApi(cfg.telegramToken);
+  await api.sendMessage({ chat_id: cfg.telegramChatId, text });
 }
 
 export async function notifyAll(subject: string, text: string) {
