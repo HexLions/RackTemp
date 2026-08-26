@@ -1,7 +1,6 @@
 import "dotenv/config";
 import express from "express";
 import cookieSession from "cookie-session";
-import cors from "cors";
 import rateLimit from "express-rate-limit";
 import path from "path";
 import bcrypt from "bcryptjs";
@@ -52,14 +51,26 @@ async function main() {
     app.set("trust proxy", Number(process.env.TRUST_PROXY_HOPS));
   }
 
-  app.use(cors({ origin: true, credentials: true }));
+  // No CORS middleware: the frontend is always same-origin. In production
+  // it's served by this same Express instance (static + SPA fallback below);
+  // in dev, Vite's own proxy (vite.config.ts) forwards /api and /ws
+  // server-to-server, so the browser never makes a cross-origin request
+  // either way. The previous `origin: true` reflected any Origin header
+  // with credentials allowed — permissive for no actual benefit.
   app.use(express.json());
   app.use(
     cookieSession({
       name: "session",
       keys: [SESSION_SECRET],
       maxAge: 7 * 24 * 3600_000,
-      sameSite: "lax",
+      // "strict" over "lax": nothing in this app links in from another site,
+      // so there's no legitimate cross-site GET that needs the cookie —
+      // strict closes that off too. Set COOKIE_SECURE=1 once there's an
+      // HTTPS reverse proxy in front (can't default it on, would break
+      // plain-HTTP LAN deploys, which is the common case here).
+      sameSite: "strict",
+      secure: process.env.COOKIE_SECURE === "1",
+      httpOnly: true,
     })
   );
 
