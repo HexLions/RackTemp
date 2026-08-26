@@ -126,7 +126,7 @@ async function main() {
   });
 
   const server = createServer(app);
-  initWs(server);
+  initWs(server, SESSION_SECRET);
   startOfflineWatcher();
   startRetentionWatcher();
   startBackupScheduler();
