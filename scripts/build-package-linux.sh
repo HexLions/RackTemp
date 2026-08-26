@@ -15,7 +15,7 @@ TOOLS="$ROOT/tools"
 STAGE="$ROOT/dist-linux/racktemp-linux-x64"
 OUT_DIR="$ROOT/dist-linux"
 
-NODE_VERSION="20.18.1"
+NODE_VERSION="24.20.0"
 NODE_DIR_NAME="node-v${NODE_VERSION}-linux-x64"
 
 echo "== 1/5: backend build =="
