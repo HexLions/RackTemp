@@ -8,6 +8,7 @@ backend/data.sqlite
 *.sqlite-journal
 .env
 .DS_Store
+*.bak
 .agents/
 .claude/
 skills-lock.json

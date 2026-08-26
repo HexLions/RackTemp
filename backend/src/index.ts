@@ -21,10 +21,11 @@ import { systemRouter } from "./routes/system";
 import { startOfflineWatcher } from "./services/thresholdEngine";
 import { startRetentionWatcher } from "./services/retention";
 import { startBackupScheduler } from "./services/backupScheduler";
+import { resolveSessionSecret } from "./services/sessionSecret";
 import { initWs } from "./ws";
 
 const PORT = Number(process.env.PORT) || 7431;
-const SESSION_SECRET = process.env.SESSION_SECRET || "change-me-in-production";
+const SESSION_SECRET = resolveSessionSecret();
 
 async function bootstrapAdmin() {
   const existing = await prisma.adminUser.findFirst();
