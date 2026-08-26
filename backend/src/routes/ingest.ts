@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { ah } from "../middleware/asyncHandler";
 import { z } from "zod";
 import { prisma } from "../db";
 import { checkReading } from "../services/thresholdEngine";
@@ -14,7 +15,7 @@ const ingestSchema = z.object({
   firmwareVersion: z.string().optional(),
 });
 
-ingestRouter.post("/", async (req, res) => {
+ingestRouter.post("/", ah(async (req, res) => {
   const apiKey = req.header("X-Api-Key") ?? (req.query.apiKey as string | undefined);
   if (!apiKey) return res.status(401).json({ error: "missing api key" });
 
@@ -61,4 +62,4 @@ ingestRouter.post("/", async (req, res) => {
   }
 
   res.status(201).json({ ok: true, reboot });
-});
+}));

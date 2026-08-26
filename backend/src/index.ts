@@ -6,6 +6,7 @@ import helmet from "helmet";
 import path from "path";
 import bcrypt from "bcryptjs";
 import { createServer } from "http";
+import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { authRouter } from "./routes/auth";
 import { sensorsRouter } from "./routes/sensors";
@@ -123,6 +124,18 @@ async function main() {
   app.get("*", (req, res, next) => {
     if (req.path.startsWith("/api")) return next();
     res.sendFile(path.join(frontendDist, "index.html"));
+  });
+
+  // Catches every rejection the ah() wrapper forwards via next(err) — without
+  // this Express 4's own default error handler would still respond, but by
+  // dumping the stack trace straight into the response body. Registered
+  // last, per Express convention for error-handling middleware.
+  app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
+      return res.status(404).json({ error: "not found" });
+    }
+    console.error(err);
+    res.status(500).json({ error: "internal server error" });
   });
 
   const server = createServer(app);

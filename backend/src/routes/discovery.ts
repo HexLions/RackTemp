@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { ah } from "../middleware/asyncHandler";
 import { z } from "zod";
 import { prisma } from "../db";
 import { requireAuth } from "../middleware/auth";
@@ -46,7 +47,7 @@ const announceSchema = z.object({
 // own next poll is handed that sensor's API key so it can start sending
 // data without ever being touched again — no reflashing, no re-opening the
 // setup portal.
-discoveryRouter.post("/announce", async (req, res) => {
+discoveryRouter.post("/announce", ah(async (req, res) => {
   const parsed = announceSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid body" });
 
@@ -78,21 +79,21 @@ discoveryRouter.post("/announce", async (req, res) => {
   }
 
   res.status(204).end();
-});
+}));
 
-discoveryRouter.get("/", requireAuth, async (_req, res) => {
+discoveryRouter.get("/", requireAuth, ah(async (_req, res) => {
   const since = new Date(Date.now() - ACTIVE_WINDOW_MS);
   const devices = await prisma.discoveredDevice.findMany({
     where: { lastSeenAt: { gte: since } },
     orderBy: { firstSeenAt: "desc" },
   });
   res.json(devices);
-});
+}));
 
-discoveryRouter.delete("/:id", requireAuth, async (req, res) => {
+discoveryRouter.delete("/:id", requireAuth, ah(async (req, res) => {
   await prisma.discoveredDevice.deleteMany({ where: { id: req.params.id } });
   res.status(204).end();
-});
+}));
 
 const claimSchema = z.object({ sensorId: z.string().min(1) });
 
@@ -100,7 +101,7 @@ const claimSchema = z.object({ sensorId: z.string().min(1) });
 // dashboard, not from this discovery entry) to a device that's still
 // polling /announce for a key. The device picks the key up on its next
 // poll — no manual copy-paste, no re-opening the setup portal.
-discoveryRouter.post("/:id/claim", requireAuth, async (req, res) => {
+discoveryRouter.post("/:id/claim", requireAuth, ah(async (req, res) => {
   const parsed = claimSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid body" });
 
@@ -117,4 +118,4 @@ discoveryRouter.post("/:id/claim", requireAuth, async (req, res) => {
   } catch {
     res.status(409).json({ error: "sensor not found or already linked to another chip" });
   }
-});
+}));
