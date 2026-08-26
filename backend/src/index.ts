@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cookieSession from "cookie-session";
 import rateLimit from "express-rate-limit";
+import helmet from "helmet";
 import path from "path";
 import bcrypt from "bcryptjs";
 import { createServer } from "http";
@@ -50,6 +51,21 @@ async function main() {
   if (process.env.TRUST_PROXY_HOPS) {
     app.set("trust proxy", Number(process.env.TRUST_PROXY_HOPS));
   }
+
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          imgSrc: ["'self'", "data:"], // MFA QR code is a data: URL
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          connectSrc: ["'self'", "ws:", "wss:"],
+          frameAncestors: ["'none'"],
+        },
+      },
+      hsts: false, // no-op on plain HTTP; a reverse proxy in front would set it
+    })
+  );
 
   // No CORS middleware: the frontend is always same-origin. In production
   // it's served by this same Express instance (static + SPA fallback below);
