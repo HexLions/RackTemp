@@ -29,7 +29,8 @@ COPY --from=backend-build /app/backend/node_modules ./node_modules
 COPY --from=backend-build /app/backend/dist ./dist
 COPY --from=backend-build /app/backend/public ./public
 COPY --from=backend-build /app/backend/prisma ./prisma
-RUN mkdir -p /app/backend/data
+RUN mkdir -p /app/backend/data && chown -R node:node /app/backend
+USER node
 
 VOLUME ["/app/backend/data"]
 EXPOSE 7431

@@ -18,6 +18,10 @@ services:
     image: ghcr.io/hexlions/racktemp:latest
     container_name: rack-temp-monitor
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     ports:
       - "7431:7431"
     environment:
