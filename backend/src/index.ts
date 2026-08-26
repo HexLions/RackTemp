@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import cookieSession from "cookie-session";
 import cors from "cors";
+import rateLimit from "express-rate-limit";
 import path from "path";
 import bcrypt from "bcryptjs";
 import { createServer } from "http";
@@ -42,6 +43,15 @@ async function main() {
   await bootstrapAdmin();
 
   const app = express();
+
+  // Only needed behind a reverse proxy: without this, req.ip is the proxy's
+  // own address and every client shares one rate-limit bucket. Set too high
+  // (or without a proxy actually stripping/setting X-Forwarded-For) and the
+  // client IP becomes spoofable via that header instead.
+  if (process.env.TRUST_PROXY_HOPS) {
+    app.set("trust proxy", Number(process.env.TRUST_PROXY_HOPS));
+  }
+
   app.use(cors({ origin: true, credentials: true }));
   app.use(express.json());
   app.use(
@@ -52,6 +62,21 @@ async function main() {
       sameSite: "lax",
     })
   );
+
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60_000,
+    limit: 10,
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    message: { error: "too many attempts, retry later" },
+  });
+  const announceLimiter = rateLimit({ windowMs: 60_000, limit: 30, legacyHeaders: false });
+
+  app.use("/api/auth/login", authLimiter);
+  app.use("/api/auth/mfa/login", authLimiter);
+  app.use("/api/auth/reset-password", authLimiter);
+  app.use("/api/auth/reset-password-with-key", authLimiter);
+  app.use("/api/discovery/announce", announceLimiter);
 
   app.use("/api/auth", authRouter);
   app.use("/api/sensors", sensorsRouter);

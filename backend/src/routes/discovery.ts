@@ -8,6 +8,29 @@ export const discoveryRouter = Router();
 
 const ACTIVE_WINDOW_MS = 10 * 60_000;
 
+// A flood of /announce calls with new chipIds (each one legitimately
+// triggers a "new sensor detected" notification) shouldn't be able to burn
+// through an SMTP quota or get the account rate-limited by the provider.
+// This is on top of the request-level rate limit on the route itself —
+// that caps request volume, this caps how many of them actually reach
+// notifyAll(). Resets every 24h; not persisted, a restart also resets it,
+// which is fine for a soft cap like this.
+const DISCOVERY_NOTIFY_CAP = 10;
+const DISCOVERY_NOTIFY_WINDOW_MS = 24 * 3600_000;
+let discoveryNotifyCount = 0;
+let discoveryNotifyWindowStart = Date.now();
+
+function discoveryNotifyAllowed(): boolean {
+  const now = Date.now();
+  if (now - discoveryNotifyWindowStart > DISCOVERY_NOTIFY_WINDOW_MS) {
+    discoveryNotifyWindowStart = now;
+    discoveryNotifyCount = 0;
+  }
+  if (discoveryNotifyCount >= DISCOVERY_NOTIFY_CAP) return false;
+  discoveryNotifyCount++;
+  return true;
+}
+
 const announceSchema = z.object({
   chipId: z.string().min(1),
   firmware: z.string().optional(),
@@ -44,10 +67,14 @@ discoveryRouter.post("/announce", async (req, res) => {
   });
 
   if (!existing) {
-    await notifyAll(
-      "Rack Temp Monitor - new sensor detected",
-      `A new ESP32 was detected on the network (chip ${chipId}${ip ? `, IP ${ip}` : ""}). Create a sensor in the dashboard and link it to get it started automatically.`
-    );
+    if (discoveryNotifyAllowed()) {
+      await notifyAll(
+        "Rack Temp Monitor - new sensor detected",
+        `A new ESP32 was detected on the network (chip ${chipId}${ip ? `, IP ${ip}` : ""}). Create a sensor in the dashboard and link it to get it started automatically.`
+      );
+    } else {
+      console.warn(`[discovery] notification cap reached, chip ${chipId} detected but not notified`);
+    }
   }
 
   res.status(204).end();
