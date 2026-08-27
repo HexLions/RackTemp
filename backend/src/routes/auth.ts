@@ -33,8 +33,12 @@ authRouter.post("/login", ah(async (req, res) => {
   if (user.totpEnabled) {
     // Password verified, but the session stays unauthenticated (no userId)
     // until the TOTP code checks out too — requireAuth everywhere else keeps
-    // blocking until then.
+    // blocking until then. pendingMfaExpires is its own short deadline
+    // rather than inheriting the cookie's full 7-day maxAge — a stolen or
+    // left-open "enter your TOTP code" state has no business staying valid
+    // that long.
     (req.session as any).pendingMfaUserId = user.id;
+    (req.session as any).pendingMfaExpires = Date.now() + 5 * 60_000;
     return res.json({ ok: true, mfaRequired: true });
   }
 
@@ -49,6 +53,12 @@ authRouter.post("/mfa/login", ah(async (req, res) => {
   const session = req.session as any;
   if (!session?.pendingMfaUserId) return res.status(401).json({ error: "not authenticated" });
 
+  if (!session.pendingMfaExpires || Date.now() > session.pendingMfaExpires) {
+    session.pendingMfaUserId = undefined;
+    session.pendingMfaExpires = undefined;
+    return res.status(401).json({ error: "code entry expired, log in again" });
+  }
+
   const parsed = mfaLoginSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid body" });
 
@@ -58,6 +68,7 @@ authRouter.post("/mfa/login", ah(async (req, res) => {
   }
 
   session.pendingMfaUserId = undefined;
+  session.pendingMfaExpires = undefined;
   session.userId = user.id;
   session.mustChangePassword = user.mustChangePassword;
   res.json({ ok: true, username: user.username, mustChangePassword: user.mustChangePassword });
@@ -89,6 +100,7 @@ function generateRecoveryKey(): string {
 const firstLoginSchema = z.object({
   newUsername: z.string().min(3),
   newPassword: z.string().min(8),
+  bootstrapToken: z.string().min(1),
 });
 
 authRouter.post("/first-login", ah(async (req, res) => {
@@ -102,6 +114,13 @@ authRouter.post("/first-login", ah(async (req, res) => {
   const parsed = firstLoginSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid body" });
 
+  // Requires reading the token off the server's own logs — an authenticated
+  // session alone (default admin/admin, reachable to whoever gets there
+  // first over the network) is no longer enough to finish setup.
+  if (!user.bootstrapTokenHash || !(await bcrypt.compare(parsed.data.bootstrapToken, user.bootstrapTokenHash))) {
+    return res.status(401).json({ error: "invalid setup token" });
+  }
+
   const existing = await prisma.adminUser.findUnique({ where: { username: parsed.data.newUsername } });
   if (existing && existing.id !== user.id) {
     return res.status(400).json({ error: "username already in use" });
@@ -112,7 +131,13 @@ authRouter.post("/first-login", ah(async (req, res) => {
   const recoveryKeyHash = await bcrypt.hash(recoveryKey, 10);
   const updated = await prisma.adminUser.update({
     where: { id: user.id },
-    data: { username: parsed.data.newUsername, passwordHash, mustChangePassword: false, recoveryKeyHash },
+    data: {
+      username: parsed.data.newUsername,
+      passwordHash,
+      mustChangePassword: false,
+      recoveryKeyHash,
+      bootstrapTokenHash: null, // one-shot: invalidated as soon as setup succeeds
+    },
   });
 
   session.mustChangePassword = false;
@@ -149,6 +174,15 @@ authRouter.post("/restore-backup", restoreUpload.single("backup"), ah(async (req
   if (!user || !user.mustChangePassword) {
     cleanup();
     return res.status(403).json({ error: "restore available only at first login" });
+  }
+
+  // Same log-access requirement as /first-login — this replaces the entire
+  // database with an uploaded file, an authenticated first-boot session
+  // alone shouldn't be enough to trigger it.
+  const bootstrapToken = typeof req.body?.bootstrapToken === "string" ? req.body.bootstrapToken : "";
+  if (!user.bootstrapTokenHash || !bootstrapToken || !(await bcrypt.compare(bootstrapToken, user.bootstrapTokenHash))) {
+    cleanup();
+    return res.status(401).json({ error: "invalid setup token" });
   }
 
   if (!req.file) return res.status(400).json({ error: "missing backup file" });
@@ -336,10 +370,23 @@ authRouter.post("/forgot-password", ah(async (req, res) => {
 
 // Logged-in admin can roll a fresh recovery key any time (e.g. the old one
 // was lost, or they suspect it leaked). Shown once in the response, same as
-// at first login.
+// at first login. Requires the current password, same as /mfa/disable —
+// otherwise anyone riding an already-authenticated session (stolen cookie,
+// unattended device) could mint themselves a working recovery key and keep
+// access even after the admin changes the password.
+const regenerateRecoveryKeySchema = z.object({ currentPassword: z.string().min(1) });
+
 authRouter.post("/regenerate-recovery-key", ah(async (req, res) => {
   const session = req.session as any;
   if (!session?.userId) return res.status(401).json({ error: "not authenticated" });
+
+  const parsed = regenerateRecoveryKeySchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid body" });
+
+  const user = await prisma.adminUser.findUnique({ where: { id: session.userId } });
+  if (!user || !(await bcrypt.compare(parsed.data.currentPassword, user.passwordHash))) {
+    return res.status(401).json({ error: "invalid current password" });
+  }
 
   const recoveryKey = generateRecoveryKey();
   const recoveryKeyHash = await bcrypt.hash(recoveryKey, 10);

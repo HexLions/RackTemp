@@ -13,19 +13,20 @@ export default function AccountSection() {
   const [busy, setBusy] = useState(false);
 
   const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
+  const [recoveryPassword, setRecoveryPassword] = useState("");
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
   const [recoveryBusy, setRecoveryBusy] = useState(false);
 
-  async function regenerateRecoveryKey() {
-    const ok = window.confirm(
-      "This immediately invalidates any recovery key you saved before. Only the new one will work. Continue?"
-    );
-    if (!ok) return;
+  async function regenerateRecoveryKey(e: FormEvent) {
+    e.preventDefault();
     setRecoveryError(null);
     setRecoveryBusy(true);
     try {
-      const res = await api.post<{ recoveryKey: string }>("/auth/regenerate-recovery-key");
+      const res = await api.post<{ recoveryKey: string }>("/auth/regenerate-recovery-key", {
+        currentPassword: recoveryPassword,
+      });
       setRecoveryKey(res.recoveryKey);
+      setRecoveryPassword("");
     } catch (err) {
       setRecoveryError(err instanceof ApiError ? err.message : "Network error");
     } finally {
@@ -100,12 +101,21 @@ export default function AccountSection() {
         {recoveryKey ? (
           <CopyField label="New recovery key" value={recoveryKey} hint="Shown only now — save it somewhere safe." />
         ) : (
-          <>
+          <form onSubmit={regenerateRecoveryKey}>
+            <label>
+              Current password
+              <input
+                type="password"
+                value={recoveryPassword}
+                onChange={(e) => setRecoveryPassword(e.target.value)}
+                required
+              />
+            </label>
             {recoveryError && <div className="error">{recoveryError}</div>}
-            <button className="btn-primary" type="button" onClick={regenerateRecoveryKey} disabled={recoveryBusy}>
+            <button className="btn-primary" type="submit" disabled={recoveryBusy}>
               {recoveryBusy ? "Generating…" : "Regenerate recovery key"}
             </button>
-          </>
+          </form>
         )}
       </div>
     </>

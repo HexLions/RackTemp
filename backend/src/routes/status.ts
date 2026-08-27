@@ -10,9 +10,12 @@ export const statusRouter = Router();
 // JSON preprocessing), Uptime Kuma (JSON Query monitor), Home Assistant
 // (REST sensor), Node-RED, or anything else that can GET+parse JSON. Same
 // per-sensor apiKey auth as the legacy PRTG endpoint.
+// `as string`: Express 5 widened req.params values to `string | string[]`
+// for wildcard (`*name`) params — this route uses a plain `:sensorId`, so
+// it's always a single string at runtime.
 statusRouter.get("/:sensorId", ah(async (req, res) => {
   const sensor = await prisma.sensor.findUnique({
-    where: { id: req.params.sensorId },
+    where: { id: req.params.sensorId as string },
     include: { threshold: true },
   });
   const key = req.query.key as string | undefined;

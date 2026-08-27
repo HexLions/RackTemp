@@ -5,6 +5,7 @@ import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import path from "path";
 import bcrypt from "bcryptjs";
+import { randomBytes } from "crypto";
 import { createServer as createHttpServer } from "http";
 import { createServer as createHttpsServer } from "https";
 import { Prisma } from "@prisma/client";
@@ -32,15 +33,42 @@ import { initWs } from "./ws";
 const PORT = Number(process.env.PORT) || 7431;
 const SESSION_SECRET = resolveSessionSecret();
 
+// 8 hex chars — same "not a strong secret, but requires access to something
+// only the operator has" bar as the setup portal's AP password (see the
+// firmware). Whoever completes /first-login or /restore-backup needs to
+// have read this from the server's own logs (docker compose logs /
+// journalctl -u racktemp), not just be first to hit the endpoint over the
+// network — the default admin/admin credentials alone used to be enough.
+function generateBootstrapToken(): string {
+  return randomBytes(4).toString("hex");
+}
+
 async function bootstrapAdmin() {
   const existing = await prisma.adminUser.findFirst();
-  if (existing) return;
 
-  const passwordHash = await bcrypt.hash("admin", 10);
-  await prisma.adminUser.create({
-    data: { username: "admin", passwordHash, mustChangePassword: true },
-  });
-  console.log('[bootstrap] created default admin user "admin" / "admin" — you will be asked to set a real username and password on first login');
+  if (!existing) {
+    const passwordHash = await bcrypt.hash("admin", 10);
+    const bootstrapToken = generateBootstrapToken();
+    const bootstrapTokenHash = await bcrypt.hash(bootstrapToken, 10);
+    await prisma.adminUser.create({
+      data: { username: "admin", passwordHash, mustChangePassword: true, bootstrapTokenHash },
+    });
+    console.log('[bootstrap] created default admin user "admin" / "admin" — you will be asked to set a real username and password on first login');
+    console.log(`[bootstrap] setup token (needed for first-login / restore-backup): ${bootstrapToken}`);
+    return;
+  }
+
+  // Setup was never finished (process restarted before /first-login
+  // succeeded) — the previous token is only known from a now-scrolled-away
+  // log, so hand out a fresh one every time this happens rather than
+  // leaving the instance impossible to finish setting up without wiping
+  // the database.
+  if (existing.mustChangePassword) {
+    const bootstrapToken = generateBootstrapToken();
+    const bootstrapTokenHash = await bcrypt.hash(bootstrapToken, 10);
+    await prisma.adminUser.update({ where: { id: existing.id }, data: { bootstrapTokenHash } });
+    console.log(`[bootstrap] setup not finished yet — setup token (needed for first-login / restore-backup): ${bootstrapToken}`);
+  }
 }
 
 async function main() {
@@ -137,7 +165,10 @@ async function main() {
 
   const frontendDist = path.join(__dirname, "../public");
   app.use(express.static(frontendDist));
-  app.get("*", (req, res, next) => {
+  // Express 5 / path-to-regexp 8: bare "*" is gone, a wildcard now needs a
+  // name — "/*splat" is the direct equivalent (matches every path, param
+  // itself unused here).
+  app.get("/*splat", (req, res, next) => {
     if (req.path.startsWith("/api")) return next();
     res.sendFile(path.join(frontendDist, "index.html"));
   });

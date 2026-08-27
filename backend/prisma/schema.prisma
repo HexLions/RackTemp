@@ -155,6 +155,13 @@ model AdminUser {
   // once the admin proves they scanned it right via /mfa/enable.
   totpSecret             String?
   totpEnabled            Boolean   @default(false)
+  // Printed to the server logs at boot while mustChangePassword is still
+  // true (see bootstrapAdmin() in index.ts) — required, alongside the
+  // authenticated session, by /first-login and /restore-backup. Whoever
+  // completes setup needs log access (docker compose logs / journalctl),
+  // not just "got there first" over the network. Cleared once first-login
+  // succeeds.
+  bootstrapTokenHash     String?
   updatedAt              DateTime  @updatedAt
 }
 
