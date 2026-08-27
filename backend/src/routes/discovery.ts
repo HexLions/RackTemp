@@ -33,9 +33,15 @@ function discoveryNotifyAllowed(): boolean {
   return true;
 }
 
+// Exactly 16 hex chars: firmware/rack_temp_sensor/rack_temp_sensor.ino's
+// chipId() does snprintf(buf, sizeof(buf), "%016llX", mac) — a zero-padded
+// 64-bit MAC, always 16 chars, uppercase (case-insensitive here anyway,
+// costs nothing and both cases are the same value). Unauthenticated
+// endpoint, 30 req/min — without a shape check chipId was an unbounded
+// string with no charset limit, straight into a unique DiscoveredDevice row.
 const announceSchema = z.object({
-  chipId: z.string().min(1),
-  firmware: z.string().optional(),
+  chipId: z.string().regex(/^[0-9A-Fa-f]{16}$/),
+  firmware: z.string().max(32).optional(),
 });
 
 // Called by ESP32/ESP8266 firmware on boot, and repeatedly on every loop
@@ -56,7 +62,12 @@ discoveryRouter.post("/announce", ah(async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "invalid body" });
 
   const { chipId, firmware } = parsed.data;
-  const ip = req.header("x-forwarded-for")?.split(",")[0].trim() || req.socket.remoteAddress || undefined;
+  // req.ip, not a hand-rolled X-Forwarded-For read: index.ts only sets
+  // "trust proxy" when TRUST_PROXY_HOPS is explicitly configured, precisely
+  // so an untrusted client can't spoof its own IP via that header. Reading
+  // it here directly bypassed that — the IP shown in the dashboard and sent
+  // in notifications was whatever the client claimed, trust proxy or not.
+  const ip = req.ip;
 
   const linkedSensor = await prisma.sensor.findUnique({ where: { chipId } });
   if (linkedSensor) {

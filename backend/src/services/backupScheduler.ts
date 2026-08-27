@@ -1,10 +1,14 @@
 import fs from "fs";
 import path from "path";
 import { prisma } from "../db";
-import { resolveDbPath } from "./dbPath";
+import { resolveDbPath, resolveDataDir } from "./dbPath";
 import { sendEmail } from "./notifier";
 
-export const BACKUPS_DIR = path.join(__dirname, "../../data/backups");
+// resolveDataDir(), not a hardcoded "../../data": on Docker they coincide,
+// but on the native Windows/Linux installs the actual data dir is
+// elsewhere (/var/lib/racktemp/data, %ProgramData%\RackTemp\data) — the
+// hardcoded path was writing scheduled backups outside it there.
+export const BACKUPS_DIR = path.join(resolveDataDir(), "backups");
 fs.mkdirSync(BACKUPS_DIR, { recursive: true });
 
 const CHECK_INTERVAL_MS = 15 * 60 * 1000;

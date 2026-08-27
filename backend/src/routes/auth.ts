@@ -10,7 +10,7 @@ import { authenticator } from "otplib";
 import QRCode from "qrcode";
 import { PrismaClient } from "@prisma/client";
 import { prisma } from "../db";
-import { resolveDbPath } from "../services/dbPath";
+import { resolveDbPath, resolveDataDir } from "../services/dbPath";
 import { sendEmail } from "../services/notifier";
 
 export const authRouter = Router();
@@ -128,9 +128,9 @@ authRouter.post("/first-login", ah(async (req, res) => {
     return res.status(400).json({ error: "username already in use" });
   }
 
-  const passwordHash = await bcrypt.hash(parsed.data.newPassword, 10);
+  const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
   const recoveryKey = generateRecoveryKey();
-  const recoveryKeyHash = await bcrypt.hash(recoveryKey, 10);
+  const recoveryKeyHash = await bcrypt.hash(recoveryKey, 12);
   const updated = await prisma.adminUser.update({
     where: { id: user.id },
     data: {
@@ -151,7 +151,9 @@ authRouter.post("/first-login", ah(async (req, res) => {
 // with an uploaded .sqlite backup, instead of configuring everything from
 // scratch. Double gate — authenticated session + mustChangePassword still
 // true — so it can never be invoked on an already-configured instance.
-const RESTORE_TMP_DIR = path.join(__dirname, "../../data/restore-tmp");
+// resolveDataDir(), not a hardcoded "../../data": correct on the native
+// Windows/Linux installs too (see services/dbPath.ts).
+const RESTORE_TMP_DIR = path.join(resolveDataDir(), "restore-tmp");
 fs.mkdirSync(RESTORE_TMP_DIR, { recursive: true });
 // An upload interrupted mid-request (client disconnects, process restarts)
 // never reaches the handler's own cleanup() below and leaves an orphaned
@@ -251,7 +253,7 @@ authRouter.post("/change-password", ah(async (req, res) => {
     return res.status(401).json({ error: "invalid current password" });
   }
 
-  const passwordHash = await bcrypt.hash(parsed.data.newPassword, 10);
+  const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
   // Bump sessionEpoch: this is the "I think I'm compromised" scenario —
   // every other outstanding session (stolen cookie, unattended device)
   // should stop working. Realign this request's own session.epoch to the
@@ -373,7 +375,7 @@ authRouter.post("/forgot-password", ah(async (req, res) => {
   }
 
   const token = crypto.randomBytes(32).toString("hex");
-  const resetTokenHash = await bcrypt.hash(token, 10);
+  const resetTokenHash = await bcrypt.hash(token, 12);
 
   // Never build the link from the request's Host header — it's client-controlled
   // and an attacker could point it at their own domain to steal the token
@@ -427,7 +429,7 @@ authRouter.post("/regenerate-recovery-key", ah(async (req, res) => {
   }
 
   const recoveryKey = generateRecoveryKey();
-  const recoveryKeyHash = await bcrypt.hash(recoveryKey, 10);
+  const recoveryKeyHash = await bcrypt.hash(recoveryKey, 12);
   await prisma.adminUser.update({ where: { id: session.userId }, data: { recoveryKeyHash } });
 
   res.json({ ok: true, recoveryKey });
@@ -451,9 +453,9 @@ authRouter.post("/reset-password-with-key", ah(async (req, res) => {
     return res.status(400).json({ error: "invalid recovery key" });
   }
 
-  const passwordHash = await bcrypt.hash(parsed.data.newPassword, 10);
+  const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
   const newRecoveryKey = generateRecoveryKey();
-  const recoveryKeyHash = await bcrypt.hash(newRecoveryKey, 10);
+  const recoveryKeyHash = await bcrypt.hash(newRecoveryKey, 12);
   await prisma.adminUser.update({
     where: { id: 1 },
     data: {
@@ -497,7 +499,7 @@ authRouter.post("/reset-password", ah(async (req, res) => {
     return res.status(400).json({ error: "invalid reset link" });
   }
 
-  const passwordHash = await bcrypt.hash(parsed.data.newPassword, 10);
+  const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
   await prisma.adminUser.update({
     where: { id: 1 },
     data: {

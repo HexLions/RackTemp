@@ -1,19 +1,18 @@
 import fs from "fs";
 import path from "path";
 import { randomBytes } from "crypto";
-import { resolveDbPath } from "./dbPath";
+import { resolveDataDir } from "./dbPath";
 
 const MIN_LENGTH = 32;
 
-// Persisted next to the database (same resolution as resolveDbPath, so this
-// lands in the actual data volume/directory for every deploy target — the
-// Docker volume, %ProgramData%\RackTemp\data on Windows, /var/lib/racktemp/data
-// on Linux — not a hardcoded backend/data that would only be correct for local
-// dev and get wiped on a Windows reinstall or Linux upgrade.
+// Persisted next to the database (resolveDataDir — same resolution as
+// resolveDbPath, so this lands in the actual data volume/directory for
+// every deploy target — the Docker volume, %ProgramData%\RackTemp\data on
+// Windows, /var/lib/racktemp/data on Linux — not a hardcoded backend/data
+// that would only be correct for local dev and get wiped on a Windows
+// reinstall or Linux upgrade.
 function secretFilePath(): string {
-  const dbPath = resolveDbPath();
-  const dir = dbPath ? path.dirname(dbPath) : path.resolve(__dirname, "../../data");
-  return path.join(dir, "session-secret");
+  return path.join(resolveDataDir(), "session-secret");
 }
 
 export function resolveSessionSecret(): string {
