@@ -556,6 +556,25 @@ npm run dev             # http://localhost:5173, proxies to :7431
 
 ---
 
+## 🔒 Security
+
+Full threat model and how to report a vulnerability: **[SECURITY.md](./SECURITY.md)**. Quick
+reference for exposing an instance beyond a trusted LAN:
+
+- **Put it behind a reverse proxy terminating HTTPS**, and set `COOKIE_SECURE=1` +
+  `TRUST_PROXY_HOPS` (usually `1`) in `.env` — otherwise the session cookie never gets the
+  `Secure` flag and rate limiting sees the proxy's IP instead of the client's. Alternatively,
+  skip the reverse proxy and turn on the built-in self-signed HTTPS from Settings → Network
+  instead — that sets `Secure` on its own, no extra config needed.
+- **`/metrics` and `/api/version` are public by design**, no auth — Prometheus scraping and
+  update checks need to work with zero setup. Nothing sensitive is in either response.
+- **PRTG/status integration keys travel in the query string** (`?key=...`), not a header — PRTG
+  and most monitoring tools only support that form. That key ends up in every reverse proxy's
+  access log between the monitoring tool and this app. Treat it like any other credential: don't
+  point it through a proxy you don't control the logs of.
+
+---
+
 ## 🗺️ Roadmap
 
 - 🐘 Migration to Postgres for multi-instance deploys (change `provider` in
