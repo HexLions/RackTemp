@@ -18,6 +18,14 @@ in the [README](./README.md) — the Security section there covers reverse proxy
 built-in self-signed HTTPS toggle. Running it bare on an untrusted network is not a supported
 configuration.
 
+**Secrets at rest are not encrypted.** The SQLite database (and any backup taken from it, on-demand
+or scheduled) stores the admin password as a bcrypt hash, but stores TOTP secrets, SMTP/Telegram/
+Graph credentials, PRTG tokens, and every sensor's API key in plain form. A backup emailed out
+(Settings → Backup) carries all of that off the server as an unencrypted attachment — the UI warns
+about this next to the toggle, but it's worth restating here: only enable email backups to a
+mailbox you trust as much as the server itself, and treat the `.sqlite` file the same as any of
+the credentials inside it.
+
 ## Reporting a vulnerability
 
 Open a [private security advisory](https://github.com/HexLions/RackTemp/security/advisories/new)

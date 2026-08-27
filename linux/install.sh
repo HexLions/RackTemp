@@ -55,7 +55,16 @@ else
   echo "Existing .env, leaving it alone (update, not first install)."
 fi
 
-chown -R racktemp:racktemp "$INSTALL_DIR" /var/lib/racktemp
+# racktemp only needs to run the program, not modify it — root:root on
+# INSTALL_DIR means an RCE in the app can't rewrite its own dist/ or
+# node_modules/ for persistence. Only the data dir needs to be writable by
+# the service (systemd's own ReadWritePaths=/var/lib/racktemp backs that
+# up), and .env needs its own ownership since it lives under INSTALL_DIR
+# but the service still has to read it at startup.
+chown -R root:root "$INSTALL_DIR"
+chown -R racktemp:racktemp /var/lib/racktemp
+chown racktemp:racktemp "$ENV_FILE"
+chmod 600 "$ENV_FILE"
 
 echo "== systemd service =="
 cp "$SCRIPT_DIR/racktemp.service" /etc/systemd/system/racktemp.service

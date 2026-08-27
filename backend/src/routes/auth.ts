@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, RequestHandler } from "express";
 import { ah } from "../middleware/asyncHandler";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
@@ -10,7 +10,7 @@ import { authenticator } from "otplib";
 import QRCode from "qrcode";
 import { PrismaClient } from "@prisma/client";
 import { prisma } from "../db";
-import { resolveDbPath } from "../services/dbPath";
+import { resolveDbPath, resolveDataDir } from "../services/dbPath";
 import { sendEmail } from "../services/notifier";
 
 export const authRouter = Router();
@@ -44,6 +44,7 @@ authRouter.post("/login", ah(async (req, res) => {
 
   (req.session as any).userId = user.id;
   (req.session as any).mustChangePassword = user.mustChangePassword;
+  (req.session as any).epoch = user.sessionEpoch;
   res.json({ ok: true, username: user.username, mustChangePassword: user.mustChangePassword });
 }));
 
@@ -71,6 +72,7 @@ authRouter.post("/mfa/login", ah(async (req, res) => {
   session.pendingMfaExpires = undefined;
   session.userId = user.id;
   session.mustChangePassword = user.mustChangePassword;
+  session.epoch = user.sessionEpoch;
   res.json({ ok: true, username: user.username, mustChangePassword: user.mustChangePassword });
 }));
 
@@ -126,9 +128,9 @@ authRouter.post("/first-login", ah(async (req, res) => {
     return res.status(400).json({ error: "username already in use" });
   }
 
-  const passwordHash = await bcrypt.hash(parsed.data.newPassword, 10);
+  const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
   const recoveryKey = generateRecoveryKey();
-  const recoveryKeyHash = await bcrypt.hash(recoveryKey, 10);
+  const recoveryKeyHash = await bcrypt.hash(recoveryKey, 12);
   const updated = await prisma.adminUser.update({
     where: { id: user.id },
     data: {
@@ -149,8 +151,16 @@ authRouter.post("/first-login", ah(async (req, res) => {
 // with an uploaded .sqlite backup, instead of configuring everything from
 // scratch. Double gate — authenticated session + mustChangePassword still
 // true — so it can never be invoked on an already-configured instance.
-const RESTORE_TMP_DIR = path.join(__dirname, "../../data/restore-tmp");
+// resolveDataDir(), not a hardcoded "../../data": correct on the native
+// Windows/Linux installs too (see services/dbPath.ts).
+const RESTORE_TMP_DIR = path.join(resolveDataDir(), "restore-tmp");
 fs.mkdirSync(RESTORE_TMP_DIR, { recursive: true });
+// An upload interrupted mid-request (client disconnects, process restarts)
+// never reaches the handler's own cleanup() below and leaves an orphaned
+// file — sweep the directory once at startup instead of letting it grow.
+for (const f of fs.readdirSync(RESTORE_TMP_DIR)) {
+  fs.unlinkSync(path.join(RESTORE_TMP_DIR, f));
+}
 const restoreUpload = multer({
   storage: multer.diskStorage({
     destination: RESTORE_TMP_DIR,
@@ -159,17 +169,25 @@ const restoreUpload = multer({
   limits: { fileSize: 200 * 1024 * 1024 },
 });
 
-authRouter.post("/restore-backup", restoreUpload.single("backup"), ah(async (req, res) => {
+// Multer runs before the route handler, so without this an unauthenticated
+// request could still write up to 200MB into RESTORE_TMP_DIR — same volume
+// as db.sqlite — before ever being checked. This blocks that at the
+// earliest possible point, before multer even starts buffering to disk.
+// bootstrapToken can't be checked here: it arrives as a multipart form
+// field, which doesn't exist until multer has parsed the body — that check
+// stays in the handler below.
+const requireFirstLoginSession: RequestHandler = (req, res, next) => {
+  const session = req.session as any;
+  if (!session?.userId) return res.status(401).json({ error: "not authenticated" });
+  next();
+};
+
+authRouter.post("/restore-backup", requireFirstLoginSession, restoreUpload.single("backup"), ah(async (req, res) => {
   const cleanup = () => {
     if (req.file) fs.unlink(req.file.path, () => {});
   };
 
   const session = req.session as any;
-  if (!session?.userId) {
-    cleanup();
-    return res.status(401).json({ error: "not authenticated" });
-  }
-
   const user = await prisma.adminUser.findUnique({ where: { id: session.userId } });
   if (!user || !user.mustChangePassword) {
     cleanup();
@@ -235,8 +253,17 @@ authRouter.post("/change-password", ah(async (req, res) => {
     return res.status(401).json({ error: "invalid current password" });
   }
 
-  const passwordHash = await bcrypt.hash(parsed.data.newPassword, 10);
-  await prisma.adminUser.update({ where: { id: user.id }, data: { passwordHash } });
+  const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
+  // Bump sessionEpoch: this is the "I think I'm compromised" scenario —
+  // every other outstanding session (stolen cookie, unattended device)
+  // should stop working. Realign this request's own session.epoch to the
+  // updated value from the same query, not epoch+1 computed by hand,
+  // otherwise this session logs itself out on its very next request.
+  const updated = await prisma.adminUser.update({
+    where: { id: user.id },
+    data: { passwordHash, sessionEpoch: { increment: 1 } },
+  });
+  session.epoch = updated.sessionEpoch;
   res.json({ ok: true });
 }));
 
@@ -297,7 +324,14 @@ authRouter.post("/mfa/enable", ah(async (req, res) => {
     return res.status(400).json({ error: "invalid code" });
   }
 
-  await prisma.adminUser.update({ where: { id: user.id }, data: { totpEnabled: true } });
+  // Bump sessionEpoch: a cookie from before MFA was turned on shouldn't
+  // keep logging in without a TOTP code. Realign this session's own epoch
+  // to the update's return value so this request doesn't self-logout next.
+  const updated = await prisma.adminUser.update({
+    where: { id: user.id },
+    data: { totpEnabled: true, sessionEpoch: { increment: 1 } },
+  });
+  session.epoch = updated.sessionEpoch;
   res.json({ ok: true });
 }));
 
@@ -315,7 +349,13 @@ authRouter.post("/mfa/disable", ah(async (req, res) => {
     return res.status(401).json({ error: "invalid current password" });
   }
 
-  await prisma.adminUser.update({ where: { id: user.id }, data: { totpEnabled: false, totpSecret: null } });
+  // Bump sessionEpoch: disabling MFA is a security-posture change, same
+  // reasoning as enabling it above. Realign this session's own epoch.
+  const updated = await prisma.adminUser.update({
+    where: { id: user.id },
+    data: { totpEnabled: false, totpSecret: null, sessionEpoch: { increment: 1 } },
+  });
+  session.epoch = updated.sessionEpoch;
   res.json({ ok: true });
 }));
 
@@ -335,7 +375,7 @@ authRouter.post("/forgot-password", ah(async (req, res) => {
   }
 
   const token = crypto.randomBytes(32).toString("hex");
-  const resetTokenHash = await bcrypt.hash(token, 10);
+  const resetTokenHash = await bcrypt.hash(token, 12);
 
   // Never build the link from the request's Host header — it's client-controlled
   // and an attacker could point it at their own domain to steal the token
@@ -389,7 +429,7 @@ authRouter.post("/regenerate-recovery-key", ah(async (req, res) => {
   }
 
   const recoveryKey = generateRecoveryKey();
-  const recoveryKeyHash = await bcrypt.hash(recoveryKey, 10);
+  const recoveryKeyHash = await bcrypt.hash(recoveryKey, 12);
   await prisma.adminUser.update({ where: { id: session.userId }, data: { recoveryKeyHash } });
 
   res.json({ ok: true, recoveryKey });
@@ -413,9 +453,9 @@ authRouter.post("/reset-password-with-key", ah(async (req, res) => {
     return res.status(400).json({ error: "invalid recovery key" });
   }
 
-  const passwordHash = await bcrypt.hash(parsed.data.newPassword, 10);
+  const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
   const newRecoveryKey = generateRecoveryKey();
-  const recoveryKeyHash = await bcrypt.hash(newRecoveryKey, 10);
+  const recoveryKeyHash = await bcrypt.hash(newRecoveryKey, 12);
   await prisma.adminUser.update({
     where: { id: 1 },
     data: {
@@ -429,6 +469,10 @@ authRouter.post("/reset-password-with-key", ah(async (req, res) => {
       // than have password + MFA both need separate recovery.
       totpEnabled: false,
       totpSecret: null,
+      // No session to realign here (this whole flow is sessionless) — any
+      // outstanding cookie from before the reset needs a fresh login either
+      // way, which is exactly what bumping the epoch forces.
+      sessionEpoch: { increment: 1 },
     },
   });
 
@@ -455,7 +499,7 @@ authRouter.post("/reset-password", ah(async (req, res) => {
     return res.status(400).json({ error: "invalid reset link" });
   }
 
-  const passwordHash = await bcrypt.hash(parsed.data.newPassword, 10);
+  const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
   await prisma.adminUser.update({
     where: { id: 1 },
     data: {
@@ -465,6 +509,9 @@ authRouter.post("/reset-password", ah(async (req, res) => {
       resetRequestedAt: null,
       totpEnabled: false,
       totpSecret: null,
+      // No session to realign (sessionless flow) — forces any outstanding
+      // cookie from before the reset to log in again.
+      sessionEpoch: { increment: 1 },
     },
   });
 

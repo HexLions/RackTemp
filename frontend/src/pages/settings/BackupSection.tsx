@@ -130,6 +130,15 @@ export default function BackupSection() {
             />
             Also send every automatic backup via email
           </label>
+          {cfg.emailOnBackup && (
+            <p className="hint" style={{ marginTop: -4 }}>
+              ⚠️ The backup file is <strong>not encrypted</strong>: it contains every sensor's API key, the
+              admin password hash, and any SMTP/Telegram/Graph credentials configured in Notifications, in
+              plain form. It's leaving this server for a third-party mailbox — usually the same one whose
+              password is inside the file. Only enable this if you trust that mailbox and its own security
+              as much as you trust this server.
+            </p>
+          )}
           {cfg.lastBackupAt && (
             <p className="hint">Last automatic backup: {new Date(cfg.lastBackupAt).toLocaleString("it-IT")}</p>
           )}

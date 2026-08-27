@@ -6,7 +6,7 @@ import { prisma } from "../db";
 import { requireAuth } from "../middleware/auth";
 
 export const sensorsRouter = Router();
-sensorsRouter.use(requireAuth);
+sensorsRouter.use(ah(requireAuth));
 
 // How long /api/discovery/announce will hand back a linked sensor's API key
 // for. Opened by an admin action (creating/claiming with a chipId, or
@@ -24,8 +24,11 @@ sensorsRouter.get("/", ah(async (_req, res) => {
   res.json(sensors);
 }));
 
+// max(80): this ends up as a Prometheus label value (metrics.ts) and a
+// PRTG channel/device name (prtg.ts) — unbounded lets one sensor bloat
+// every scrape and every PRTG payload.
 const createSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().min(1).max(80),
   location: z.string().optional(),
   staticIp: z.string().optional(),
   // Set when created from a discovery banner entry ("Configura"): links the
@@ -74,7 +77,7 @@ sensorsRouter.get("/:id", ah(async (req, res) => {
 }));
 
 const updateSchema = z.object({
-  name: z.string().min(1).optional(),
+  name: z.string().min(1).max(80).optional(),
   location: z.string().optional().nullable(),
   staticIp: z.string().optional().nullable(),
 });

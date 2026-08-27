@@ -6,7 +6,7 @@ import { prisma } from "../db";
 import { requireAuth } from "../middleware/auth";
 
 export const integrationsRouter = Router();
-integrationsRouter.use(requireAuth);
+integrationsRouter.use(ah(requireAuth));
 
 async function getSettings() {
   return prisma.integrationSettings.upsert({
@@ -21,8 +21,32 @@ integrationsRouter.get("/", ah(async (_req, res) => {
   res.json({ prtgToken: settings.prtgToken, portainerWebhookUrl: settings.portainerWebhookUrl });
 }));
 
+// This URL gets POSTed to from the server itself (/api/system/trigger-update)
+// with no further checks — an admin-only SSRF primitive otherwise. Restrict
+// to http/https (no file:, data:, gopher:, ...) and reject the obvious
+// internal/metadata targets. Doesn't chase DNS rebinding (a hostname that
+// resolves to a link-local address only at request time) — that needs a
+// request-time check against the resolved IP, out of scope for what was
+// asked here; this catches the URL being link-local/metadata on its face.
+function isBlockedWebhookHost(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  if (h === "localhost" || h === "169.254.169.254") return true;
+  if (/^127\./.test(h) || /^169\.254\./.test(h)) return true;
+  if (h === "::1" || h === "[::1]") return true;
+  return false;
+}
+
 const webhookSchema = z.object({
-  portainerWebhookUrl: z.string().url().nullable(),
+  portainerWebhookUrl: z
+    .string()
+    .url()
+    .refine((v) => ["http:", "https:"].includes(new URL(v).protocol), {
+      message: "webhook URL must be http or https",
+    })
+    .refine((v) => !isBlockedWebhookHost(new URL(v).hostname), {
+      message: "webhook URL points to a link-local/metadata address",
+    })
+    .nullable(),
 });
 
 integrationsRouter.put("/portainer-webhook", ah(async (req, res) => {
