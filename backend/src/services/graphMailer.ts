@@ -9,7 +9,7 @@ type GraphConfig = {
 };
 
 async function getAccessToken(cfg: GraphConfig): Promise<string> {
-  const res = await fetch(`https://login.microsoftonline.com/${cfg.graphTenantId}/oauth2/v2.0/token`, {
+  const res = await fetch(`https://login.microsoftonline.com/${encodeURIComponent(cfg.graphTenantId!)}/oauth2/v2.0/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
