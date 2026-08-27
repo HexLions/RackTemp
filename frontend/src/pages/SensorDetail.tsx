@@ -95,6 +95,18 @@ export default function SensorDetail() {
     setSensor(updated);
   }
 
+  const [handoffNow, setHandoffNow] = useState(() => Date.now());
+  useEffect(() => {
+    const iv = setInterval(() => setHandoffNow(Date.now()), 1000);
+    return () => clearInterval(iv);
+  }, []);
+
+  async function reopenHandoff() {
+    if (!id) return;
+    await api.post(`/sensors/${id}/reopen-handoff`);
+    load();
+  }
+
   async function rebootSensor() {
     if (!id) return;
     if (!confirm("Reboot this sensor? It has no open connection, so this takes effect on its next check-in (up to ~1 minute).")) return;
@@ -121,6 +133,10 @@ export default function SensorDetail() {
   }));
   const hasHumidity = readings.some((r) => r.humidity != null);
 
+  const handoutUntil = sensor.keyHandoutUntil ? new Date(sensor.keyHandoutUntil).getTime() : null;
+  const handoutWindowOpen = !sensor.keyHandedOut && handoutUntil !== null && handoutUntil > handoffNow;
+  const handoutRemainingSec = handoutWindowOpen ? Math.max(0, Math.round((handoutUntil! - handoffNow) / 1000)) : 0;
+
   const ingestUrl = `${window.location.origin}/api/ingest`;
   const prtgUrl = `${window.location.origin}/api/prtg/${sensor.id}?key=${sensor.apiKey}`;
   const statusUrl = `${window.location.origin}/api/status/${sensor.id}?key=${sensor.apiKey}`;
@@ -142,6 +158,23 @@ export default function SensorDetail() {
           Regenerate API key
         </button>
       </div>
+      {sensor.chipId && (
+        <p className="hint" style={{ marginBottom: 16 }}>
+          {handoutWindowOpen ? (
+            <>
+              Pairing window open — the device picks up its key automatically if it announces itself in the
+              next <strong>{Math.floor(handoutRemainingSec / 60)}m {handoutRemainingSec % 60}s</strong>.
+            </>
+          ) : (
+            <>
+              Pairing window closed{sensor.keyHandedOut ? " (key already delivered)" : ""}.{" "}
+              <button type="button" className="btn-link" style={{ display: "inline" }} onClick={reopenHandoff}>
+                Reopen pairing window
+              </button>
+            </>
+          )}
+        </p>
+      )}
       {sensor.firmwareVersion && (
         <p className="hint" style={{ marginBottom: 16 }}>
           Firmware on the device: <code>{sensor.firmwareVersion}</code>

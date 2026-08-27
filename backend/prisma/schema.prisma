@@ -14,8 +14,21 @@ model Sensor {
   name        String
   location    String?
   staticIp    String?
-  apiKey      String   @unique @default(cuid())
+  // No @default here on purpose — generated explicitly with randomBytes(32)
+  // in sensors.ts. cuid isn't meant to be unguessable credential material
+  // (k-sortable, embeds a timestamp + a process/host fingerprint, only the
+  // last block is actually random) — fine for the `id` field above, wrong
+  // for something that authenticates a device.
+  apiKey      String   @unique
   chipId      String?  @unique
+  // chipId isn't a secret (derived from the MAC via ARP scan, visible in the
+  // portal's own AP SSID, shown in the dashboard) — so /announce handing
+  // back the API key just because it knows a linked chipId was effectively
+  // a permanent, unauthenticated credential grab for anyone on the LAN. Now
+  // it's a one-shot handoff, only valid inside a short window opened by an
+  // admin action (creating/claiming the sensor, or explicitly reopening it).
+  keyHandoutUntil DateTime?
+  keyHandedOut    Boolean  @default(false)
   firmwareVersion String?
   rebootRequested Boolean  @default(false)
   createdAt   DateTime @default(now())
@@ -108,7 +121,9 @@ model DiscoveredDevice {
 // (unlike the per-sensor apiKey/PRTG endpoint, these aren't tied to one device).
 model IntegrationSettings {
   id                  Int      @id @default(1)
-  prtgToken           String   @default(cuid())
+  // Same reasoning as Sensor.apiKey — generated explicitly with
+  // randomBytes(32) in integrations.ts, not cuid.
+  prtgToken           String
   portainerWebhookUrl String?
   updatedAt           DateTime @updatedAt
 }

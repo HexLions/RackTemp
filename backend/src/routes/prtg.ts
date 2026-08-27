@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { ah } from "../middleware/asyncHandler";
 import { prisma } from "../db";
+import { secretEquals } from "../services/secrets";
 
 export const prtgRouter = Router();
 
@@ -47,7 +48,7 @@ prtgRouter.get("/all", ah(async (req, res) => {
   const key = req.query.key as string | undefined;
   const settings = await prisma.integrationSettings.findUnique({ where: { id: 1 } });
 
-  if (!settings || !key || settings.prtgToken !== key) {
+  if (!settings || !secretEquals(settings.prtgToken, key)) {
     return res.status(401).json({ prtg: { error: 1, text: "invalid integration token" } });
   }
 
@@ -106,7 +107,7 @@ prtgRouter.get("/:sensorId", ah(async (req, res) => {
   });
   const key = req.query.key as string | undefined;
 
-  if (!sensor || !key || sensor.apiKey !== key) {
+  if (!sensor || !secretEquals(sensor.apiKey, key)) {
     return res.status(401).json({ prtg: { error: 1, text: "invalid sensor or key" } });
   }
 

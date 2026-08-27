@@ -39,6 +39,8 @@ export interface Sensor {
   staticIp: string | null;
   apiKey: string;
   chipId: string | null;
+  keyHandoutUntil: string | null;
+  keyHandedOut: boolean;
   firmwareVersion: string | null;
   rebootRequested: boolean;
   lastSeenAt: string | null;
