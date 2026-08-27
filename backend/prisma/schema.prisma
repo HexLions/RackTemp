@@ -135,6 +135,7 @@ model FirmwareRelease {
   id         Int      @id @default(1)
   version    String
   notes      String?
+  sha256     String?
   uploadedAt DateTime @default(now())
 }
 

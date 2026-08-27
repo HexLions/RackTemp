@@ -131,6 +131,7 @@ export interface VersionInfo {
 export interface FirmwareRelease {
   version: string;
   notes: string | null;
+  sha256: string | null;
   uploadedAt: string;
 }
 

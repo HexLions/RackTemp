@@ -33,16 +33,21 @@
 // so you can quickly tell if the device is running the latest flashed version.
 // Also used for OTA auto-update: if the server offers a different one, the
 // device downloads it and flashes itself (see checkFirmwareUpdate below).
-#define FIRMWARE_VERSION "2026-08-27.1"
+#define FIRMWARE_VERSION "2026-08-27.2"
 
-// OTA auto-update fetches and flashes a .bin over plain HTTP, with no
-// signature, no TLS, no pinning, from a server URL that's typically
-// http://<ip>:7431 — anyone able to ARP- or DNS-spoof that address on the
-// LAN can push arbitrary, persistent code onto the chip (which holds the
-// WiFi PSK in NVS). Off by default until signed-update verification lands
-// (see the security remediation doc, FASE 4.2); set to 1 only if you've
-// weighed that tradeoff for your network. The version check itself (just a
-// GET, no download) still runs and logs when an update is available either way.
+// OTA auto-update fetches and flashes a .bin over plain HTTP, checked against
+// the SHA256 the server reports for it (HTTPUpdate.setSHA256sum, see
+// checkFirmwareUpdate below) — that catches corruption and a swapped file,
+// but arduino-esp32's HTTPUpdate has no signature/authenticity API (checked
+// against core 3.3.11's actual HTTPUpdate.h: setMD5sum/setSHA256sum exist,
+// nothing else). So anyone able to ARP- or DNS-spoof cfgServerUrl on the LAN
+// can still serve their own .bin together with a matching hash and the check
+// passes. Real authenticity needs ESP-IDF Secure Boot v2 or an app-level
+// RSA/ECDSA signature checked with mbedtls against an embedded public key,
+// which needs its own signing step in the release pipeline — out of scope
+// here, left for a future phase. Off by default; set to 1 only if you've
+// weighed that remaining tradeoff for your network. The version check itself
+// (just a GET, no download) still runs and logs when an update is available either way.
 #define OTA_AUTO_UPDATE 0
 
 // BOOT button, held down AFTER boot (not at power-on — see setup()) to
@@ -343,29 +348,47 @@ void announceDiscovery() {
 // new .bin and reflashes itself (HTTPUpdate only writes the OTA app
 // partition — the NVS where WiFi/server/API key are saved is not touched,
 // so the configuration survives the update intact).
+// Extracts a top-level "key":"value" string field from a small flat JSON
+// payload — same hand-rolled approach already used elsewhere in this file
+// (announceDiscovery, sendReading) rather than pulling in a JSON library
+// for a couple of fields.
+String jsonStringField(const String &payload, const char *key) {
+  String needle = String("\"") + key + "\":\"";
+  int start = payload.indexOf(needle);
+  if (start < 0) return "";
+  start += needle.length();
+  int end = payload.indexOf('"', start);
+  if (end <= start) return "";
+  return payload.substring(start, end);
+}
+
 void checkFirmwareUpdate() {
   HTTPClient http;
   http.begin(cfgServerUrl + "/api/firmware/latest");
   int code = http.GET();
-  String latestVersion;
+  String latestVersion, latestSha256;
 
   if (code == 200) {
     String payload = http.getString();
-    int start = payload.indexOf("\"version\":\"");
-    if (start >= 0) {
-      start += 11;
-      int end = payload.indexOf('"', start);
-      if (end > start) latestVersion = payload.substring(start, end);
-    }
+    latestVersion = jsonStringField(payload, "version");
+    latestSha256 = jsonStringField(payload, "sha256");
   }
   http.end();
 
   if (latestVersion.length() == 0 || latestVersion == FIRMWARE_VERSION) return;
 
 #if OTA_AUTO_UPDATE
+  // No verified hash from the server: refuse to flash rather than trust an
+  // unverified download (an old server predating FASE 4.2, or a striped/
+  // malformed response, both look the same from here — fail closed either way).
+  if (latestSha256.length() != 64) {
+    Serial.println("New firmware available: " + latestVersion + " but server did not report a SHA256 - not flashing.");
+    return;
+  }
   Serial.println("New firmware available: " + latestVersion + " (current: " FIRMWARE_VERSION "). Updating...");
   WiFiClient client;
   httpUpdate.rebootOnUpdate(true);
+  httpUpdate.setSHA256sum(latestSha256);
   t_httpUpdate_return ret = httpUpdate.update(client, cfgServerUrl + "/api/firmware/latest.bin");
   if (ret != HTTP_UPDATE_OK) {
     Serial.printf("OTA failed: %s\n", httpUpdate.getLastErrorString().c_str());

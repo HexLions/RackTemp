@@ -297,7 +297,7 @@ The firmware sends a JSON POST to `/api/ingest` every 60 seconds (`SEND_INTERVAL
 of the sketch, if you want to change it):
 
 ```json
-{ "temperature": 23.4, "humidity": 41.2, "rssi": -58, "chipId": "AABBCCDDEEFF0011", "firmwareVersion": "2026-08-27.1" }
+{ "temperature": 23.4, "humidity": 41.2, "rssi": -58, "chipId": "AABBCCDDEEFF0011", "firmwareVersion": "2026-08-27.2" }
 ```
 
 `chipId` is the chip's hardware identifier (used for discovery below): the firmware
@@ -306,10 +306,12 @@ includes it on its own, no need to configure it. The ingest response can also ca
 
 Separately, once a day the sensor checks `/api/firmware/latest` for a newer version and logs
 it if one's available — it does **not** flash itself automatically by default (`#define
-OTA_AUTO_UPDATE 0` at the top of the sketch): the OTA download has no signature, no TLS, no
-pinning, so anyone able to spoof the server address on the LAN could push arbitrary code onto
-the chip. Set it to `1` and reflash if you've weighed that tradeoff for your network;
-otherwise reflash manually over USB to update.
+OTA_AUTO_UPDATE 0` at the top of the sketch). If enabled, the download is checked against the
+SHA256 the server reports for it (rejects a corrupted or swapped-in-transit `.bin`), but there's
+still no signature/authenticity check — no TLS, no pinning — so anyone able to spoof the server
+address on the LAN can serve their own `.bin` together with a matching hash. Set `OTA_AUTO_UPDATE`
+to `1` and reflash if you've weighed that remaining tradeoff for your network; otherwise reflash
+manually over USB to update.
 
 ### WiFi setup via captive portal (first boot)
 

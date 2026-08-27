@@ -3,6 +3,7 @@ import { ah } from "../middleware/asyncHandler";
 import multer from "multer";
 import fs from "fs";
 import path from "path";
+import { createHash } from "crypto";
 import { prisma } from "../db";
 import { requireAuth } from "../middleware/auth";
 
@@ -21,12 +22,15 @@ const upload = multer({
 });
 
 // Public, no auth: devices poll this to decide whether to self-update.
+// Includes the uploaded .bin's SHA256 so the firmware can verify it wasn't
+// corrupted or swapped in transit (HTTPUpdate.setSHA256sum) before flashing —
+// see the OTA_AUTO_UPDATE comment in the .ino for what this does and doesn't cover.
 firmwareRouter.get("/latest", ah(async (_req, res) => {
   const release = await prisma.firmwareRelease.findUnique({ where: { id: 1 } });
   if (!release || !fs.existsSync(BIN_PATH)) {
     return res.status(404).json({ error: "no firmware uploaded yet" });
   }
-  res.json({ version: release.version, notes: release.notes, uploadedAt: release.uploadedAt });
+  res.json({ version: release.version, notes: release.notes, sha256: release.sha256, uploadedAt: release.uploadedAt });
 }));
 
 firmwareRouter.get("/latest.bin", (_req, res) => {
@@ -41,10 +45,11 @@ firmwareRouter.post("/", requireAuth, upload.single("firmware"), ah(async (req, 
   if (!version || !req.file) {
     return res.status(400).json({ error: "version and .bin file are required" });
   }
+  const sha256 = createHash("sha256").update(fs.readFileSync(BIN_PATH)).digest("hex");
   const release = await prisma.firmwareRelease.upsert({
     where: { id: 1 },
-    update: { version, notes, uploadedAt: new Date() },
-    create: { id: 1, version, notes },
+    update: { version, notes, sha256, uploadedAt: new Date() },
+    create: { id: 1, version, notes, sha256 },
   });
   res.json(release);
 }));
