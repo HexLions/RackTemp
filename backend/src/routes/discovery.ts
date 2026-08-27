@@ -106,8 +106,11 @@ discoveryRouter.get("/", requireAuth, ah(async (_req, res) => {
   res.json(devices);
 }));
 
+// `as string`: Express 5 widened req.params values to `string | string[]`
+// for wildcard (`*name`) params — every route here uses a plain `:id`, so
+// it's always a single string at runtime.
 discoveryRouter.delete("/:id", requireAuth, ah(async (req, res) => {
-  await prisma.discoveredDevice.deleteMany({ where: { id: req.params.id } });
+  await prisma.discoveredDevice.deleteMany({ where: { id: req.params.id as string } });
   res.status(204).end();
 }));
 
@@ -122,7 +125,7 @@ discoveryRouter.post("/:id/claim", requireAuth, ah(async (req, res) => {
   const parsed = claimSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid body" });
 
-  const device = await prisma.discoveredDevice.findUnique({ where: { id: req.params.id } });
+  const device = await prisma.discoveredDevice.findUnique({ where: { id: req.params.id as string } });
   if (!device) return res.status(404).json({ error: "device not found" });
 
   try {

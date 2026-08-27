@@ -160,7 +160,10 @@ async function main() {
 
   const frontendDist = path.join(__dirname, "../public");
   app.use(express.static(frontendDist));
-  app.get("*", (req, res, next) => {
+  // Express 5 / path-to-regexp 8: bare "*" is gone, a wildcard now needs a
+  // name — "/*splat" is the direct equivalent (matches every path, param
+  // itself unused here).
+  app.get("/*splat", (req, res, next) => {
     if (req.path.startsWith("/api")) return next();
     res.sendFile(path.join(frontendDist, "index.html"));
   });

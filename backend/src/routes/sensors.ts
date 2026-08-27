@@ -60,9 +60,13 @@ sensorsRouter.post("/", ah(async (req, res) => {
   res.status(201).json(sensor);
 }));
 
+// Express 5 / path-to-regexp 8 widened req.params values to `string |
+// string[]` (a wildcard `*name` param can capture multiple segments); every
+// route in this file uses a plain `:id`, never a wildcard, so it's always a
+// single string at runtime — `as string` throughout just tells Prisma that.
 sensorsRouter.get("/:id", ah(async (req, res) => {
   const sensor = await prisma.sensor.findUnique({
-    where: { id: req.params.id },
+    where: { id: req.params.id as string },
     include: { threshold: true },
   });
   if (!sensor) return res.status(404).json({ error: "not found" });
@@ -80,21 +84,21 @@ sensorsRouter.put("/:id", ah(async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "invalid body" });
 
   const sensor = await prisma.sensor.update({
-    where: { id: req.params.id },
+    where: { id: req.params.id as string },
     data: parsed.data,
   });
   res.json(sensor);
 }));
 
 sensorsRouter.delete("/:id", ah(async (req, res) => {
-  await prisma.sensor.delete({ where: { id: req.params.id } });
+  await prisma.sensor.delete({ where: { id: req.params.id as string } });
   res.status(204).end();
 }));
 
 sensorsRouter.post("/:id/regenerate-key", ah(async (req, res) => {
   const apiKey = randomBytes(32).toString("hex");
   const sensor = await prisma.sensor.update({
-    where: { id: req.params.id },
+    where: { id: req.params.id as string },
     data: { apiKey },
   });
   res.json(sensor);
@@ -106,7 +110,7 @@ sensorsRouter.post("/:id/regenerate-key", ah(async (req, res) => {
 // time. Reopens the same 10-minute one-shot handoff.
 sensorsRouter.post("/:id/reopen-handoff", ah(async (req, res) => {
   const sensor = await prisma.sensor.update({
-    where: { id: req.params.id },
+    where: { id: req.params.id as string },
     data: { keyHandoutUntil: new Date(Date.now() + KEY_HANDOUT_WINDOW_MS), keyHandedOut: false },
   });
   res.json({ keyHandoutUntil: sensor.keyHandoutUntil });
@@ -118,7 +122,7 @@ sensorsRouter.post("/:id/reopen-handoff", ah(async (req, res) => {
 // answers with {reboot:true}, which can take up to ~1 minute.
 sensorsRouter.post("/:id/reboot", ah(async (req, res) => {
   const sensor = await prisma.sensor.update({
-    where: { id: req.params.id },
+    where: { id: req.params.id as string },
     data: { rebootRequested: true },
   });
   res.json(sensor);
@@ -128,20 +132,20 @@ sensorsRouter.get("/:id/readings", ah(async (req, res) => {
   const hours = Math.min(Number(req.query.hours) || 24, 24 * 30);
   const since = new Date(Date.now() - hours * 3600_000);
   const readings = await prisma.reading.findMany({
-    where: { sensorId: req.params.id, createdAt: { gte: since } },
+    where: { sensorId: req.params.id as string, createdAt: { gte: since } },
     orderBy: { createdAt: "asc" },
   });
   res.json(readings);
 }));
 
 sensorsRouter.get("/:id/readings.csv", ah(async (req, res) => {
-  const sensor = await prisma.sensor.findUnique({ where: { id: req.params.id } });
+  const sensor = await prisma.sensor.findUnique({ where: { id: req.params.id as string } });
   if (!sensor) return res.status(404).json({ error: "not found" });
 
   const hours = Math.min(Number(req.query.hours) || 24 * 30, 24 * 365);
   const since = new Date(Date.now() - hours * 3600_000);
   const readings = await prisma.reading.findMany({
-    where: { sensorId: req.params.id, createdAt: { gte: since } },
+    where: { sensorId: req.params.id as string, createdAt: { gte: since } },
     orderBy: { createdAt: "asc" },
   });
 
@@ -173,9 +177,9 @@ sensorsRouter.put("/:id/threshold", ah(async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "invalid body" });
 
   const threshold = await prisma.threshold.upsert({
-    where: { sensorId: req.params.id },
+    where: { sensorId: req.params.id as string },
     update: parsed.data,
-    create: { sensorId: req.params.id, ...parsed.data },
+    create: { sensorId: req.params.id as string, ...parsed.data },
   });
   res.json(threshold);
 }));

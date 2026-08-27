@@ -100,9 +100,12 @@ prtgRouter.get("/all", ah(async (req, res) => {
 
 // Legacy per-sensor endpoint, kept for setups that prefer one PRTG sensor per
 // device: GET with the sensor's own apiKey as ?key=...
+// `as string`: Express 5 widened req.params values to `string | string[]`
+// for wildcard (`*name`) params — this route uses a plain `:sensorId`, so
+// it's always a single string at runtime.
 prtgRouter.get("/:sensorId", ah(async (req, res) => {
   const sensor = await prisma.sensor.findUnique({
-    where: { id: req.params.sensorId },
+    where: { id: req.params.sensorId as string },
     include: { threshold: true },
   });
   const key = req.query.key as string | undefined;
