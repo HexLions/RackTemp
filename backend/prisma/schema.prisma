@@ -158,6 +158,15 @@ model AdminUser {
   updatedAt              DateTime  @updatedAt
 }
 
+// Singleton, same pattern as BackupSettings below. httpsEnabled only takes
+// effect on the next start (index.ts reads it once at boot to decide
+// http.createServer vs https.createServer) — see Settings > Network.
+model ServerSettings {
+  id           Int      @id @default(1)
+  httpsEnabled Boolean  @default(false)
+  updatedAt    DateTime @updatedAt
+}
+
 // Scheduled full-database backup (settings + sensors + thresholds + readings
 // history), independent of the on-demand download in Settings > Backup.
 model BackupSettings {

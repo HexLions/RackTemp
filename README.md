@@ -473,6 +473,7 @@ Everything account/deploy-related lives under **Settings**, one page per topic:
 | **Account** | Change password, two-factor authentication setup, recovery key regeneration, Windows autostart toggle (Windows install only) |
 | **Notifications** | SMTP/Graph and Telegram configuration, test buttons, alert history |
 | **Integrations** | PRTG token, Portainer webhook |
+| **Network** | HTTPS toggle (self-signed certificate, generated and managed by the app itself) |
 | **Updates** | Current/latest version check, links to the release, manual Portainer redeploy |
 | **Firmware** | Upload a new sensor `.bin` — sensors check for it daily, but only self-flash if built with `OTA_AUTO_UPDATE 1` (off by default) |
 | **Backup** | On-demand download, scheduled automatic backups, saved backups list |

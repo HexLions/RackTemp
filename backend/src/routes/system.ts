@@ -7,6 +7,8 @@ import { requireAuth } from "../middleware/auth";
 import { prisma } from "../db";
 import { resolveDbPath } from "../services/dbPath";
 import { BACKUPS_DIR, getBackupSettings, listBackups, performBackup } from "../services/backupScheduler";
+import { getServerSettings, setHttpsEnabled } from "../services/serverSettings";
+import { tlsCertInfo, regenerateTlsCert } from "../services/tls";
 import pkg from "../../package.json";
 
 export const systemRouter = Router();
@@ -144,3 +146,34 @@ systemRouter.get("/backups/:name/download", (req, res) => {
   if (!fs.existsSync(filePath)) return res.status(404).end();
   res.download(filePath, name);
 });
+
+// Toggle only — the actual protocol switch happens once at boot (index.ts
+// reads ServerSettings before creating the server), so flipping this here
+// doesn't affect the currently running process. The frontend tells the
+// admin a restart is needed.
+systemRouter.get("/https-settings", ah(async (_req, res) => {
+  const settings = await getServerSettings();
+  res.json({ httpsEnabled: settings.httpsEnabled, cert: tlsCertInfo() });
+}));
+
+const httpsSettingsSchema = z.object({ httpsEnabled: z.boolean() });
+
+systemRouter.put("/https-settings", ah(async (req, res) => {
+  const parsed = httpsSettingsSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.message });
+  const settings = await setHttpsEnabled(parsed.data.httpsEnabled);
+  res.json({ httpsEnabled: settings.httpsEnabled, cert: tlsCertInfo() });
+}));
+
+// Forces a fresh self-signed cert — e.g. the machine's LAN IP changed since
+// the current one was generated (its Subject Alternative Names no longer
+// match, so browsers reject it as invalid for this address on top of the
+// usual self-signed warning).
+systemRouter.post("/https-settings/regenerate-cert", ah(async (_req, res) => {
+  await regenerateTlsCert();
+  // tlsCertInfo() re-reads the file we just wrote rather than trusting
+  // regenerateTlsCert()'s own return value, so the fingerprint here is
+  // computed the same way (Node's X509Certificate) as the GET endpoint's —
+  // selfsigned's own .fingerprint field uses a different format.
+  res.json(tlsCertInfo());
+}));

@@ -5,7 +5,8 @@ import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import path from "path";
 import bcrypt from "bcryptjs";
-import { createServer } from "http";
+import { createServer as createHttpServer } from "http";
+import { createServer as createHttpsServer } from "https";
 import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { authRouter } from "./routes/auth";
@@ -24,6 +25,8 @@ import { startOfflineWatcher } from "./services/thresholdEngine";
 import { startRetentionWatcher } from "./services/retention";
 import { startBackupScheduler } from "./services/backupScheduler";
 import { resolveSessionSecret } from "./services/sessionSecret";
+import { getServerSettings } from "./services/serverSettings";
+import { resolveTlsCert } from "./services/tls";
 import { initWs } from "./ws";
 
 const PORT = Number(process.env.PORT) || 7431;
@@ -42,6 +45,7 @@ async function bootstrapAdmin() {
 
 async function main() {
   await bootstrapAdmin();
+  const { httpsEnabled } = await getServerSettings();
 
   const app = express();
 
@@ -93,11 +97,12 @@ async function main() {
       maxAge: 7 * 24 * 3600_000,
       // "strict" over "lax": nothing in this app links in from another site,
       // so there's no legitimate cross-site GET that needs the cookie —
-      // strict closes that off too. Set COOKIE_SECURE=1 once there's an
-      // HTTPS reverse proxy in front (can't default it on, would break
-      // plain-HTTP LAN deploys, which is the common case here).
+      // strict closes that off too. Secure automatically when this process
+      // is serving HTTPS itself (Settings > Network); COOKIE_SECURE=1 covers
+      // the other case, an HTTPS reverse proxy in front while this process
+      // still speaks plain HTTP internally, which httpsEnabled can't see.
       sameSite: "strict",
-      secure: process.env.COOKIE_SECURE === "1",
+      secure: httpsEnabled || process.env.COOKIE_SECURE === "1",
       httpOnly: true,
     })
   );
@@ -149,13 +154,22 @@ async function main() {
     res.status(500).json({ error: "internal server error" });
   });
 
-  const server = createServer(app);
+  // httpsEnabled is read once, above, before the app is even built — the
+  // cert (self-signed, generated on first use and reused after that — see
+  // services/tls.ts) is only loaded when it's actually needed. Switching
+  // the toggle in Settings > Network takes effect on the next restart, not
+  // live: there's no live-reload of an active http.Server into an
+  // https.Server, and doing that mid-request (including any open WebSocket
+  // upgrade) isn't worth the complexity for a setting nobody flips often.
+  const server = httpsEnabled ? createHttpsServer(await resolveTlsCert(), app) : createHttpServer(app);
   initWs(server, SESSION_SECRET);
   startOfflineWatcher();
   startRetentionWatcher();
   startBackupScheduler();
 
-  server.listen(PORT, () => console.log(`rack-temp-monitor listening on :${PORT}`));
+  server.listen(PORT, () =>
+    console.log(`rack-temp-monitor listening on ${httpsEnabled ? "https" : "http"}://0.0.0.0:${PORT}`)
+  );
 }
 
 main().catch((err) => {

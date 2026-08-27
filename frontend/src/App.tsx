@@ -14,6 +14,7 @@ import SettingsLayout from "./pages/settings/SettingsLayout";
 import AccountSection from "./pages/settings/AccountSection";
 import NotificationsSection from "./pages/settings/NotificationsSection";
 import IntegrationsSection from "./pages/settings/IntegrationsSection";
+import NetworkSection from "./pages/settings/NetworkSection";
 import UpdatesSection from "./pages/settings/UpdatesSection";
 import FirmwareSection from "./pages/settings/FirmwareSection";
 import BackupSection from "./pages/settings/BackupSection";
@@ -100,6 +101,7 @@ export default function App() {
         <Route path="account" element={<AccountSection />} />
         <Route path="notifiche" element={<NotificationsSection />} />
         <Route path="integrazioni" element={<IntegrationsSection />} />
+        <Route path="rete" element={<NetworkSection />} />
         <Route path="aggiornamenti" element={<UpdatesSection />} />
         <Route path="firmware" element={<FirmwareSection />} />
         <Route path="backup" element={<BackupSection />} />

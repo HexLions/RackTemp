@@ -148,3 +148,14 @@ export interface BackupFileInfo {
   size: number;
   createdAt: string;
 }
+
+export interface TlsCertInfo {
+  exists: boolean;
+  generatedAt: string | null;
+  fingerprint: string | null;
+}
+
+export interface HttpsSettings {
+  httpsEnabled: boolean;
+  cert: TlsCertInfo;
+}
