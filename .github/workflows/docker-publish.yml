@@ -21,6 +21,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      security-events: write # for the Trivy SARIF upload below
     steps:
       - uses: actions/checkout@v4
 
@@ -36,6 +37,7 @@ jobs:
         # a release gets :latest, its own version tag, and a short-sha tag.
         run: |
           SHORT_SHA="${GITHUB_SHA:0:7}"
+          echo "SHORT_SHA=$SHORT_SHA" >> "$GITHUB_ENV"
           if [ "${{ github.event_name }}" = "release" ]; then
             TAGS="${IMAGE}:latest
           ${IMAGE}:${{ github.event.release.tag_name }}
@@ -73,3 +75,25 @@ jobs:
           # (:latest only on release, Watchtower opt-in+pinned).
           provenance: mode=max
           sbom: true
+
+      # Reporting only, not a gate: findings land in the repo's Security >
+      # Code scanning tab (SARIF), reviewed by a human rather than failing
+      # the publish on something that might be a false positive or a
+      # fix-pending upstream base-image CVE with no action to take here.
+      - name: Scan published image for vulnerabilities (Trivy)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE }}:sha-${{ env.SHORT_SHA }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          # Without this the SARIF output includes every severity
+          # regardless of the filter above (only table/json output would
+          # actually be filtered) — this makes severity apply to SARIF too.
+          limit-severities-for-sarif: true
+
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy
