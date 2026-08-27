@@ -1,10 +1,12 @@
 // Firmware for ESP32-C3 Super Mini + SHT31-D sensor (I2C via jumper wire).
 //
 // No configuration to compile in: the same firmware works for every sensor.
-// On first boot the device opens an access point "RackTemp-XXXXXXXX" with no
-// password. To reopen it later on an already-configured device, power it on
+// On first boot the device opens an access point "RackTemp-XXXXXXXX" — the
+// password is the same XXXXXXXX suffix (also printed over serial). To
+// reopen it later on an already-configured device, power it on
 // normally, then hold BOOT for 2 seconds AFTER it's already running (not
-// while powering on — see the BOOT_BUTTON_PIN comment below for why).
+// while powering on — see the BOOT_BUTTON_PIN comment below for why). The
+// portal closes on its own after 10 minutes of inactivity.
 // Connect and open http://192.168.4.1 (or wait for the
 // automatic "sign in to network" popup): there you enter the WiFi, the RackTemp server address and,
 // if you already know it, the sensor's API key. Save: the device restarts and tries to connect.
@@ -31,7 +33,22 @@
 // so you can quickly tell if the device is running the latest flashed version.
 // Also used for OTA auto-update: if the server offers a different one, the
 // device downloads it and flashes itself (see checkFirmwareUpdate below).
-#define FIRMWARE_VERSION "2026-08-22.5"
+#define FIRMWARE_VERSION "2026-08-27.2"
+
+// OTA auto-update fetches and flashes a .bin over plain HTTP, checked against
+// the SHA256 the server reports for it (HTTPUpdate.setSHA256sum, see
+// checkFirmwareUpdate below) — that catches corruption and a swapped file,
+// but arduino-esp32's HTTPUpdate has no signature/authenticity API (checked
+// against core 3.3.11's actual HTTPUpdate.h: setMD5sum/setSHA256sum exist,
+// nothing else). So anyone able to ARP- or DNS-spoof cfgServerUrl on the LAN
+// can still serve their own .bin together with a matching hash and the check
+// passes. Real authenticity needs ESP-IDF Secure Boot v2 or an app-level
+// RSA/ECDSA signature checked with mbedtls against an embedded public key,
+// which needs its own signing step in the release pipeline — out of scope
+// here, left for a future phase. Off by default; set to 1 only if you've
+// weighed that remaining tradeoff for your network. The version check itself
+// (just a GET, no download) still runs and logs when an update is available either way.
+#define OTA_AUTO_UPDATE 0
 
 // BOOT button, held down AFTER boot (not at power-on — see setup()) to
 // re-enter WiFi setup. On many "Super Mini" clones it's on the same GPIO9
@@ -57,6 +74,10 @@ Adafruit_SHT31 sht31 = Adafruit_SHT31();
 Preferences prefs;
 WebServer portalServer(80);
 DNSServer dnsServer;
+// Set by the portal's HTTP handlers, read (and cleared) by runSetupPortal()'s
+// loop to reset its inactivity timeout — a real request is genuine activity,
+// unlike the constant DNS queries every captive-portal-detection probe sends.
+bool portalActivitySeen = false;
 
 const unsigned long SEND_INTERVAL_MS = SEND_INTERVAL_SEC * 1000UL;
 const unsigned long WIFI_CONNECT_TIMEOUT_MS = 15000UL;
@@ -147,6 +168,7 @@ String htmlEscape(const String &s) {
   "</svg>RackTemp</div>"
 
 void handlePortalRoot() {
+  portalActivitySeen = true;
   int n = WiFi.scanComplete();
   String options = "<option value=''>-- choose from the list or type below --</option>";
   if (n > 0) {
@@ -173,7 +195,10 @@ void handlePortalRoot() {
     "<label>RackTemp server address</label>"
     "<input name='serverUrl' placeholder='http://192.168.1.50:7431' value='" + htmlEscape(cfgServerUrl) + "' required>"
     "<label>Sensor API key (optional)</label>"
-    "<input name='apiKey' placeholder='leave it empty to get notified in the dashboard' value='" + htmlEscape(cfgApiKey) + "'>"
+    "<input name='apiKey' placeholder='" +
+      String(cfgApiKey.length() > 0 ? "******** (leave empty to keep the current one)"
+                                     : "leave it empty to get notified in the dashboard") +
+      "'>"
     "<button type='submit'>Save and restart</button>"
     "<small>The sensor restarts and tries to connect. If you got something wrong, power it on "
     "and hold BOOT for 2s once it's already running to come back to this page.</small>"
@@ -183,6 +208,7 @@ void handlePortalRoot() {
 }
 
 void handlePortalSave() {
+  portalActivitySeen = true;
   String newSsid = portalServer.arg("ssid");
   String newPassword = portalServer.arg("password");
   String newServerUrl = portalServer.arg("serverUrl");
@@ -199,7 +225,7 @@ void handlePortalSave() {
   cfgSsid = newSsid;
   if (newPassword.length() > 0) cfgPassword = newPassword; // empty = keep the saved one
   cfgServerUrl = newServerUrl;
-  cfgApiKey = newApiKey;
+  if (newApiKey.length() > 0) cfgApiKey = newApiKey; // empty = keep the saved one, same as the WiFi password
   saveConfig();
 
   portalServer.send(200, "text/html",
@@ -221,7 +247,14 @@ void runSetupPortal() {
   Serial.printf("WiFi networks found: %d\n", found);
 
   String apName = "RackTemp-" + chipId().substring(8);
-  WiFi.softAP(apName.c_str());
+  // Not a strong secret — it's derived from the chip's own ID, printed right
+  // below on the same serial line anyone flashing/debugging the device
+  // already has access to. But an open AP meant anyone in WiFi range could
+  // join and reach the setup portal with zero barrier; this at least
+  // requires physical/serial access to the device to read the password,
+  // same bar as reopening the portal in the first place (hold BOOT).
+  String apPassword = chipId().substring(8);
+  WiFi.softAP(apName.c_str(), apPassword.c_str());
   IPAddress apIP = WiFi.softAPIP();
 
   dnsServer.start(53, "*", apIP);
@@ -231,13 +264,26 @@ void runSetupPortal() {
   portalServer.begin();
 
   Serial.println("=== Setup mode ===");
-  Serial.println("Connect to the WiFi network \"" + apName + "\" (no password)");
+  Serial.println("Connect to the WiFi network \"" + apName + "\", password: " + apPassword);
   Serial.println("then open http://" + apIP.toString() + " (or wait for the automatic popup).");
 
-  while (true) {
+  unsigned long lastActivity = millis();
+  const unsigned long PORTAL_TIMEOUT_MS = 10UL * 60 * 1000;
+  while (millis() - lastActivity < PORTAL_TIMEOUT_MS) {
     dnsServer.processNextRequest();
     portalServer.handleClient();
+    if (portalActivitySeen) {
+      lastActivity = millis();
+      portalActivitySeen = false;
+    }
   }
+
+  // Left open with no activity for too long, instead of indefinitely:
+  // restarting re-enters setup() fresh, which reopens the portal again if
+  // still unconfigured, or connects normally if a config was already saved
+  // (e.g. this was a BOOT-reopened portal nobody finished editing).
+  Serial.println("Setup portal timed out after 10 minutes of inactivity, restarting.");
+  ESP.restart();
 }
 
 // ---------- normal operation ----------
@@ -302,33 +348,56 @@ void announceDiscovery() {
 // new .bin and reflashes itself (HTTPUpdate only writes the OTA app
 // partition — the NVS where WiFi/server/API key are saved is not touched,
 // so the configuration survives the update intact).
+// Extracts a top-level "key":"value" string field from a small flat JSON
+// payload — same hand-rolled approach already used elsewhere in this file
+// (announceDiscovery, sendReading) rather than pulling in a JSON library
+// for a couple of fields.
+String jsonStringField(const String &payload, const char *key) {
+  String needle = String("\"") + key + "\":\"";
+  int start = payload.indexOf(needle);
+  if (start < 0) return "";
+  start += needle.length();
+  int end = payload.indexOf('"', start);
+  if (end <= start) return "";
+  return payload.substring(start, end);
+}
+
 void checkFirmwareUpdate() {
   HTTPClient http;
   http.begin(cfgServerUrl + "/api/firmware/latest");
   int code = http.GET();
-  String latestVersion;
+  String latestVersion, latestSha256;
 
   if (code == 200) {
     String payload = http.getString();
-    int start = payload.indexOf("\"version\":\"");
-    if (start >= 0) {
-      start += 11;
-      int end = payload.indexOf('"', start);
-      if (end > start) latestVersion = payload.substring(start, end);
-    }
+    latestVersion = jsonStringField(payload, "version");
+    latestSha256 = jsonStringField(payload, "sha256");
   }
   http.end();
 
   if (latestVersion.length() == 0 || latestVersion == FIRMWARE_VERSION) return;
 
+#if OTA_AUTO_UPDATE
+  // No verified hash from the server: refuse to flash rather than trust an
+  // unverified download (an old server predating FASE 4.2, or a striped/
+  // malformed response, both look the same from here — fail closed either way).
+  if (latestSha256.length() != 64) {
+    Serial.println("New firmware available: " + latestVersion + " but server did not report a SHA256 - not flashing.");
+    return;
+  }
   Serial.println("New firmware available: " + latestVersion + " (current: " FIRMWARE_VERSION "). Updating...");
   WiFiClient client;
   httpUpdate.rebootOnUpdate(true);
+  httpUpdate.setSHA256sum(latestSha256);
   t_httpUpdate_return ret = httpUpdate.update(client, cfgServerUrl + "/api/firmware/latest.bin");
   if (ret != HTTP_UPDATE_OK) {
     Serial.printf("OTA failed: %s\n", httpUpdate.getLastErrorString().c_str());
   }
   // If ret == HTTP_UPDATE_OK the device restarts on its own (rebootOnUpdate).
+#else
+  Serial.println("New firmware available: " + latestVersion + " (current: " FIRMWARE_VERSION
+                  ") - OTA_AUTO_UPDATE is off, not flashing. Reflash manually to update.");
+#endif
 }
 
 void sendReading(float temperature, float humidity) {

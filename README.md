@@ -48,7 +48,8 @@ PRTG/Prometheus/Grafana/Zabbix, all configured from the same web page.
 - 🔁 **Remote sensor reboot** — one click from the sensor page, no physical access needed
   (picked up on the sensor's next check-in, no open connection required)
 - 📤 **Firmware OTA updates** — upload a new `.bin` from Settings → Firmware, sensors check
-  for it once a day and self-update
+  for it once a day and log when one's available. Self-flashing is off by default (see the
+  note in the firmware section below) — it's unsigned, plain-HTTP OTA, so it's opt-in
 
 **Notifications**
 - 🔔 **SMTP + Telegram** — threshold breach, sensor offline, back to normal, new sensor
@@ -296,14 +297,21 @@ The firmware sends a JSON POST to `/api/ingest` every 60 seconds (`SEND_INTERVAL
 of the sketch, if you want to change it):
 
 ```json
-{ "temperature": 23.4, "humidity": 41.2, "rssi": -58, "chipId": "AABBCCDDEEFF0011", "firmwareVersion": "2026-08-22.5" }
+{ "temperature": 23.4, "humidity": 41.2, "rssi": -58, "chipId": "AABBCCDDEEFF0011", "firmwareVersion": "2026-08-27.2" }
 ```
 
 `chipId` is the chip's hardware identifier (used for discovery below): the firmware
 includes it on its own, no need to configure it. The ingest response can also carry a one-shot
-`{"reboot":true}` flag (set from the sensor's page in the dashboard) or, once a day, an OTA
-update if a newer `.bin` was uploaded under Settings → Firmware — both handled by the firmware
-automatically.
+`{"reboot":true}` flag (set from the sensor's page in the dashboard), handled automatically.
+
+Separately, once a day the sensor checks `/api/firmware/latest` for a newer version and logs
+it if one's available — it does **not** flash itself automatically by default (`#define
+OTA_AUTO_UPDATE 0` at the top of the sketch). If enabled, the download is checked against the
+SHA256 the server reports for it (rejects a corrupted or swapped-in-transit `.bin`), but there's
+still no signature/authenticity check — no TLS, no pinning — so anyone able to spoof the server
+address on the LAN can serve their own `.bin` together with a matching hash. Set `OTA_AUTO_UPDATE`
+to `1` and reflash if you've weighed that remaining tradeoff for your network; otherwise reflash
+manually over USB to update.
 
 ### WiFi setup via captive portal (first boot)
 
@@ -312,8 +320,8 @@ re-enter it later (not while powering on, see the note below) — the
 sensor finds no saved configuration and opens its own access point instead of
 connecting to a network:
 
-1. From a phone/PC, connect to the WiFi network **`RackTemp-XXXXXXXX`** (no password —
-   the last digits are the chip's ID).
+1. From a phone/PC, connect to the WiFi network **`RackTemp-XXXXXXXX`** — the password is
+   the same `XXXXXXXX` suffix (the chip's ID), also printed over serial at boot.
 2. A "sign in to network" popup opens on its own (Android/iOS/Windows); if it doesn't appear, open
    your browser at `http://192.168.4.1`.
 3. Choose your WiFi network from the list (or type it manually) + password, the server address
@@ -325,9 +333,12 @@ connecting to a network:
 
 The configuration stays saved on the chip (internal NVS) even after a power-cycle or a
 sketch re-flash. To change it — new network, new server, new API key — power the sensor
-on normally, wait for it to boot, then hold **BOOT for 2 seconds**; the WiFi/server/API key
-fields stay pre-filled with the current values, the password only needs re-entering if you
-want to change it.
+on normally, wait for it to boot, then hold **BOOT for 2 seconds**; the WiFi network and
+server address fields stay pre-filled with the current values. The WiFi password and API
+key fields are left blank instead of showing the current secret — leave either one empty
+to keep what's already saved, or type a new value to replace it. The portal closes on its
+own after 10 minutes of inactivity (restarts the sensor, which reconnects normally if it
+already had a saved configuration, or reopens the portal if it didn't).
 
 > **Important: hold BOOT *after* it's running, never while powering it on.** On the ESP32-C3,
 > GPIO9 (where BOOT usually sits on these clones — the same pin used for SCL above) is also
@@ -463,7 +474,7 @@ Everything account/deploy-related lives under **Settings**, one page per topic:
 | **Notifications** | SMTP/Graph and Telegram configuration, test buttons, alert history |
 | **Integrations** | PRTG token, Portainer webhook |
 | **Updates** | Current/latest version check, links to the release, manual Portainer redeploy |
-| **Firmware** | Upload a new sensor `.bin`, sensors self-update within a day |
+| **Firmware** | Upload a new sensor `.bin` — sensors check for it daily, but only self-flash if built with `OTA_AUTO_UPDATE 1` (off by default) |
 | **Backup** | On-demand download, scheduled automatic backups, saved backups list |
 
 ---
