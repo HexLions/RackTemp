@@ -162,6 +162,10 @@ async function main() {
     message: { error: "too many attempts, retry later" },
   });
   const announceLimiter = rateLimit({ windowMs: 60_000, limit: 30, legacyHeaders: false });
+  // CodeQL (js/missing-rate-limiting) flagged these two: public, no auth,
+  // sensors poll /latest every boot + daily, so a generous limit — this
+  // exists for anonymous-hammering protection, not to constrain normal use.
+  const firmwarePublicLimiter = rateLimit({ windowMs: 60_000, limit: 60, legacyHeaders: false });
 
   app.use("/api/auth/login", authLimiter);
   app.use("/api/auth/mfa/login", authLimiter);
@@ -172,6 +176,8 @@ async function main() {
   app.use("/api/auth/first-login", authLimiter);
   app.use("/api/auth/restore-backup", authLimiter);
   app.use("/api/discovery/announce", announceLimiter);
+  app.use("/api/firmware/latest", firmwarePublicLimiter);
+  app.use("/api/firmware/latest.bin", firmwarePublicLimiter);
 
   app.use("/api/auth", authRouter);
   app.use("/api/sensors", sensorsRouter);
