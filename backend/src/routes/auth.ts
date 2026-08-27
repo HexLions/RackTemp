@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, RequestHandler } from "express";
 import { ah } from "../middleware/asyncHandler";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
@@ -151,6 +151,12 @@ authRouter.post("/first-login", ah(async (req, res) => {
 // true — so it can never be invoked on an already-configured instance.
 const RESTORE_TMP_DIR = path.join(__dirname, "../../data/restore-tmp");
 fs.mkdirSync(RESTORE_TMP_DIR, { recursive: true });
+// An upload interrupted mid-request (client disconnects, process restarts)
+// never reaches the handler's own cleanup() below and leaves an orphaned
+// file — sweep the directory once at startup instead of letting it grow.
+for (const f of fs.readdirSync(RESTORE_TMP_DIR)) {
+  fs.unlinkSync(path.join(RESTORE_TMP_DIR, f));
+}
 const restoreUpload = multer({
   storage: multer.diskStorage({
     destination: RESTORE_TMP_DIR,
@@ -159,17 +165,25 @@ const restoreUpload = multer({
   limits: { fileSize: 200 * 1024 * 1024 },
 });
 
-authRouter.post("/restore-backup", restoreUpload.single("backup"), ah(async (req, res) => {
+// Multer runs before the route handler, so without this an unauthenticated
+// request could still write up to 200MB into RESTORE_TMP_DIR — same volume
+// as db.sqlite — before ever being checked. This blocks that at the
+// earliest possible point, before multer even starts buffering to disk.
+// bootstrapToken can't be checked here: it arrives as a multipart form
+// field, which doesn't exist until multer has parsed the body — that check
+// stays in the handler below.
+const requireFirstLoginSession: RequestHandler = (req, res, next) => {
+  const session = req.session as any;
+  if (!session?.userId) return res.status(401).json({ error: "not authenticated" });
+  next();
+};
+
+authRouter.post("/restore-backup", requireFirstLoginSession, restoreUpload.single("backup"), ah(async (req, res) => {
   const cleanup = () => {
     if (req.file) fs.unlink(req.file.path, () => {});
   };
 
   const session = req.session as any;
-  if (!session?.userId) {
-    cleanup();
-    return res.status(401).json({ error: "not authenticated" });
-  }
-
   const user = await prisma.adminUser.findUnique({ where: { id: session.userId } });
   if (!user || !user.mustChangePassword) {
     cleanup();
