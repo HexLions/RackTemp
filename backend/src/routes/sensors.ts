@@ -8,6 +8,11 @@ import { requireAuth } from "../middleware/auth";
 export const sensorsRouter = Router();
 sensorsRouter.use(requireAuth);
 
+// How long /api/discovery/announce will hand back a linked sensor's API key
+// for. Opened by an admin action (creating/claiming with a chipId, or
+// POST /:id/reopen-handoff) — see discovery.ts for the consuming side.
+export const KEY_HANDOUT_WINDOW_MS = 10 * 60_000;
+
 sensorsRouter.get("/", ah(async (_req, res) => {
   const sensors = await prisma.sensor.findMany({
     include: {
@@ -41,6 +46,9 @@ sensorsRouter.post("/", ah(async (req, res) => {
       chipId: parsed.data.chipId,
       apiKey: randomBytes(32).toString("hex"),
       threshold: { create: {} },
+      ...(parsed.data.chipId
+        ? { keyHandoutUntil: new Date(Date.now() + KEY_HANDOUT_WINDOW_MS), keyHandedOut: false }
+        : {}),
     },
     include: { threshold: true },
   });
@@ -90,6 +98,18 @@ sensorsRouter.post("/:id/regenerate-key", ah(async (req, res) => {
     data: { apiKey },
   });
   res.json(sensor);
+}));
+
+// For when the first pairing window (opened at create/claim time) closed
+// before the device actually picked up its key — e.g. it wasn't powered on
+// yet, or the WiFi/server address in the setup portal was wrong the first
+// time. Reopens the same 10-minute one-shot handoff.
+sensorsRouter.post("/:id/reopen-handoff", ah(async (req, res) => {
+  const sensor = await prisma.sensor.update({
+    where: { id: req.params.id },
+    data: { keyHandoutUntil: new Date(Date.now() + KEY_HANDOUT_WINDOW_MS), keyHandedOut: false },
+  });
+  res.json({ keyHandoutUntil: sensor.keyHandoutUntil });
 }));
 
 // The sensor has no open connection to push a command to — it only talks to

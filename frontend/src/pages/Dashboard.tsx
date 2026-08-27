@@ -163,8 +163,9 @@ export default function Dashboard() {
           <h2>Sensors discovered on the network ({discovered.length})</h2>
           <p className="hint" style={{ marginTop: -4 }}>
             These devices have announced themselves but don't have an API key yet. Create a new sensor, or
-            link them to an existing one: the device will pick up the key on its own at the next announcement,
-            with no need to touch it again.
+            link them to an existing one: the device picks up the key on its own within the next 10 minutes,
+            no need to touch it again — if it doesn't check in within that window, reopen pairing from the
+            sensor's own page.
           </p>
           <div className="stack-tight">
             {discovered.map((d) => {

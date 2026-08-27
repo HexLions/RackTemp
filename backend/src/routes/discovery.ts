@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../db";
 import { requireAuth } from "../middleware/auth";
 import { notifyAll } from "../services/notifier";
+import { KEY_HANDOUT_WINDOW_MS } from "./sensors";
 
 export const discoveryRouter = Router();
 
@@ -44,9 +45,12 @@ const announceSchema = z.object({
 // act on — it can't read or change anything, UNLESS an admin has already
 // linked this exact chipId to a Sensor (via /claim, or by creating the
 // sensor from this device's discovery entry), in which case the device's
-// own next poll is handed that sensor's API key so it can start sending
-// data without ever being touched again — no reflashing, no re-opening the
-// setup portal.
+// own next poll is handed that sensor's API key — but only inside the
+// short one-shot window opened by that admin action (see sensors.ts).
+// chipId isn't secret (derived from the MAC, visible in the portal's own
+// AP SSID, shown in the dashboard), so without that window this endpoint
+// would hand out a permanent, unauthenticated credential to anyone on the
+// LAN who already knows — or can see — a linked chipId.
 discoveryRouter.post("/announce", ah(async (req, res) => {
   const parsed = announceSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid body" });
@@ -56,8 +60,20 @@ discoveryRouter.post("/announce", ah(async (req, res) => {
 
   const linkedSensor = await prisma.sensor.findUnique({ where: { chipId } });
   if (linkedSensor) {
-    await prisma.discoveredDevice.deleteMany({ where: { chipId } });
-    return res.json({ apiKey: linkedSensor.apiKey });
+    const windowOpen =
+      !linkedSensor.keyHandedOut && !!linkedSensor.keyHandoutUntil && linkedSensor.keyHandoutUntil > new Date();
+    if (windowOpen) {
+      await prisma.sensor.update({ where: { id: linkedSensor.id }, data: { keyHandedOut: true } });
+      await prisma.discoveredDevice.deleteMany({ where: { chipId } });
+      return res.json({ apiKey: linkedSensor.apiKey });
+    }
+    // Window closed or already used: respond exactly like an unknown chip
+    // (204, no body) so a caller can't distinguish "unknown" from "linked
+    // but too late" — but stop here, don't fall through to the
+    // DiscoveredDevice/notify path below. This chipId already belongs to a
+    // real Sensor; treating it as newly discovered would create a phantom
+    // discovery entry and re-fire "new sensor detected" on every poll.
+    return res.status(204).end();
   }
 
   const existing = await prisma.discoveredDevice.findUnique({ where: { chipId } });
@@ -99,8 +115,9 @@ const claimSchema = z.object({ sensorId: z.string().min(1) });
 
 // Links an already-existing Sensor (e.g. one created directly from the
 // dashboard, not from this discovery entry) to a device that's still
-// polling /announce for a key. The device picks the key up on its next
-// poll — no manual copy-paste, no re-opening the setup portal.
+// polling /announce for a key. Opens a fresh 10-minute handout window —
+// the device picks the key up on its next poll, no manual copy-paste, no
+// re-opening the setup portal, as long as that poll lands inside the window.
 discoveryRouter.post("/:id/claim", requireAuth, ah(async (req, res) => {
   const parsed = claimSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid body" });
@@ -111,7 +128,11 @@ discoveryRouter.post("/:id/claim", requireAuth, ah(async (req, res) => {
   try {
     const sensor = await prisma.sensor.update({
       where: { id: parsed.data.sensorId },
-      data: { chipId: device.chipId },
+      data: {
+        chipId: device.chipId,
+        keyHandoutUntil: new Date(Date.now() + KEY_HANDOUT_WINDOW_MS),
+        keyHandedOut: false,
+      },
     });
     await prisma.discoveredDevice.delete({ where: { id: device.id } });
     res.json(sensor);
