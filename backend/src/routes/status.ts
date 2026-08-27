@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { ah } from "../middleware/asyncHandler";
 import { prisma } from "../db";
+import { secretEquals } from "../services/secrets";
 
 export const statusRouter = Router();
 
@@ -16,7 +17,7 @@ statusRouter.get("/:sensorId", ah(async (req, res) => {
   });
   const key = req.query.key as string | undefined;
 
-  if (!sensor || !key || sensor.apiKey !== key) {
+  if (!sensor || !secretEquals(sensor.apiKey, key)) {
     return res.status(401).json({ error: "invalid sensor or key" });
   }
 
