@@ -1,13 +1,13 @@
 import { NavLink, Outlet } from "react-router-dom";
 
 const SECTIONS = [
-  { to: "/impostazioni/account", label: "Account" },
-  { to: "/impostazioni/notifiche", label: "Notifications" },
-  { to: "/impostazioni/integrazioni", label: "Integrations" },
-  { to: "/impostazioni/rete", label: "Network" },
-  { to: "/impostazioni/aggiornamenti", label: "Updates" },
-  { to: "/impostazioni/firmware", label: "Sensor firmware" },
-  { to: "/impostazioni/backup", label: "Backup" },
+  { to: "/settings/account", label: "Account" },
+  { to: "/settings/notifications", label: "Notifications" },
+  { to: "/settings/integrations", label: "Integrations" },
+  { to: "/settings/network", label: "Network" },
+  { to: "/settings/updates", label: "Updates" },
+  { to: "/settings/firmware", label: "Sensor firmware" },
+  { to: "/settings/backup", label: "Backup" },
 ];
 
 export default function SettingsLayout() {

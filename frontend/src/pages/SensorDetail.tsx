@@ -189,7 +189,7 @@ export default function SensorDetail() {
       <p className="hint" style={{ marginBottom: 0 }}>
         Expected POST body: <code>{`{"temperature": 23.4, "humidity": 45.0}`}</code>. For one aggregated
         integration covering every sensor at once (PRTG, Prometheus), see the{" "}
-        <Link to="/impostazioni/integrazioni" className="btn-link" style={{ display: "inline" }}>
+        <Link to="/settings/integrations" className="btn-link" style={{ display: "inline" }}>
           Integrations
         </Link>{" "}
         page instead.

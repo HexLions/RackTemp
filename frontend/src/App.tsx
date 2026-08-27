@@ -39,12 +39,12 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
           <NavLink to="/" end>
             Dashboard
           </NavLink>
-          <NavLink to="/soglie-bulk">Multiple thresholds</NavLink>
-          <NavLink to="/impostazioni">Settings</NavLink>
+          <NavLink to="/bulk-thresholds">Multiple thresholds</NavLink>
+          <NavLink to="/settings">Settings</NavLink>
         </nav>
         <div className="topbar-right">
           <ThemeToggle />
-          <NavLink to="/impostazioni/account" className="user" style={{ textDecoration: "none" }}>
+          <NavLink to="/settings/account" className="user" style={{ textDecoration: "none" }}>
             {username}
           </NavLink>
           <button className="btn-link" onClick={() => logout()}>
@@ -82,7 +82,7 @@ export default function App() {
         }
       />
       <Route
-        path="/soglie-bulk"
+        path="/bulk-thresholds"
         element={
           <ProtectedLayout>
             <BulkThresholds />
@@ -90,7 +90,7 @@ export default function App() {
         }
       />
       <Route
-        path="/impostazioni"
+        path="/settings"
         element={
           <ProtectedLayout>
             <SettingsLayout />
@@ -99,18 +99,27 @@ export default function App() {
       >
         <Route index element={<Navigate to="account" replace />} />
         <Route path="account" element={<AccountSection />} />
-        <Route path="notifiche" element={<NotificationsSection />} />
-        <Route path="integrazioni" element={<IntegrationsSection />} />
-        <Route path="rete" element={<NetworkSection />} />
-        <Route path="aggiornamenti" element={<UpdatesSection />} />
+        <Route path="notifications" element={<NotificationsSection />} />
+        <Route path="integrations" element={<IntegrationsSection />} />
+        <Route path="network" element={<NetworkSection />} />
+        <Route path="updates" element={<UpdatesSection />} />
         <Route path="firmware" element={<FirmwareSection />} />
         <Route path="backup" element={<BackupSection />} />
       </Route>
 
-      {/* Legacy paths, for existing links/bookmarks */}
-      <Route path="/account" element={<Navigate to="/impostazioni/account" replace />} />
-      <Route path="/notifications" element={<Navigate to="/impostazioni/notifiche" replace />} />
-      <Route path="/integrazioni" element={<Navigate to="/impostazioni/integrazioni" replace />} />
+      {/* Legacy paths (pre-English-route-rename and older), for existing links/bookmarks */}
+      <Route path="/soglie-bulk" element={<Navigate to="/bulk-thresholds" replace />} />
+      <Route path="/account" element={<Navigate to="/settings/account" replace />} />
+      <Route path="/notifications" element={<Navigate to="/settings/notifications" replace />} />
+      <Route path="/integrazioni" element={<Navigate to="/settings/integrations" replace />} />
+      <Route path="/impostazioni" element={<Navigate to="/settings" replace />} />
+      <Route path="/impostazioni/account" element={<Navigate to="/settings/account" replace />} />
+      <Route path="/impostazioni/notifiche" element={<Navigate to="/settings/notifications" replace />} />
+      <Route path="/impostazioni/integrazioni" element={<Navigate to="/settings/integrations" replace />} />
+      <Route path="/impostazioni/rete" element={<Navigate to="/settings/network" replace />} />
+      <Route path="/impostazioni/aggiornamenti" element={<Navigate to="/settings/updates" replace />} />
+      <Route path="/impostazioni/firmware" element={<Navigate to="/settings/firmware" replace />} />
+      <Route path="/impostazioni/backup" element={<Navigate to="/settings/backup" replace />} />
     </Routes>
   );
 }
