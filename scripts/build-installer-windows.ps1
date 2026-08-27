@@ -19,7 +19,7 @@ $tools = Join-Path $root "tools"
 $stage = Join-Path $root "dist-windows\app"
 $outDir = Join-Path $root "dist-windows"
 
-$nodeVersion = "20.18.1"
+$nodeVersion = "24.20.0"
 $nodeDirName = "node-v$nodeVersion-win-x64"
 $nssmVersion = "2.24"
 $nssmDirName = "nssm-$nssmVersion"

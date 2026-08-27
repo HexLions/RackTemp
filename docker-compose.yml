@@ -4,12 +4,18 @@ services:
     image: rack-temp-monitor:latest
     container_name: rack-temp-monitor
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     ports:
       - "7431:7431"
     environment:
       PORT: 7431
       DATABASE_URL: "file:../data/db.sqlite"
-      SESSION_SECRET: ${SESSION_SECRET:-change-me-to-a-long-random-string}
+      # Optional — if unset, the app generates one on first run and persists
+      # it in the data volume. Set it explicitly for a multi-instance deploy.
+      SESSION_SECRET: ${SESSION_SECRET:-}
     volumes:
       - rack-temp-data:/app/backend/data
 

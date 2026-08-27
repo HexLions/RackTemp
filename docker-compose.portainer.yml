@@ -4,9 +4,9 @@
 # a local Dockerfile. The image is published by .github/workflows/docker-publish.yml
 # on every push to main.
 #
-# In Portainer, when creating the stack add the SESSION_SECRET environment
-# variable (Environment variables) with a long, random string,
-# otherwise the default value below stays in place (change it anyway).
+# SESSION_SECRET is optional — if you don't set it in Portainer's
+# "Environment variables", the app generates one on first run and persists
+# it in the data volume.
 #
 # Also includes Watchtower: as soon as a new image is out on GHCR the
 # controller updates and restarts itself, with no need for a webhook
@@ -18,12 +18,16 @@ services:
     image: ghcr.io/hexlions/racktemp:latest
     container_name: rack-temp-monitor
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     ports:
       - "7431:7431"
     environment:
       PORT: 7431
       DATABASE_URL: "file:../data/db.sqlite"
-      SESSION_SECRET: ${SESSION_SECRET:-change-me-to-a-long-random-string}
+      SESSION_SECRET: ${SESSION_SECRET:-}
     volumes:
       - rack-temp-data:/app/backend/data
     labels:
