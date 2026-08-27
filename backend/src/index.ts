@@ -143,6 +143,10 @@ async function main() {
   app.use("/api/auth/mfa/login", authLimiter);
   app.use("/api/auth/reset-password", authLimiter);
   app.use("/api/auth/reset-password-with-key", authLimiter);
+  // Both guard the bootstrap token (32 bits of entropy) — the only other
+  // endpoints in this group without a limiter.
+  app.use("/api/auth/first-login", authLimiter);
+  app.use("/api/auth/restore-backup", authLimiter);
   app.use("/api/discovery/announce", announceLimiter);
 
   app.use("/api/auth", authRouter);
