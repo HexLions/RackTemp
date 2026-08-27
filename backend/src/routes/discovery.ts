@@ -62,7 +62,12 @@ discoveryRouter.post("/announce", ah(async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "invalid body" });
 
   const { chipId, firmware } = parsed.data;
-  const ip = req.header("x-forwarded-for")?.split(",")[0].trim() || req.socket.remoteAddress || undefined;
+  // req.ip, not a hand-rolled X-Forwarded-For read: index.ts only sets
+  // "trust proxy" when TRUST_PROXY_HOPS is explicitly configured, precisely
+  // so an untrusted client can't spoof its own IP via that header. Reading
+  // it here directly bypassed that — the IP shown in the dashboard and sent
+  // in notifications was whatever the client claimed, trust proxy or not.
+  const ip = req.ip;
 
   const linkedSensor = await prisma.sensor.findUnique({ where: { chipId } });
   if (linkedSensor) {
