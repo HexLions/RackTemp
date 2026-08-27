@@ -44,6 +44,7 @@ authRouter.post("/login", ah(async (req, res) => {
 
   (req.session as any).userId = user.id;
   (req.session as any).mustChangePassword = user.mustChangePassword;
+  (req.session as any).epoch = user.sessionEpoch;
   res.json({ ok: true, username: user.username, mustChangePassword: user.mustChangePassword });
 }));
 
@@ -71,6 +72,7 @@ authRouter.post("/mfa/login", ah(async (req, res) => {
   session.pendingMfaExpires = undefined;
   session.userId = user.id;
   session.mustChangePassword = user.mustChangePassword;
+  session.epoch = user.sessionEpoch;
   res.json({ ok: true, username: user.username, mustChangePassword: user.mustChangePassword });
 }));
 
@@ -250,7 +252,16 @@ authRouter.post("/change-password", ah(async (req, res) => {
   }
 
   const passwordHash = await bcrypt.hash(parsed.data.newPassword, 10);
-  await prisma.adminUser.update({ where: { id: user.id }, data: { passwordHash } });
+  // Bump sessionEpoch: this is the "I think I'm compromised" scenario —
+  // every other outstanding session (stolen cookie, unattended device)
+  // should stop working. Realign this request's own session.epoch to the
+  // updated value from the same query, not epoch+1 computed by hand,
+  // otherwise this session logs itself out on its very next request.
+  const updated = await prisma.adminUser.update({
+    where: { id: user.id },
+    data: { passwordHash, sessionEpoch: { increment: 1 } },
+  });
+  session.epoch = updated.sessionEpoch;
   res.json({ ok: true });
 }));
 
@@ -311,7 +322,14 @@ authRouter.post("/mfa/enable", ah(async (req, res) => {
     return res.status(400).json({ error: "invalid code" });
   }
 
-  await prisma.adminUser.update({ where: { id: user.id }, data: { totpEnabled: true } });
+  // Bump sessionEpoch: a cookie from before MFA was turned on shouldn't
+  // keep logging in without a TOTP code. Realign this session's own epoch
+  // to the update's return value so this request doesn't self-logout next.
+  const updated = await prisma.adminUser.update({
+    where: { id: user.id },
+    data: { totpEnabled: true, sessionEpoch: { increment: 1 } },
+  });
+  session.epoch = updated.sessionEpoch;
   res.json({ ok: true });
 }));
 
@@ -329,7 +347,13 @@ authRouter.post("/mfa/disable", ah(async (req, res) => {
     return res.status(401).json({ error: "invalid current password" });
   }
 
-  await prisma.adminUser.update({ where: { id: user.id }, data: { totpEnabled: false, totpSecret: null } });
+  // Bump sessionEpoch: disabling MFA is a security-posture change, same
+  // reasoning as enabling it above. Realign this session's own epoch.
+  const updated = await prisma.adminUser.update({
+    where: { id: user.id },
+    data: { totpEnabled: false, totpSecret: null, sessionEpoch: { increment: 1 } },
+  });
+  session.epoch = updated.sessionEpoch;
   res.json({ ok: true });
 }));
 
@@ -443,6 +467,10 @@ authRouter.post("/reset-password-with-key", ah(async (req, res) => {
       // than have password + MFA both need separate recovery.
       totpEnabled: false,
       totpSecret: null,
+      // No session to realign here (this whole flow is sessionless) — any
+      // outstanding cookie from before the reset needs a fresh login either
+      // way, which is exactly what bumping the epoch forces.
+      sessionEpoch: { increment: 1 },
     },
   });
 
@@ -479,6 +507,9 @@ authRouter.post("/reset-password", ah(async (req, res) => {
       resetRequestedAt: null,
       totpEnabled: false,
       totpSecret: null,
+      // No session to realign (sessionless flow) — forces any outstanding
+      // cookie from before the reset to log in again.
+      sessionEpoch: { increment: 1 },
     },
   });
 

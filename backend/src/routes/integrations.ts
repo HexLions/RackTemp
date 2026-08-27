@@ -6,7 +6,7 @@ import { prisma } from "../db";
 import { requireAuth } from "../middleware/auth";
 
 export const integrationsRouter = Router();
-integrationsRouter.use(requireAuth);
+integrationsRouter.use(ah(requireAuth));
 
 async function getSettings() {
   return prisma.integrationSettings.upsert({

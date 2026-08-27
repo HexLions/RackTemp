@@ -162,6 +162,14 @@ model AdminUser {
   // not just "got there first" over the network. Cleared once first-login
   // succeeds.
   bootstrapTokenHash     String?
+  // cookie-session is stateless — the signed cookie itself is the only
+  // record of a session, valid for 7 days with nothing server-side to
+  // revoke. Bumped whenever an action should invalidate every other
+  // outstanding session (password change/reset, MFA enable/disable); a
+  // session's own copy (session.epoch) is checked against this on every
+  // authenticated request in requireAuth (middleware/auth.ts) and rejected
+  // on mismatch, which is the only actual revocation mechanism this app has.
+  sessionEpoch           Int       @default(0)
   updatedAt              DateTime  @updatedAt
 }
 

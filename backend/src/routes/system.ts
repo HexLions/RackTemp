@@ -10,7 +10,7 @@ import { BACKUPS_DIR, getBackupSettings, listBackups, performBackup } from "../s
 import pkg from "../../package.json";
 
 export const systemRouter = Router();
-systemRouter.use(requireAuth);
+systemRouter.use(ah(requireAuth));
 
 const GITHUB_REPO = "HexLions/RackTemp";
 const UPDATE_CHECK_TTL_MS = 6 * 60 * 60 * 1000;
