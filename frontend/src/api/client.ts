@@ -81,6 +81,14 @@ export interface NotificationLogEntry {
   sentAt: string;
 }
 
+export interface AuditLogEntry {
+  id: string;
+  action: string;
+  detail: string | null;
+  ip: string | null;
+  createdAt: string;
+}
+
 export interface NotificationConfig {
   smtpEnabled: boolean;
   smtpHost: string | null;
