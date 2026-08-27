@@ -114,11 +114,16 @@ async function main() {
   // either way. The previous `origin: true` reflected any Origin header
   // with credentials allowed — permissive for no actual benefit.
   app.use(express.json());
+  // Default lowered from the old 7 days to 24h: a week-long cookie is a lot
+  // of standing exposure for a stolen/left-open session, and 24h already
+  // covers a full workday without re-login. Configurable for setups that
+  // want it shorter (or, if you really want the old behavior back, longer).
+  const sessionMaxAgeMs = (Number(process.env.SESSION_MAX_AGE_HOURS) || 24) * 3600_000;
   app.use(
     cookieSession({
       name: "session",
       keys: [SESSION_SECRET],
-      maxAge: 7 * 24 * 3600_000,
+      maxAge: sessionMaxAgeMs,
       // "strict" over "lax": nothing in this app links in from another site,
       // so there's no legitimate cross-site GET that needs the cookie —
       // strict closes that off too. Set COOKIE_SECURE=1 once there's an
