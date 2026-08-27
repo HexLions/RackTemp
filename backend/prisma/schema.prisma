@@ -14,7 +14,12 @@ model Sensor {
   name        String
   location    String?
   staticIp    String?
-  apiKey      String   @unique @default(cuid())
+  // No @default here on purpose — generated explicitly with randomBytes(32)
+  // in sensors.ts. cuid isn't meant to be unguessable credential material
+  // (k-sortable, embeds a timestamp + a process/host fingerprint, only the
+  // last block is actually random) — fine for the `id` field above, wrong
+  // for something that authenticates a device.
+  apiKey      String   @unique
   chipId      String?  @unique
   firmwareVersion String?
   rebootRequested Boolean  @default(false)
@@ -108,7 +113,9 @@ model DiscoveredDevice {
 // (unlike the per-sensor apiKey/PRTG endpoint, these aren't tied to one device).
 model IntegrationSettings {
   id                  Int      @id @default(1)
-  prtgToken           String   @default(cuid())
+  // Same reasoning as Sensor.apiKey — generated explicitly with
+  // randomBytes(32) in integrations.ts, not cuid.
+  prtgToken           String
   portainerWebhookUrl String?
   updatedAt           DateTime @updatedAt
 }

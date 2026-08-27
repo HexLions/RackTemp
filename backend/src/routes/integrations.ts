@@ -12,7 +12,7 @@ async function getSettings() {
   return prisma.integrationSettings.upsert({
     where: { id: 1 },
     update: {},
-    create: { id: 1 },
+    create: { id: 1, prtgToken: randomBytes(32).toString("hex") },
   });
 }
 
@@ -38,7 +38,7 @@ integrationsRouter.put("/portainer-webhook", ah(async (req, res) => {
 
 integrationsRouter.post("/regenerate-prtg-token", ah(async (_req, res) => {
   await getSettings();
-  const prtgToken = randomBytes(16).toString("hex");
+  const prtgToken = randomBytes(32).toString("hex");
   const updated = await prisma.integrationSettings.update({
     where: { id: 1 },
     data: { prtgToken },

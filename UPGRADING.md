@@ -19,3 +19,26 @@ docker compose up -d
 
 If you're not sure whether this applies to you: it's harmless to run even if
 the volume is already owned correctly.
+
+## Sensor API keys / PRTG token: rotate the weak (cuid-based) ones (FASE 3.1)
+
+Sensor API keys and the PRTG integration token used to default to `cuid()` —
+not meant to be unguessable credential material (it's k-sortable, embeds a
+timestamp and a process/host fingerprint). New sensors/tokens are now
+generated with 32 random bytes instead.
+
+Existing installations aren't rotated automatically — run this once after
+upgrading:
+
+```bash
+cd backend
+npm run rotate-keys
+```
+
+It only touches keys still in the old cuid format (safe to re-run; does
+nothing on a second run) and prints each rotated sensor's new key. **Every
+sensor it rotates needs that new key pasted into its setup portal** (hold
+BOOT for 2s after boot to reopen it) — until then, that sensor's readings
+will be rejected (401) since the server no longer recognizes its old key.
+Same for the PRTG token, if it gets rotated: update it in your PRTG sensor
+URL(s).

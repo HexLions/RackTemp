@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { ah } from "../middleware/asyncHandler";
+import { randomBytes } from "crypto";
 import { z } from "zod";
 import { prisma } from "../db";
 import { requireAuth } from "../middleware/auth";
@@ -38,6 +39,7 @@ sensorsRouter.post("/", ah(async (req, res) => {
       location: parsed.data.location,
       staticIp: parsed.data.staticIp,
       chipId: parsed.data.chipId,
+      apiKey: randomBytes(32).toString("hex"),
       threshold: { create: {} },
     },
     include: { threshold: true },
@@ -82,8 +84,7 @@ sensorsRouter.delete("/:id", ah(async (req, res) => {
 }));
 
 sensorsRouter.post("/:id/regenerate-key", ah(async (req, res) => {
-  const { randomBytes } = await import("crypto");
-  const apiKey = randomBytes(16).toString("hex");
+  const apiKey = randomBytes(32).toString("hex");
   const sensor = await prisma.sensor.update({
     where: { id: req.params.id },
     data: { apiKey },
