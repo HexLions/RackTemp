@@ -1,0 +1,44 @@
+# Optional add-on stack: automatic updates for rack-temp-monitor.
+#
+# Deploy this as a SEPARATE Portainer stack (or with `docker compose -f
+# docker-compose.watchtower.yml up -d`) alongside docker-compose.portainer.yml
+# or docker-compose.yml — not merged into either, so enabling it is a
+# deliberate, separate choice (FASE 5.1). As soon as a new image is out on
+# GHCR — which only happens on a published RackTemp release, see
+# docker-publish.yml — the controller pulls it, restarts
+# rack-temp-monitor (matched via the "com.centurylinklabs.watchtower.enable"
+# label already on that service), and removes the old image. The data volume
+# is not touched.
+#
+# Tradeoff: this pulls and restarts a production container unattended, with
+# no review step between "new release published" and "running on your
+# hardware". Fine for a low-stakes homelab monitor; skip this file (and just
+# update rack-temp-monitor's image tag by hand, or use Portainer's own
+# "Recreate" button) if you'd rather review each release first.
+
+services:
+  watchtower:
+    # containrrr/watchtower has been stuck at 2023 (archived project) and negotiates
+    # a Docker API version so old (1.25) that recent Docker daemons
+    # reject it ("client version too old"). nickfedor/watchtower
+    # is the maintained continuation of the same project, same config.
+    #
+    # Pinned by digest rather than :latest — Watchtower is exactly the kind
+    # of unattended-pull-and-restart tool where you don't want an upstream
+    # tag moving out from under you unnoticed. Its own updates aren't
+    # tracked by itself (it only watches labeled containers, not its own
+    # image); bump this digest by hand when you want a newer Watchtower.
+    image: nickfedor/watchtower@sha256:3b8d2e3f0f6ff9295a5d634e4fdb7062e5e6602f71d89baa15cd4d39d22b5743
+    container_name: rack-temp-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_POLL_INTERVAL: "21600" # 6 hours
+      # Even the updated image still negotiates too low an API
+      # version on some hosts (a known Docker Go SDK client bug when the
+      # automatic negotiation fails) — force it explicitly to a
+      # recent version instead of letting it decide on its own.
+      DOCKER_API_VERSION: "1.44"

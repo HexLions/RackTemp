@@ -28,11 +28,16 @@ jobs:
         run: echo "IMAGE=$(echo $IMAGE | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
 
       - name: Compute tags
+        # :latest only moves on a published release, not on every push to
+        # main (FASE 5.2) — Portainer/Watchtower deploys pinned to :latest
+        # otherwise pick up unreleased, still-in-progress work the moment
+        # it lands on main. Every build still gets a sha tag either way,
+        # so a specific main commit's image stays pullable/debuggable.
         run: |
-          TAGS="${IMAGE}:latest
-          ${IMAGE}:${GITHUB_SHA}"
+          TAGS="${IMAGE}:${GITHUB_SHA}"
           if [ "${{ github.event_name }}" = "release" ]; then
             TAGS="$TAGS
+          ${IMAGE}:latest
           ${IMAGE}:${{ github.event.release.tag_name }}"
           fi
           echo "TAGS<<EOF" >> "$GITHUB_ENV"
