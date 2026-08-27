@@ -193,3 +193,20 @@ model BackupSettings {
   lastBackupAt   DateTime?
   updatedAt      DateTime  @updatedAt
 }
+
+// Security-relevant events — auth attempts, credential/config changes —
+// not a general activity log. Useful even with a single admin account: it's
+// the only record of "did this really happen, and from where" if a session
+// was stolen or someone had physical/network access. See services/auditLog.ts.
+// Note the obvious limitation: /restore-backup replaces this table along
+// with everything else, so a restore is the one event that erases its own
+// trail — same as it would for any other row in the database.
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String
+  detail    String?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}

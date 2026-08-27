@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import { api, ApiError } from "../../api/client";
 import WindowsAppCard from "./WindowsAppCard";
 import MfaCard from "./MfaCard";
+import AuditLogCard from "./AuditLogCard";
 import CopyField from "../../components/CopyField";
 
 export default function AccountSection() {
@@ -118,6 +119,8 @@ export default function AccountSection() {
           </form>
         )}
       </div>
+
+      <AuditLogCard />
     </>
   );
 }

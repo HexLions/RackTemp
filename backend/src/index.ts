@@ -28,6 +28,7 @@ import { startBackupScheduler } from "./services/backupScheduler";
 import { resolveSessionSecret } from "./services/sessionSecret";
 import { getServerSettings } from "./services/serverSettings";
 import { resolveTlsCert } from "./services/tls";
+import { writeSetupTokenFile, clearSetupTokenFile } from "./services/setupTokenFile";
 import { initWs } from "./ws";
 
 const PORT = Number(process.env.PORT) || 7431;
@@ -37,8 +38,11 @@ const SESSION_SECRET = resolveSessionSecret();
 // only the operator has" bar as the setup portal's AP password (see the
 // firmware). Whoever completes /first-login or /restore-backup needs to
 // have read this from the server's own logs (docker compose logs /
-// journalctl -u racktemp), not just be first to hit the endpoint over the
-// network — the default admin/admin credentials alone used to be enough.
+// journalctl -u racktemp / service.log on Windows) or the SETUP-TOKEN.txt
+// file next to the database (services/setupTokenFile.ts — also what the
+// Windows tray app watches for a balloon notification), not just be first
+// to hit the endpoint over the network — the default admin/admin
+// credentials alone used to be enough.
 function generateBootstrapToken(): string {
   return randomBytes(4).toString("hex");
 }
@@ -55,6 +59,17 @@ async function bootstrapAdmin() {
     });
     console.log('[bootstrap] created default admin user "admin" / "admin" — you will be asked to set a real username and password on first login');
     console.log(`[bootstrap] setup token (needed for first-login / restore-backup): ${bootstrapToken}`);
+    writeSetupTokenFile(bootstrapToken);
+    return;
+  }
+
+  if (!existing.mustChangePassword) {
+    // Already configured — e.g. this boot is right after /restore-backup
+    // replaced the database with one belonging to a fully set-up admin.
+    // Any leftover SETUP-TOKEN.txt from before the restore is now for a
+    // token that no longer matches anything; clear it rather than leave a
+    // stale file around.
+    clearSetupTokenFile();
     return;
   }
 
@@ -63,12 +78,11 @@ async function bootstrapAdmin() {
   // log, so hand out a fresh one every time this happens rather than
   // leaving the instance impossible to finish setting up without wiping
   // the database.
-  if (existing.mustChangePassword) {
-    const bootstrapToken = generateBootstrapToken();
-    const bootstrapTokenHash = await bcrypt.hash(bootstrapToken, 12);
-    await prisma.adminUser.update({ where: { id: existing.id }, data: { bootstrapTokenHash } });
-    console.log(`[bootstrap] setup not finished yet — setup token (needed for first-login / restore-backup): ${bootstrapToken}`);
-  }
+  const bootstrapToken = generateBootstrapToken();
+  const bootstrapTokenHash = await bcrypt.hash(bootstrapToken, 12);
+  await prisma.adminUser.update({ where: { id: existing.id }, data: { bootstrapTokenHash } });
+  console.log(`[bootstrap] setup not finished yet — setup token (needed for first-login / restore-backup): ${bootstrapToken}`);
+  writeSetupTokenFile(bootstrapToken);
 }
 
 async function main() {
@@ -118,11 +132,16 @@ async function main() {
   // either way. The previous `origin: true` reflected any Origin header
   // with credentials allowed — permissive for no actual benefit.
   app.use(express.json());
+  // Default lowered from the old 7 days to 24h: a week-long cookie is a lot
+  // of standing exposure for a stolen/left-open session, and 24h already
+  // covers a full workday without re-login. Configurable for setups that
+  // want it shorter (or, if you really want the old behavior back, longer).
+  const sessionMaxAgeMs = (Number(process.env.SESSION_MAX_AGE_HOURS) || 24) * 3600_000;
   app.use(
     cookieSession({
       name: "session",
       keys: [SESSION_SECRET],
-      maxAge: 7 * 24 * 3600_000,
+      maxAge: sessionMaxAgeMs,
       // "strict" over "lax": nothing in this app links in from another site,
       // so there's no legitimate cross-site GET that needs the cookie —
       // strict closes that off too. Secure automatically when this process

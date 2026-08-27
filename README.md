@@ -204,10 +204,11 @@ app after a full exit, the service starts back up on its own (another UAC prompt
 
 The database lives in `%ProgramData%\RackTemp\data\`, outside Program Files: reinstalling or
 updating (by downloading and running a newer `Setup.exe`) doesn't touch the data or the
-`SESSION_SECRET` generated at first install. The service's console output (including the
-first-login/restore setup token — see "First login" above) goes to
-`%ProgramData%\RackTemp\service.log`, not a console window (the service has none). To build
-the installer from source:
+`SESSION_SECRET` generated at first install. The service's console output goes to
+`%ProgramData%\RackTemp\service.log`, not a console window (the service has none) — the
+first-login/restore setup token is in there, but the tray app also watches for it and pops up
+a balloon notification with it automatically, no log-hunting needed. To build the installer
+from source:
 
 ```powershell
 # Requires Node.js + .NET 8 SDK + Inno Setup 6 (winget install JRSoftware.InnoSetup) on the build machine

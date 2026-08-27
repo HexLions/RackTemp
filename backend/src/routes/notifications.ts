@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../db";
 import { requireAuth } from "../middleware/auth";
 import { sendEmail, sendTelegram } from "../services/notifier";
+import { encryptField, decryptField } from "../services/fieldEncryption";
 
 export const notificationsRouter = Router();
 notificationsRouter.use(ah(requireAuth));
@@ -21,9 +22,9 @@ notificationsRouter.get("/config", ah(async (_req, res) => {
   });
   res.json({
     ...cfg,
-    smtpPass: mask(cfg.smtpPass),
-    telegramToken: mask(cfg.telegramToken),
-    graphClientSecret: mask(cfg.graphClientSecret),
+    smtpPass: mask(decryptField(cfg.smtpPass)),
+    telegramToken: mask(decryptField(cfg.telegramToken)),
+    graphClientSecret: mask(decryptField(cfg.graphClientSecret)),
   });
 }));
 
@@ -56,6 +57,13 @@ notificationsRouter.put("/config", ah(async (req, res) => {
   if (data.telegramToken?.includes("****")) delete data.telegramToken;
   if (data.graphClientSecret?.includes("****")) delete data.graphClientSecret;
 
+  // Encrypt at rest — a real value replacing the field re-encrypts it (this
+  // is also how a pre-encryption install's plaintext row self-heals: the
+  // next time each secret is actually changed, it's saved back encrypted).
+  if (data.smtpPass) data.smtpPass = encryptField(data.smtpPass);
+  if (data.telegramToken) data.telegramToken = encryptField(data.telegramToken);
+  if (data.graphClientSecret) data.graphClientSecret = encryptField(data.graphClientSecret);
+
   const cfg = await prisma.notificationConfig.upsert({
     where: { id: 1 },
     update: data,
@@ -63,9 +71,9 @@ notificationsRouter.put("/config", ah(async (req, res) => {
   });
   res.json({
     ...cfg,
-    smtpPass: mask(cfg.smtpPass),
-    telegramToken: mask(cfg.telegramToken),
-    graphClientSecret: mask(cfg.graphClientSecret),
+    smtpPass: mask(decryptField(cfg.smtpPass)),
+    telegramToken: mask(decryptField(cfg.telegramToken)),
+    graphClientSecret: mask(decryptField(cfg.graphClientSecret)),
   });
 }));
 

@@ -177,3 +177,14 @@ systemRouter.post("/https-settings/regenerate-cert", ah(async (_req, res) => {
   // selfsigned's own .fingerprint field uses a different format.
   res.json(tlsCertInfo());
 }));
+
+// Security-relevant events only (auth attempts, credential/config changes) —
+// see services/auditLog.ts for what gets logged and why.
+systemRouter.get("/audit-log", ah(async (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 100, 500);
+  const logs = await prisma.auditLog.findMany({
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+  res.json(logs);
+}));

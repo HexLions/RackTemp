@@ -11,7 +11,10 @@ import QRCode from "qrcode";
 import { PrismaClient } from "@prisma/client";
 import { prisma } from "../db";
 import { resolveDbPath, resolveDataDir } from "../services/dbPath";
+import { encryptField, decryptField } from "../services/fieldEncryption";
 import { sendEmail } from "../services/notifier";
+import { logAudit } from "../services/auditLog";
+import { clearSetupTokenFile } from "../services/setupTokenFile";
 
 export const authRouter = Router();
 
@@ -27,6 +30,7 @@ authRouter.post("/login", ah(async (req, res) => {
   const { username, password } = parsed.data;
   const user = await prisma.adminUser.findUnique({ where: { username } });
   if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+    await logAudit("login_failed", { detail: `username: ${username}`, ip: req.ip });
     return res.status(401).json({ error: "invalid credentials" });
   }
 
@@ -45,6 +49,7 @@ authRouter.post("/login", ah(async (req, res) => {
   (req.session as any).userId = user.id;
   (req.session as any).mustChangePassword = user.mustChangePassword;
   (req.session as any).epoch = user.sessionEpoch;
+  await logAudit("login", { detail: `username: ${username}`, ip: req.ip });
   res.json({ ok: true, username: user.username, mustChangePassword: user.mustChangePassword });
 }));
 
@@ -64,7 +69,8 @@ authRouter.post("/mfa/login", ah(async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "invalid body" });
 
   const user = await prisma.adminUser.findUnique({ where: { id: session.pendingMfaUserId } });
-  if (!user?.totpEnabled || !user.totpSecret || !authenticator.check(parsed.data.code, user.totpSecret)) {
+  if (!user?.totpEnabled || !user.totpSecret || !authenticator.check(parsed.data.code, decryptField(user.totpSecret)!)) {
+    await logAudit("mfa_login_failed", { ip: req.ip });
     return res.status(401).json({ error: "invalid code" });
   }
 
@@ -73,13 +79,19 @@ authRouter.post("/mfa/login", ah(async (req, res) => {
   session.userId = user.id;
   session.mustChangePassword = user.mustChangePassword;
   session.epoch = user.sessionEpoch;
+  await logAudit("mfa_login", { detail: `username: ${user.username}`, ip: req.ip });
   res.json({ ok: true, username: user.username, mustChangePassword: user.mustChangePassword });
 }));
 
-authRouter.post("/logout", (req, res) => {
+authRouter.post("/logout", ah(async (req, res) => {
+  const session = req.session as any;
+  if (session?.userId) {
+    const user = await prisma.adminUser.findUnique({ where: { id: session.userId } });
+    await logAudit("logout", { detail: user ? `username: ${user.username}` : undefined, ip: req.ip });
+  }
   req.session = null;
   res.json({ ok: true });
-});
+}));
 
 authRouter.get("/me", ah(async (req, res) => {
   const session = req.session as any;
@@ -143,6 +155,8 @@ authRouter.post("/first-login", ah(async (req, res) => {
   });
 
   session.mustChangePassword = false;
+  clearSetupTokenFile();
+  await logAudit("first_login_completed", { detail: `username: ${updated.username}`, ip: req.ip });
   res.json({ ok: true, username: updated.username, mustChangePassword: false, recoveryKey });
 }));
 
@@ -224,6 +238,13 @@ authRouter.post("/restore-backup", requireFirstLoginSession, restoreUpload.singl
     return res.status(500).json({ error: "database path not configured" });
   }
 
+  // Logged to the process's own stdout, not AuditLog: this is about to
+  // overwrite the entire database, log table included, so a written-then-
+  // discarded row would tell nobody anything. The console line at least
+  // survives in the service's own log file (docker compose logs /
+  // journalctl / service.log — same places the bootstrap token shows up).
+  console.warn(`[audit] restore-backup: replacing the database from an uploaded file (ip: ${req.ip ?? "unknown"})`);
+
   await prisma.$disconnect();
   fs.copyFileSync(req.file.path, dbPath);
   cleanup();
@@ -264,6 +285,7 @@ authRouter.post("/change-password", ah(async (req, res) => {
     data: { passwordHash, sessionEpoch: { increment: 1 } },
   });
   session.epoch = updated.sessionEpoch;
+  await logAudit("password_change", { detail: `username: ${updated.username}`, ip: req.ip });
   res.json({ ok: true });
 }));
 
@@ -302,7 +324,7 @@ authRouter.post("/mfa/setup", ah(async (req, res) => {
   }
 
   const secret = authenticator.generateSecret();
-  await prisma.adminUser.update({ where: { id: user.id }, data: { totpSecret: secret, totpEnabled: false } });
+  await prisma.adminUser.update({ where: { id: user.id }, data: { totpSecret: encryptField(secret), totpEnabled: false } });
 
   const otpauth = authenticator.keyuri(user.username, "RackTemp", secret);
   const qrDataUrl = await QRCode.toDataURL(otpauth);
@@ -320,7 +342,7 @@ authRouter.post("/mfa/enable", ah(async (req, res) => {
 
   const user = await prisma.adminUser.findUnique({ where: { id: session.userId } });
   if (!user?.totpSecret) return res.status(400).json({ error: "call /mfa/setup first" });
-  if (!authenticator.check(parsed.data.code, user.totpSecret)) {
+  if (!authenticator.check(parsed.data.code, decryptField(user.totpSecret)!)) {
     return res.status(400).json({ error: "invalid code" });
   }
 
@@ -332,6 +354,7 @@ authRouter.post("/mfa/enable", ah(async (req, res) => {
     data: { totpEnabled: true, sessionEpoch: { increment: 1 } },
   });
   session.epoch = updated.sessionEpoch;
+  await logAudit("mfa_enabled", { detail: `username: ${updated.username}`, ip: req.ip });
   res.json({ ok: true });
 }));
 
@@ -356,6 +379,7 @@ authRouter.post("/mfa/disable", ah(async (req, res) => {
     data: { totpEnabled: false, totpSecret: null, sessionEpoch: { increment: 1 } },
   });
   session.epoch = updated.sessionEpoch;
+  await logAudit("mfa_disabled", { detail: `username: ${updated.username}`, ip: req.ip });
   res.json({ ok: true });
 }));
 
@@ -450,6 +474,7 @@ authRouter.post("/reset-password-with-key", ah(async (req, res) => {
   const user = await prisma.adminUser.findUnique({ where: { id: 1 } });
   if (!user?.recoveryKeyHash) return res.status(400).json({ error: "no recovery key set for this account" });
   if (!(await bcrypt.compare(parsed.data.recoveryKey, user.recoveryKeyHash))) {
+    await logAudit("password_reset_recovery_key_failed", { ip: req.ip });
     return res.status(400).json({ error: "invalid recovery key" });
   }
 
@@ -476,6 +501,7 @@ authRouter.post("/reset-password-with-key", ah(async (req, res) => {
     },
   });
 
+  await logAudit("password_reset_recovery_key", { ip: req.ip });
   res.json({ ok: true, newRecoveryKey });
 }));
 
@@ -496,6 +522,7 @@ authRouter.post("/reset-password", ah(async (req, res) => {
     return res.status(400).json({ error: "reset link expired, request a new one" });
   }
   if (!(await bcrypt.compare(parsed.data.token, user.resetTokenHash))) {
+    await logAudit("password_reset_email_failed", { ip: req.ip });
     return res.status(400).json({ error: "invalid reset link" });
   }
 
@@ -515,5 +542,6 @@ authRouter.post("/reset-password", ah(async (req, res) => {
     },
   });
 
+  await logAudit("password_reset_email", { ip: req.ip });
   res.json({ ok: true });
 }));
