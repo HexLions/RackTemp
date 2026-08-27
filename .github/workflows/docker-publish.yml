@@ -66,3 +66,10 @@ jobs:
           tags: ${{ env.TAGS }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # SLSA build provenance + SBOM attached to the image, so anyone
+          # pulling it can verify it was actually built by this workflow
+          # from this source, not tampered with in transit or substituted
+          # at the registry. Completes the FASE 5 supply-chain work
+          # (:latest only on release, Watchtower opt-in+pinned).
+          provenance: mode=max
+          sbom: true
