@@ -16,7 +16,11 @@ const ingestSchema = z.object({
 });
 
 ingestRouter.post("/", ah(async (req, res) => {
-  const apiKey = req.header("X-Api-Key") ?? (req.query.apiKey as string | undefined);
+  // Header only — a query-string fallback would put the credential in every
+  // reverse proxy's access log. The firmware always sends X-Api-Key already;
+  // unlike /api/prtg/* and /api/status/*, nothing needs this in a URL (PRTG
+  // and monitoring tools are the reason those two keep the query-string form).
+  const apiKey = req.header("X-Api-Key");
   if (!apiKey) return res.status(401).json({ error: "missing api key" });
 
   const sensor = await prisma.sensor.findUnique({ where: { apiKey } });
