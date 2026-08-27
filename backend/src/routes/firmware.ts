@@ -6,10 +6,14 @@ import path from "path";
 import { createHash } from "crypto";
 import { prisma } from "../db";
 import { requireAuth } from "../middleware/auth";
+import { resolveDataDir } from "../services/dbPath";
 
 export const firmwareRouter = Router();
 
-const FIRMWARE_DIR = path.join(__dirname, "../../data/firmware");
+// resolveDataDir(), not a hardcoded "../../data": correct on the native
+// Windows/Linux installs too, where the actual data dir isn't next to the
+// program files (see services/dbPath.ts).
+const FIRMWARE_DIR = path.join(resolveDataDir(), "firmware");
 fs.mkdirSync(FIRMWARE_DIR, { recursive: true });
 const BIN_PATH = path.join(FIRMWARE_DIR, "latest.bin");
 

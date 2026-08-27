@@ -10,7 +10,7 @@ import { authenticator } from "otplib";
 import QRCode from "qrcode";
 import { PrismaClient } from "@prisma/client";
 import { prisma } from "../db";
-import { resolveDbPath } from "../services/dbPath";
+import { resolveDbPath, resolveDataDir } from "../services/dbPath";
 import { sendEmail } from "../services/notifier";
 
 export const authRouter = Router();
@@ -151,7 +151,9 @@ authRouter.post("/first-login", ah(async (req, res) => {
 // with an uploaded .sqlite backup, instead of configuring everything from
 // scratch. Double gate — authenticated session + mustChangePassword still
 // true — so it can never be invoked on an already-configured instance.
-const RESTORE_TMP_DIR = path.join(__dirname, "../../data/restore-tmp");
+// resolveDataDir(), not a hardcoded "../../data": correct on the native
+// Windows/Linux installs too (see services/dbPath.ts).
+const RESTORE_TMP_DIR = path.join(resolveDataDir(), "restore-tmp");
 fs.mkdirSync(RESTORE_TMP_DIR, { recursive: true });
 // An upload interrupted mid-request (client disconnects, process restarts)
 // never reaches the handler's own cleanup() below and leaves an orphaned
