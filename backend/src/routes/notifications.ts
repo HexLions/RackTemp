@@ -6,7 +6,7 @@ import { requireAuth } from "../middleware/auth";
 import { sendEmail, sendTelegram } from "../services/notifier";
 
 export const notificationsRouter = Router();
-notificationsRouter.use(requireAuth);
+notificationsRouter.use(ah(requireAuth));
 
 function mask(secret: string | null | undefined) {
   if (!secret) return null;

@@ -6,7 +6,7 @@ import { prisma } from "../db";
 import { requireAuth } from "../middleware/auth";
 
 export const sensorsRouter = Router();
-sensorsRouter.use(requireAuth);
+sensorsRouter.use(ah(requireAuth));
 
 // How long /api/discovery/announce will hand back a linked sensor's API key
 // for. Opened by an admin action (creating/claiming with a chipId, or

@@ -39,7 +39,7 @@ firmwareRouter.get("/latest.bin", (_req, res) => {
   res.sendFile(BIN_PATH);
 });
 
-firmwareRouter.post("/", requireAuth, upload.single("firmware"), ah(async (req, res) => {
+firmwareRouter.post("/", ah(requireAuth), upload.single("firmware"), ah(async (req, res) => {
   const version = (req.body?.version ?? "").trim();
   const notes = (req.body?.notes ?? "").trim() || null;
   if (!version || !req.file) {

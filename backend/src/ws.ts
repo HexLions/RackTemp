@@ -2,12 +2,14 @@ import { WebSocketServer, WebSocket } from "ws";
 import type { Server, IncomingMessage } from "http";
 import { parse as parseCookies } from "cookie";
 import Keygrip from "keygrip";
+import { prisma } from "./db";
 
 let wss: WebSocketServer | null = null;
 
 interface SessionPayload {
   userId?: number;
   mustChangePassword?: boolean;
+  epoch?: number;
 }
 
 // Replicates cookie-session's own verification exactly (read from its
@@ -43,13 +45,21 @@ export function initWs(server: Server, sessionSecret: string) {
     server,
     path: "/ws",
     maxPayload: 4096,
+    // Async: the signed cookie alone isn't enough anymore — it has to match
+    // the account's current sessionEpoch too, same revocation check as
+    // requireAuth (middleware/auth.ts), otherwise a cookie revoked by a
+    // password change/reset or MFA toggle would keep receiving live
+    // readings over this connection even after every REST endpoint rejects it.
     verifyClient: (info, callback) => {
       const session = readSession(info.req, sessionSecret);
       if (!session?.userId || session.mustChangePassword) {
         callback(false, 401, "Unauthorized");
         return;
       }
-      callback(true);
+      prisma.adminUser
+        .findUnique({ where: { id: session.userId } })
+        .then((user) => callback(!!user && session.epoch === user.sessionEpoch, 401, "Unauthorized"))
+        .catch(() => callback(false, 500, "Internal error"));
     },
   });
 

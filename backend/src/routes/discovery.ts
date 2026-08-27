@@ -97,7 +97,7 @@ discoveryRouter.post("/announce", ah(async (req, res) => {
   res.status(204).end();
 }));
 
-discoveryRouter.get("/", requireAuth, ah(async (_req, res) => {
+discoveryRouter.get("/", ah(requireAuth), ah(async (_req, res) => {
   const since = new Date(Date.now() - ACTIVE_WINDOW_MS);
   const devices = await prisma.discoveredDevice.findMany({
     where: { lastSeenAt: { gte: since } },
@@ -109,7 +109,7 @@ discoveryRouter.get("/", requireAuth, ah(async (_req, res) => {
 // `as string`: Express 5 widened req.params values to `string | string[]`
 // for wildcard (`*name`) params — every route here uses a plain `:id`, so
 // it's always a single string at runtime.
-discoveryRouter.delete("/:id", requireAuth, ah(async (req, res) => {
+discoveryRouter.delete("/:id", ah(requireAuth), ah(async (req, res) => {
   await prisma.discoveredDevice.deleteMany({ where: { id: req.params.id as string } });
   res.status(204).end();
 }));
@@ -121,7 +121,7 @@ const claimSchema = z.object({ sensorId: z.string().min(1) });
 // polling /announce for a key. Opens a fresh 10-minute handout window —
 // the device picks the key up on its next poll, no manual copy-paste, no
 // re-opening the setup portal, as long as that poll lands inside the window.
-discoveryRouter.post("/:id/claim", requireAuth, ah(async (req, res) => {
+discoveryRouter.post("/:id/claim", ah(requireAuth), ah(async (req, res) => {
   const parsed = claimSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid body" });
 
