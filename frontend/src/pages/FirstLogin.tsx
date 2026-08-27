@@ -15,6 +15,8 @@ export default function FirstLogin() {
   const [newUsername, setNewUsername] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [bootstrapToken, setBootstrapToken] = useState("");
+  const [restoreBootstrapToken, setRestoreBootstrapToken] = useState("");
   const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -37,6 +39,7 @@ export default function FirstLogin() {
       const res = await api.post<{ username: string; recoveryKey: string }>("/auth/first-login", {
         newUsername,
         newPassword,
+        bootstrapToken,
       });
       setRecoveryKey(res.recoveryKey);
       setMode("show-key");
@@ -60,6 +63,7 @@ export default function FirstLogin() {
     try {
       const form = new FormData();
       form.append("backup", file);
+      form.append("bootstrapToken", restoreBootstrapToken);
       const res = await fetch("/api/auth/restore-backup", { method: "POST", credentials: "include", body: form });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -110,10 +114,24 @@ export default function FirstLogin() {
             </span>
             First login
           </div>
-          <p className="subtitle">Choose your final username and password to continue.</p>
+          <p className="subtitle">
+            Choose your final username and password to continue. You'll also need the setup token printed in
+            the server logs (<code>docker compose logs</code> / <code>journalctl -u racktemp</code>) when it
+            started.
+          </p>
+          <label>
+            Setup token
+            <input
+              value={bootstrapToken}
+              onChange={(e) => setBootstrapToken(e.target.value)}
+              autoFocus
+              required
+              placeholder="printed in the server logs at startup"
+            />
+          </label>
           <label>
             New username
-            <input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} autoFocus required minLength={3} />
+            <input value={newUsername} onChange={(e) => setNewUsername(e.target.value)} required minLength={3} />
           </label>
           <label>
             New password
@@ -151,8 +169,19 @@ export default function FirstLogin() {
           </div>
           <p className="subtitle">
             Upload a <code>.sqlite</code> file downloaded from Settings → Backup on another RackTemp
-            installation. Username and password will be those from the backup, not admin/admin.
+            installation. Username and password will be those from the backup, not admin/admin. You'll also
+            need the setup token printed in the server logs (<code>docker compose logs</code> /{" "}
+            <code>journalctl -u racktemp</code>) when it started.
           </p>
+          <label>
+            Setup token
+            <input
+              value={restoreBootstrapToken}
+              onChange={(e) => setRestoreBootstrapToken(e.target.value)}
+              required
+              placeholder="printed in the server logs at startup"
+            />
+          </label>
           <label>
             Backup file
             <input type="file" accept=".sqlite" ref={fileInput} required />
