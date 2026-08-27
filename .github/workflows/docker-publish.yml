@@ -31,14 +31,18 @@ jobs:
         # :latest only moves on a published release, not on every push to
         # main (FASE 5.2) — Portainer/Watchtower deploys pinned to :latest
         # otherwise pick up unreleased, still-in-progress work the moment
-        # it lands on main. Every build still gets a sha tag either way,
-        # so a specific main commit's image stays pullable/debuggable.
+        # it lands on main. A main push instead gets :edge (deliberately
+        # opt-in for anyone who wants bleeding-edge) and a short-sha tag;
+        # a release gets :latest, its own version tag, and a short-sha tag.
         run: |
-          TAGS="${IMAGE}:${GITHUB_SHA}"
+          SHORT_SHA="${GITHUB_SHA:0:7}"
           if [ "${{ github.event_name }}" = "release" ]; then
-            TAGS="$TAGS
-          ${IMAGE}:latest
-          ${IMAGE}:${{ github.event.release.tag_name }}"
+            TAGS="${IMAGE}:latest
+          ${IMAGE}:${{ github.event.release.tag_name }}
+          ${IMAGE}:sha-${SHORT_SHA}"
+          else
+            TAGS="${IMAGE}:edge
+          ${IMAGE}:sha-${SHORT_SHA}"
           fi
           echo "TAGS<<EOF" >> "$GITHUB_ENV"
           echo "$TAGS" >> "$GITHUB_ENV"

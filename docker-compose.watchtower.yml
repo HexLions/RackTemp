@@ -37,6 +37,13 @@ services:
       WATCHTOWER_LABEL_ENABLE: "true"
       WATCHTOWER_CLEANUP: "true"
       WATCHTOWER_POLL_INTERVAL: "21600" # 6 hours
+      # Suggested default: notify that an update is available instead of
+      # applying it unattended. This container already holds the Docker
+      # socket (root on the host); combined with auto-apply, a compromised
+      # GHCR token or GitHub account would reach every machine running this
+      # stack within one poll interval, with no review step in between. Set
+      # to "false" only once you've deliberately accepted that tradeoff.
+      WATCHTOWER_MONITOR_ONLY: "true"
       # Even the updated image still negotiates too low an API
       # version on some hosts (a known Docker Go SDK client bug when the
       # automatic negotiation fails) — force it explicitly to a

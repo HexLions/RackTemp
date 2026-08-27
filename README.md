@@ -152,7 +152,8 @@ Prefer to manage it from Portainer? Use the ready-made stack at
 [`docker-compose.portainer.yml`](docker-compose.portainer.yml) — unlike the main
 compose file it doesn't build from a Dockerfile (Portainer has no access to the local repo), but pulls
 the ready-made image from `ghcr.io/hexlions/racktemp`. `:latest` there tracks published
-[releases](https://github.com/HexLions/RackTemp/releases), not every push to `main` — see
+[releases](https://github.com/HexLions/RackTemp/releases), not every push to `main` (that's `:edge`,
+for anyone who deliberately wants bleeding-edge) — see
 [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml).
 
 1. **Stacks** → **Add stack**, any name.

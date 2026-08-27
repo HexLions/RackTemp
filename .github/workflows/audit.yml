@@ -19,7 +19,7 @@ on:
       - "backend/package-lock.json"
       - "frontend/package.json"
       - "frontend/package-lock.json"
-      - ".github/workflows/npm-audit.yml"
+      - ".github/workflows/audit.yml"
   schedule:
     - cron: "0 6 * * 1" # every Monday, 06:00 UTC
   workflow_dispatch:
