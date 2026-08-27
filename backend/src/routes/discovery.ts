@@ -33,9 +33,15 @@ function discoveryNotifyAllowed(): boolean {
   return true;
 }
 
+// Exactly 16 hex chars: firmware/rack_temp_sensor/rack_temp_sensor.ino's
+// chipId() does snprintf(buf, sizeof(buf), "%016llX", mac) — a zero-padded
+// 64-bit MAC, always 16 chars, uppercase (case-insensitive here anyway,
+// costs nothing and both cases are the same value). Unauthenticated
+// endpoint, 30 req/min — without a shape check chipId was an unbounded
+// string with no charset limit, straight into a unique DiscoveredDevice row.
 const announceSchema = z.object({
-  chipId: z.string().min(1),
-  firmware: z.string().optional(),
+  chipId: z.string().regex(/^[0-9A-Fa-f]{16}$/),
+  firmware: z.string().max(32).optional(),
 });
 
 // Called by ESP32/ESP8266 firmware on boot, and repeatedly on every loop
