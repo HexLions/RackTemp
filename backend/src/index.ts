@@ -44,9 +44,9 @@ async function bootstrapAdmin() {
   const existing = await prisma.adminUser.findFirst();
 
   if (!existing) {
-    const passwordHash = await bcrypt.hash("admin", 10);
+    const passwordHash = await bcrypt.hash("admin", 12);
     const bootstrapToken = generateBootstrapToken();
-    const bootstrapTokenHash = await bcrypt.hash(bootstrapToken, 10);
+    const bootstrapTokenHash = await bcrypt.hash(bootstrapToken, 12);
     await prisma.adminUser.create({
       data: { username: "admin", passwordHash, mustChangePassword: true, bootstrapTokenHash },
     });
@@ -62,7 +62,7 @@ async function bootstrapAdmin() {
   // the database.
   if (existing.mustChangePassword) {
     const bootstrapToken = generateBootstrapToken();
-    const bootstrapTokenHash = await bcrypt.hash(bootstrapToken, 10);
+    const bootstrapTokenHash = await bcrypt.hash(bootstrapToken, 12);
     await prisma.adminUser.update({ where: { id: existing.id }, data: { bootstrapTokenHash } });
     console.log(`[bootstrap] setup not finished yet — setup token (needed for first-login / restore-backup): ${bootstrapToken}`);
   }
