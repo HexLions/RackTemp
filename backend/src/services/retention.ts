@@ -27,6 +27,19 @@ async function pruneStaleDiscoveredDevices() {
   }
 }
 
+// A year of security-relevant events (auth attempts, credential/config
+// changes — see services/auditLog.ts) by default, well past what's useful
+// for spotting a pattern after the fact but not unbounded growth either.
+const AUDIT_LOG_RETENTION_DAYS = Number(process.env.AUDIT_LOG_RETENTION_DAYS) || 365;
+
+async function pruneOldAuditLog() {
+  const cutoff = new Date(Date.now() - AUDIT_LOG_RETENTION_DAYS * 24 * 3600_000);
+  const result = await prisma.auditLog.deleteMany({ where: { createdAt: { lt: cutoff } } });
+  if (result.count > 0) {
+    console.log(`[retention] pruned ${result.count} audit log entries older than ${AUDIT_LOG_RETENTION_DAYS}d`);
+  }
+}
+
 // Keeps the readings table from growing forever on a long-running self-hosted
 // instance. Runs once at boot and then daily. Override with
 // READING_RETENTION_DAYS if 90 days of history isn't what you want.
@@ -34,6 +47,7 @@ export function startRetentionWatcher() {
   const run = () => {
     pruneOldReadings().catch((err) => console.error("retention prune failed", err));
     pruneStaleDiscoveredDevices().catch((err) => console.error("discovered-device prune failed", err));
+    pruneOldAuditLog().catch((err) => console.error("audit-log prune failed", err));
   };
   run();
   setInterval(run, CHECK_INTERVAL_MS);

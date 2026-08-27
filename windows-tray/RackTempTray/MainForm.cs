@@ -25,12 +25,26 @@ public class MainForm : Form
     private const string AutostartRunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string AutostartValueName = "RackTemp";
 
+    // Same file the backend writes/deletes (services/setupTokenFile.ts),
+    // same %ProgramData%\RackTemp\data as the database — see the README's
+    // Windows section. Polled rather than a FileSystemWatcher: the
+    // directory may not exist yet at tray startup (first backend boot
+    // hasn't run), and a plain interval check handles that without extra
+    // watcher-recreation logic for a file that's only ever touched a
+    // handful of times in an install's lifetime.
+    private static readonly string SetupTokenPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+        "RackTemp", "data", "SETUP-TOKEN.txt"
+    );
+
     private readonly NotifyIcon _trayIcon;
     private readonly WebView2 _webView;
     private readonly System.Windows.Forms.Timer _readyTimer;
+    private readonly System.Windows.Forms.Timer _setupTokenTimer;
     private ToolStripMenuItem _autostartMenuItem = null!;
     private bool _navigatedOnce;
     private bool _reallyExit;
+    private string? _lastShownSetupToken;
 
     public MainForm()
     {
@@ -65,6 +79,51 @@ public class MainForm : Form
         // which used to fail if the service wasn't up yet.
         _readyTimer = new System.Windows.Forms.Timer { Interval = 1000 };
         _readyTimer.Tick += async (_, _) => await TryNavigateWhenReadyAsync();
+
+        _setupTokenTimer = new System.Windows.Forms.Timer { Interval = 5000 };
+        _setupTokenTimer.Tick += (_, _) => CheckSetupToken();
+        _setupTokenTimer.Start();
+        CheckSetupToken();
+    }
+
+    // Shows a balloon with the setup token as soon as the backend writes
+    // it (fresh install, or a restart while first-login is still
+    // pending), so the admin never has to go find it in a log file.
+    // Doesn't re-show for the same token it already showed once — the
+    // balloon reappearing every 5s while the setup screen just sits there
+    // unfinished would be annoying, not helpful.
+    private void CheckSetupToken()
+    {
+        string? token = null;
+        try
+        {
+            if (File.Exists(SetupTokenPath))
+            {
+                token = File.ReadAllText(SetupTokenPath).Trim();
+            }
+        }
+        catch
+        {
+            // Read raced a write (backend regenerating it) or a transient
+            // access issue — try again on the next tick.
+            return;
+        }
+
+        if (string.IsNullOrEmpty(token))
+        {
+            _lastShownSetupToken = null;
+            return;
+        }
+
+        if (token == _lastShownSetupToken) return;
+        _lastShownSetupToken = token;
+
+        _trayIcon.ShowBalloonTip(
+            10000,
+            "RackTemp setup token",
+            $"Setup token: {token}\nEnter it on the first-login page to finish setting up RackTemp.",
+            ToolTipIcon.Info
+        );
     }
 
     private ContextMenuStrip BuildTrayMenu()

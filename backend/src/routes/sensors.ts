@@ -4,6 +4,7 @@ import { randomBytes } from "crypto";
 import { z } from "zod";
 import { prisma } from "../db";
 import { requireAuth } from "../middleware/auth";
+import { logAudit } from "../services/auditLog";
 
 export const sensorsRouter = Router();
 sensorsRouter.use(ah(requireAuth));
@@ -94,7 +95,9 @@ sensorsRouter.put("/:id", ah(async (req, res) => {
 }));
 
 sensorsRouter.delete("/:id", ah(async (req, res) => {
-  await prisma.sensor.delete({ where: { id: req.params.id as string } });
+  const id = req.params.id as string;
+  await prisma.sensor.delete({ where: { id } });
+  await logAudit("sensor_deleted", { detail: `sensor id: ${id}`, ip: req.ip });
   res.status(204).end();
 }));
 
@@ -104,6 +107,7 @@ sensorsRouter.post("/:id/regenerate-key", ah(async (req, res) => {
     where: { id: req.params.id as string },
     data: { apiKey },
   });
+  await logAudit("sensor_key_regenerated", { detail: `sensor: ${sensor.name} (${sensor.id})`, ip: req.ip });
   res.json(sensor);
 }));
 
