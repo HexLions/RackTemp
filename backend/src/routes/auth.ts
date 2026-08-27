@@ -11,6 +11,7 @@ import QRCode from "qrcode";
 import { PrismaClient } from "@prisma/client";
 import { prisma } from "../db";
 import { resolveDbPath, resolveDataDir } from "../services/dbPath";
+import { encryptField, decryptField } from "../services/fieldEncryption";
 import { sendEmail } from "../services/notifier";
 
 export const authRouter = Router();
@@ -64,7 +65,7 @@ authRouter.post("/mfa/login", ah(async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "invalid body" });
 
   const user = await prisma.adminUser.findUnique({ where: { id: session.pendingMfaUserId } });
-  if (!user?.totpEnabled || !user.totpSecret || !authenticator.check(parsed.data.code, user.totpSecret)) {
+  if (!user?.totpEnabled || !user.totpSecret || !authenticator.check(parsed.data.code, decryptField(user.totpSecret)!)) {
     return res.status(401).json({ error: "invalid code" });
   }
 
@@ -302,7 +303,7 @@ authRouter.post("/mfa/setup", ah(async (req, res) => {
   }
 
   const secret = authenticator.generateSecret();
-  await prisma.adminUser.update({ where: { id: user.id }, data: { totpSecret: secret, totpEnabled: false } });
+  await prisma.adminUser.update({ where: { id: user.id }, data: { totpSecret: encryptField(secret), totpEnabled: false } });
 
   const otpauth = authenticator.keyuri(user.username, "RackTemp", secret);
   const qrDataUrl = await QRCode.toDataURL(otpauth);
@@ -320,7 +321,7 @@ authRouter.post("/mfa/enable", ah(async (req, res) => {
 
   const user = await prisma.adminUser.findUnique({ where: { id: session.userId } });
   if (!user?.totpSecret) return res.status(400).json({ error: "call /mfa/setup first" });
-  if (!authenticator.check(parsed.data.code, user.totpSecret)) {
+  if (!authenticator.check(parsed.data.code, decryptField(user.totpSecret)!)) {
     return res.status(400).json({ error: "invalid code" });
   }
 

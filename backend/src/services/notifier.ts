@@ -2,9 +2,21 @@ import nodemailer from "nodemailer";
 import { Api as TelegramApi } from "node-telegram-bot-api";
 import { prisma } from "../db";
 import { sendGraphMail } from "./graphMailer";
+import { decryptField } from "./fieldEncryption";
 
+// Single choke point every consumer below (and sendGraphMail, which
+// receives this same object) goes through — decrypting here once means
+// smtpPass/telegramToken/graphClientSecret arrive already in plaintext
+// everywhere else in this file.
 async function getConfig() {
-  return prisma.notificationConfig.findUnique({ where: { id: 1 } });
+  const cfg = await prisma.notificationConfig.findUnique({ where: { id: 1 } });
+  if (!cfg) return cfg;
+  return {
+    ...cfg,
+    smtpPass: decryptField(cfg.smtpPass),
+    telegramToken: decryptField(cfg.telegramToken),
+    graphClientSecret: decryptField(cfg.graphClientSecret),
+  };
 }
 
 export async function sendEmail(
