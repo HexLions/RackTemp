@@ -35,4 +35,11 @@ USER node
 VOLUME ["/app/backend/data"]
 EXPOSE 7431
 
-CMD ["sh", "-c", "npx prisma db push --skip-generate && node dist/index.js"]
+# node node_modules/prisma/build/index.js directly, not "npx prisma": npx
+# invokes the npm CLI to resolve the binary, and npm bundles its own
+# vulnerable-at-rest transitive deps (tar/ip-address/brace-expansion —
+# flagged by the Trivy scan in docker-publish.yml) that then sit inside
+# the shipped image and get loaded at every container start for no
+# reason — the local prisma binary is already right here, no resolution
+# needed. Same invocation style linux/racktemp.service already uses.
+CMD ["sh", "-c", "node node_modules/prisma/build/index.js db push --skip-generate && node dist/index.js"]
