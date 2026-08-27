@@ -151,8 +151,10 @@ Readings are automatically pruned after 90 days so the DB doesn't grow forever
 Prefer to manage it from Portainer? Use the ready-made stack at
 [`docker-compose.portainer.yml`](docker-compose.portainer.yml) — unlike the main
 compose file it doesn't build from a Dockerfile (Portainer has no access to the local repo), but pulls
-the ready-made image from `ghcr.io/hexlions/racktemp`, published automatically on every push to
-`main` by [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml).
+the ready-made image from `ghcr.io/hexlions/racktemp`. `:latest` there tracks published
+[releases](https://github.com/HexLions/RackTemp/releases), not every push to `main` (that's `:edge`,
+for anyone who deliberately wants bleeding-edge) — see
+[`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml).
 
 1. **Stacks** → **Add stack**, any name.
 2. **Web editor**: paste the contents of `docker-compose.portainer.yml` (or **Upload** the file).
@@ -162,13 +164,15 @@ the ready-made image from `ghcr.io/hexlions/racktemp`, published automatically o
 Open `http://<pc-ip>:7431` — same behavior as the CLI deploy, including the first
 `admin`/`admin` login you need to change right away.
 
-The stack already includes **Watchtower**: as soon as a new image is out on GHCR (every push to
-`main`), the container updates and restarts itself within 6 hours, with no need to touch
-Portainer. The data stays intact (it lives in the `rack-temp-data` volume, not in the image). In
-**Settings → Updates** you'll still find a version indicator with a link to the release and a
-button to force an immediate redeploy via an optional Portainer webhook, if you don't want to
-wait for Watchtower's poll. To disable automatic updates, remove the `watchtower` service (and
-the matching label on `rack-temp-monitor`) from the stack.
+**Automatic updates (optional)**: this stack does *not* include Watchtower by default — pulling
+and restarting a container unattended, on a fixed poll, with no review step is worth choosing
+deliberately rather than getting it for free. If you want it anyway, deploy
+[`docker-compose.watchtower.yml`](docker-compose.watchtower.yml) as a second stack alongside this
+one: as soon as a new image is out on GHCR (i.e. a new release is published), it updates and
+restarts `rack-temp-monitor` within 6 hours. The data stays intact either way (it lives in the
+`rack-temp-data` volume, not in the image). In **Settings → Updates** you'll still find a version
+indicator with a link to the release and a button to force an immediate redeploy via an optional
+Portainer webhook, whether or not Watchtower is deployed.
 
 ---
 
@@ -496,7 +500,8 @@ RackTemp/
 ├── firmware/rack_temp_sensor/      ← ESP32-C3 Arduino sketch, WiFi setup via captive portal, OTA
 ├── Dockerfile                      ← multi-stage build, single image
 ├── docker-compose.yml               ← deploy via CLI (build from source)
-├── docker-compose.portainer.yml    ← deploy via Portainer (image from GHCR) + Watchtower
+├── docker-compose.portainer.yml    ← deploy via Portainer (image from GHCR)
+├── docker-compose.watchtower.yml   ← optional add-on stack: auto-update via Watchtower
 ├── installer/installer.iss         ← Windows installer (Inno Setup)
 ├── windows-tray/RackTempTray/      ← WebView2 window + tray icon for the Windows install
 ├── linux/                           ← systemd unit + install.sh/uninstall.sh
