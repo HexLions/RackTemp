@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { ah } from "../middleware/asyncHandler";
 import fs from "fs";
 import path from "path";
 import { z } from "zod";
@@ -57,7 +58,7 @@ function pickDownloadUrl(assets: GithubAsset[], target: DeployTarget): string | 
   return assets.find((a) => matcher.test(a.name))?.browser_download_url ?? null;
 }
 
-systemRouter.get("/update-check", async (_req, res) => {
+systemRouter.get("/update-check", ah(async (_req, res) => {
   try {
     const latest = await fetchLatestRelease();
     const platform = getDeployTarget();
@@ -72,9 +73,9 @@ systemRouter.get("/update-check", async (_req, res) => {
   } catch {
     res.status(502).json({ error: "unable to check releases on GitHub" });
   }
-});
+}));
 
-systemRouter.post("/trigger-update", async (_req, res) => {
+systemRouter.post("/trigger-update", ah(async (_req, res) => {
   const settings = await prisma.integrationSettings.findUnique({ where: { id: 1 } });
   if (!settings?.portainerWebhookUrl) {
     return res.status(400).json({ error: "no Portainer webhook configured in Integrations" });
@@ -86,9 +87,12 @@ systemRouter.post("/trigger-update", async (_req, res) => {
   } catch (err) {
     res.status(502).json({ error: err instanceof Error ? err.message : "webhook failed" });
   }
-});
+}));
 
-systemRouter.get("/backup", (_req, res) => {
+// POST, not GET: this downloads the entire database (admin password hash,
+// sensor API keys, notification credentials) — a GET could be triggered by
+// mere navigation or an embedded resource, not just a deliberate click.
+systemRouter.post("/backup", (_req, res) => {
   const dbPath = resolveDbPath();
   if (!dbPath || !fs.existsSync(dbPath)) {
     return res.status(404).json({ error: "database not found" });
@@ -106,23 +110,23 @@ const backupSettingsSchema = z.object({
   emailOnBackup: z.boolean(),
 });
 
-systemRouter.get("/backup-settings", async (_req, res) => {
+systemRouter.get("/backup-settings", ah(async (_req, res) => {
   res.json(await getBackupSettings());
-});
+}));
 
-systemRouter.put("/backup-settings", async (req, res) => {
+systemRouter.put("/backup-settings", ah(async (req, res) => {
   const parsed = backupSettingsSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.message });
   await getBackupSettings();
   const updated = await prisma.backupSettings.update({ where: { id: 1 }, data: parsed.data });
   res.json(updated);
-});
+}));
 
 systemRouter.get("/backups", (_req, res) => {
   res.json(listBackups());
 });
 
-systemRouter.post("/backups/run", async (req, res) => {
+systemRouter.post("/backups/run", ah(async (req, res) => {
   const emailIt = req.body?.email === true;
   try {
     const result = await performBackup(emailIt);
@@ -131,7 +135,7 @@ systemRouter.post("/backups/run", async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "backup failed" });
   }
-});
+}));
 
 systemRouter.get("/backups/:name/download", (req, res) => {
   const name = req.params.name;

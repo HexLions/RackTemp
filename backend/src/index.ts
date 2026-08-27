@@ -1,11 +1,12 @@
 import "dotenv/config";
 import express from "express";
 import cookieSession from "cookie-session";
-import cors from "cors";
 import rateLimit from "express-rate-limit";
+import helmet from "helmet";
 import path from "path";
 import bcrypt from "bcryptjs";
 import { createServer } from "http";
+import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { authRouter } from "./routes/auth";
 import { sensorsRouter } from "./routes/sensors";
@@ -52,14 +53,41 @@ async function main() {
     app.set("trust proxy", Number(process.env.TRUST_PROXY_HOPS));
   }
 
-  app.use(cors({ origin: true, credentials: true }));
+  app.use(
+    helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          imgSrc: ["'self'", "data:"], // MFA QR code is a data: URL
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          connectSrc: ["'self'", "ws:", "wss:"],
+          frameAncestors: ["'none'"],
+        },
+      },
+      hsts: false, // no-op on plain HTTP; a reverse proxy in front would set it
+    })
+  );
+
+  // No CORS middleware: the frontend is always same-origin. In production
+  // it's served by this same Express instance (static + SPA fallback below);
+  // in dev, Vite's own proxy (vite.config.ts) forwards /api and /ws
+  // server-to-server, so the browser never makes a cross-origin request
+  // either way. The previous `origin: true` reflected any Origin header
+  // with credentials allowed — permissive for no actual benefit.
   app.use(express.json());
   app.use(
     cookieSession({
       name: "session",
       keys: [SESSION_SECRET],
       maxAge: 7 * 24 * 3600_000,
-      sameSite: "lax",
+      // "strict" over "lax": nothing in this app links in from another site,
+      // so there's no legitimate cross-site GET that needs the cookie —
+      // strict closes that off too. Set COOKIE_SECURE=1 once there's an
+      // HTTPS reverse proxy in front (can't default it on, would break
+      // plain-HTTP LAN deploys, which is the common case here).
+      sameSite: "strict",
+      secure: process.env.COOKIE_SECURE === "1",
+      httpOnly: true,
     })
   );
 
@@ -98,8 +126,20 @@ async function main() {
     res.sendFile(path.join(frontendDist, "index.html"));
   });
 
+  // Catches every rejection the ah() wrapper forwards via next(err) — without
+  // this Express 4's own default error handler would still respond, but by
+  // dumping the stack trace straight into the response body. Registered
+  // last, per Express convention for error-handling middleware.
+  app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
+      return res.status(404).json({ error: "not found" });
+    }
+    console.error(err);
+    res.status(500).json({ error: "internal server error" });
+  });
+
   const server = createServer(app);
-  initWs(server);
+  initWs(server, SESSION_SECRET);
   startOfflineWatcher();
   startRetentionWatcher();
   startBackupScheduler();

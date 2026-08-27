@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { ah } from "../middleware/asyncHandler";
 import { prisma } from "../db";
 
 export const prtgRouter = Router();
@@ -42,7 +43,7 @@ function withThresholdLimits<T extends Record<string, unknown>>(
 // this URL (with the integration token as ?key=...) gets every configured
 // rack sensor back as channels, instead of creating one PRTG sensor per
 // device. Registered before "/:sensorId" so "all" isn't swallowed as an id.
-prtgRouter.get("/all", async (req, res) => {
+prtgRouter.get("/all", ah(async (req, res) => {
   const key = req.query.key as string | undefined;
   const settings = await prisma.integrationSettings.findUnique({ where: { id: 1 } });
 
@@ -94,11 +95,11 @@ prtgRouter.get("/all", async (req, res) => {
   }
 
   res.json({ prtg: { result } });
-});
+}));
 
 // Legacy per-sensor endpoint, kept for setups that prefer one PRTG sensor per
 // device: GET with the sensor's own apiKey as ?key=...
-prtgRouter.get("/:sensorId", async (req, res) => {
+prtgRouter.get("/:sensorId", ah(async (req, res) => {
   const sensor = await prisma.sensor.findUnique({
     where: { id: req.params.sensorId },
     include: { threshold: true },
@@ -142,4 +143,4 @@ prtgRouter.get("/:sensorId", async (req, res) => {
   }
 
   res.json({ prtg: { result } });
-});
+}));

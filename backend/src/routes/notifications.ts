@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { ah } from "../middleware/asyncHandler";
 import { z } from "zod";
 import { prisma } from "../db";
 import { requireAuth } from "../middleware/auth";
@@ -12,7 +13,7 @@ function mask(secret: string | null | undefined) {
   return secret.length <= 4 ? "****" : `${secret.slice(0, 2)}****${secret.slice(-2)}`;
 }
 
-notificationsRouter.get("/config", async (_req, res) => {
+notificationsRouter.get("/config", ah(async (_req, res) => {
   const cfg = await prisma.notificationConfig.upsert({
     where: { id: 1 },
     update: {},
@@ -24,7 +25,7 @@ notificationsRouter.get("/config", async (_req, res) => {
     telegramToken: mask(cfg.telegramToken),
     graphClientSecret: mask(cfg.graphClientSecret),
   });
-});
+}));
 
 const configSchema = z.object({
   smtpEnabled: z.boolean().optional(),
@@ -45,7 +46,7 @@ const configSchema = z.object({
   telegramChatId: z.string().optional().nullable(),
 });
 
-notificationsRouter.put("/config", async (req, res) => {
+notificationsRouter.put("/config", ah(async (req, res) => {
   const parsed = configSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid body" });
 
@@ -66,9 +67,9 @@ notificationsRouter.put("/config", async (req, res) => {
     telegramToken: mask(cfg.telegramToken),
     graphClientSecret: mask(cfg.graphClientSecret),
   });
-});
+}));
 
-notificationsRouter.get("/log", async (req, res) => {
+notificationsRouter.get("/log", ah(async (req, res) => {
   const limit = Math.min(Number(req.query.limit) || 100, 500);
   const logs = await prisma.notificationLog.findMany({
     orderBy: { sentAt: "desc" },
@@ -76,11 +77,11 @@ notificationsRouter.get("/log", async (req, res) => {
     include: { sensor: { select: { name: true } } },
   });
   res.json(logs);
-});
+}));
 
 const testSchema = z.object({ channel: z.enum(["smtp", "telegram"]) });
 
-notificationsRouter.post("/test", async (req, res) => {
+notificationsRouter.post("/test", ah(async (req, res) => {
   const parsed = testSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid body" });
 
@@ -94,4 +95,4 @@ notificationsRouter.post("/test", async (req, res) => {
   } catch (err: any) {
     res.status(500).json({ error: err?.message ?? "send failed" });
   }
-});
+}));

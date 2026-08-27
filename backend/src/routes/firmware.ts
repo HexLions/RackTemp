@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { ah } from "../middleware/asyncHandler";
 import multer from "multer";
 import fs from "fs";
 import path from "path";
@@ -20,13 +21,13 @@ const upload = multer({
 });
 
 // Public, no auth: devices poll this to decide whether to self-update.
-firmwareRouter.get("/latest", async (_req, res) => {
+firmwareRouter.get("/latest", ah(async (_req, res) => {
   const release = await prisma.firmwareRelease.findUnique({ where: { id: 1 } });
   if (!release || !fs.existsSync(BIN_PATH)) {
     return res.status(404).json({ error: "no firmware uploaded yet" });
   }
   res.json({ version: release.version, notes: release.notes, uploadedAt: release.uploadedAt });
-});
+}));
 
 firmwareRouter.get("/latest.bin", (_req, res) => {
   if (!fs.existsSync(BIN_PATH)) return res.status(404).end();
@@ -34,7 +35,7 @@ firmwareRouter.get("/latest.bin", (_req, res) => {
   res.sendFile(BIN_PATH);
 });
 
-firmwareRouter.post("/", requireAuth, upload.single("firmware"), async (req, res) => {
+firmwareRouter.post("/", requireAuth, upload.single("firmware"), ah(async (req, res) => {
   const version = (req.body.version || "").trim();
   const notes = (req.body.notes || "").trim() || null;
   if (!version || !req.file) {
@@ -46,4 +47,4 @@ firmwareRouter.post("/", requireAuth, upload.single("firmware"), async (req, res
     create: { id: 1, version, notes },
   });
   res.json(release);
-});
+}));

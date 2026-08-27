@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { ah } from "../middleware/asyncHandler";
 import { prisma } from "../db";
 
 export const metricsRouter = Router();
@@ -12,7 +13,7 @@ function esc(v: string) {
 // Kuma, ...) that can pull a Prometheus endpoint. Unauthenticated, matching
 // convention (e.g. node_exporter): put it behind a reverse proxy with an
 // IP allowlist if this instance is reachable beyond a trusted LAN.
-metricsRouter.get("/", async (_req, res) => {
+metricsRouter.get("/", ah(async (_req, res) => {
   const sensors = await prisma.sensor.findMany({
     include: {
       threshold: true,
@@ -65,4 +66,4 @@ metricsRouter.get("/", async (_req, res) => {
 
   res.set("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
   res.send(lines.join("\n") + "\n");
-});
+}));

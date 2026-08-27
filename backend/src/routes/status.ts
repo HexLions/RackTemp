@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { ah } from "../middleware/asyncHandler";
 import { prisma } from "../db";
 
 export const statusRouter = Router();
@@ -8,7 +9,7 @@ export const statusRouter = Router();
 // JSON preprocessing), Uptime Kuma (JSON Query monitor), Home Assistant
 // (REST sensor), Node-RED, or anything else that can GET+parse JSON. Same
 // per-sensor apiKey auth as the legacy PRTG endpoint.
-statusRouter.get("/:sensorId", async (req, res) => {
+statusRouter.get("/:sensorId", ah(async (req, res) => {
   const sensor = await prisma.sensor.findUnique({
     where: { id: req.params.sensorId },
     include: { threshold: true },
@@ -38,4 +39,4 @@ statusRouter.get("/:sensorId", async (req, res) => {
     rssi: reading?.rssi ?? null,
     readingAt: reading?.createdAt ?? null,
   });
-});
+}));

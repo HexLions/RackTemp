@@ -13,6 +13,34 @@ export default function BackupSection() {
   const [files, setFiles] = useState<BackupFileInfo[] | null>(null);
   const [runBusy, setRunBusy] = useState(false);
   const [runMsg, setRunMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [downloadBusy, setDownloadBusy] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  // Now a POST (downloads the whole database — shouldn't be reachable by a
+  // plain GET/navigation), so it can't be a plain <a href> anymore: fetch
+  // the blob ourselves and trigger the save manually.
+  async function downloadNow() {
+    setDownloadBusy(true);
+    setDownloadError(null);
+    try {
+      const res = await fetch("/api/system/backup", { method: "POST", credentials: "include" });
+      if (!res.ok) throw new Error(`Download failed (${res.status})`);
+      const disposition = res.headers.get("Content-Disposition") ?? "";
+      const match = disposition.match(/filename="([^"]+)"/);
+      const filename = match?.[1] ?? "racktemp-backup.sqlite";
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setDownloadError(err instanceof Error ? err.message : "Network error");
+    } finally {
+      setDownloadBusy(false);
+    }
+  }
 
   function loadFiles() {
     api.get<BackupFileInfo[]>("/system/backups").then(setFiles);
@@ -55,9 +83,10 @@ export default function BackupSection() {
           folder, not in the image or the program folder). This downloads a full backup (sensors, thresholds,
           notifications, login) on the spot.
         </p>
-        <a href="/api/system/backup" className="btn-primary" style={{ textDecoration: "none", display: "inline-block" }}>
-          Download backup now
-        </a>
+        <button className="btn-primary" type="button" onClick={downloadNow} disabled={downloadBusy}>
+          {downloadBusy ? "Preparing…" : "Download backup now"}
+        </button>
+        {downloadError && <div className="error">{downloadError}</div>}
       </div>
 
       {cfg && (
