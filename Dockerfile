@@ -30,6 +30,16 @@ COPY --from=backend-build /app/backend/dist ./dist
 COPY --from=backend-build /app/backend/public ./public
 COPY --from=backend-build /app/backend/prisma ./prisma
 RUN mkdir -p /app/backend/data && chown -R node:node /app/backend
+
+# Not needed at runtime since the CMD below calls the local prisma binary
+# directly (see its own comment). Removes the npm CLI's bundled
+# vulnerable-at-rest transitive deps (tar/ip-address/brace-expansion) from
+# the shipped image entirely, not just from the execution path — the
+# files themselves were still flagged by the Trivy scan in
+# docker-publish.yml even after CMD stopped invoking them.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+  /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
+
 USER node
 
 VOLUME ["/app/backend/data"]
