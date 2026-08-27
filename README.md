@@ -11,7 +11,7 @@
 [![Windows](https://img.shields.io/badge/windows-installer-0078D6.svg?logo=windows&logoColor=white)](#-running-on-windows-without-docker)
 [![Linux](https://img.shields.io/badge/linux-systemd-FCC624.svg?logo=linux&logoColor=black)](#-running-on-linux-without-docker)
 [![Self-hosted](https://img.shields.io/badge/self--hosted-yes-6dc24b.svg)](#-quick-start-docker)
-[![Version](https://img.shields.io/badge/version-1.2.0-6dc24b.svg)](#)
+[![Version](https://img.shields.io/badge/version-1.3.0-6dc24b.svg)](#)
 
 **📦 [See the Docker package →](https://github.com/HexLions/RackTemp/pkgs/container/racktemp)**
 
