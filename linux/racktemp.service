@@ -14,8 +14,26 @@ ExecStartPre=/opt/racktemp/node/bin/node node_modules/prisma/build/index.js db p
 ExecStart=/opt/racktemp/node/bin/node dist/index.js
 Restart=on-failure
 RestartSec=5
-# The service doesn't need to write anywhere but in here: data and logs.
+
+# ReadWritePaths only carves out an exception in a filesystem already made
+# read-only by ProtectSystem — on its own (as it was before this) it
+# restricts nothing. The service doesn't need to write anywhere but here:
+# data and logs.
+ProtectSystem=strict
+ProtectHome=true
 ReadWritePaths=/var/lib/racktemp
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictSUIDSGID=true
+LockPersonality=true
+# Explicitly false, not the default: V8 needs a JIT (write-then-execute
+# pages) to run at all - MemoryDenyWriteExecute=true here means Node never
+# starts.
+MemoryDenyWriteExecute=false
 
 [Install]
 WantedBy=multi-user.target
