@@ -143,6 +143,10 @@ async function main() {
   app.use("/api/auth/mfa/login", authLimiter);
   app.use("/api/auth/reset-password", authLimiter);
   app.use("/api/auth/reset-password-with-key", authLimiter);
+  // Both guard the bootstrap token (32 bits of entropy) — the only other
+  // endpoints in this group without a limiter.
+  app.use("/api/auth/first-login", authLimiter);
+  app.use("/api/auth/restore-backup", authLimiter);
   app.use("/api/discovery/announce", announceLimiter);
 
   app.use("/api/auth", authRouter);
@@ -161,9 +165,11 @@ async function main() {
   const frontendDist = path.join(__dirname, "../public");
   app.use(express.static(frontendDist));
   // Express 5 / path-to-regexp 8: bare "*" is gone, a wildcard now needs a
-  // name — "/*splat" is the direct equivalent (matches every path, param
-  // itself unused here).
-  app.get("/*splat", (req, res, next) => {
+  // name. "/*splat" alone isn't the full equivalent though — it matches one
+  // or more segments, so "/" itself falls through (express.static already
+  // serves index.html for "/" today, so this was silently not a complete
+  // safety net). Listing "/" explicitly alongside it closes that gap.
+  app.get(["/", "/*splat"], (req, res, next) => {
     if (req.path.startsWith("/api")) return next();
     res.sendFile(path.join(frontendDist, "index.html"));
   });

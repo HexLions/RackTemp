@@ -40,8 +40,8 @@ firmwareRouter.get("/latest.bin", (_req, res) => {
 });
 
 firmwareRouter.post("/", requireAuth, upload.single("firmware"), ah(async (req, res) => {
-  const version = (req.body.version || "").trim();
-  const notes = (req.body.notes || "").trim() || null;
+  const version = (req.body?.version ?? "").trim();
+  const notes = (req.body?.notes ?? "").trim() || null;
   if (!version || !req.file) {
     return res.status(400).json({ error: "version and .bin file are required" });
   }
