@@ -62,6 +62,17 @@ async function main() {
           styleSrc: ["'self'", "'unsafe-inline'"],
           connectSrc: ["'self'", "ws:", "wss:"],
           frameAncestors: ["'none'"],
+          // Helmet's default directive set includes this even though we only
+          // pass our own `directives` (useDefaults defaults to true, and the
+          // two are merged) — it tells the browser to silently rewrite every
+          // http: sub-resource request on the page to https:. Fine behind a
+          // TLS-terminating reverse proxy, but this app is plain HTTP by
+          // default (typical LAN deploy, see hsts below): with it on, every
+          // asset request gets upgraded to an https: URL nothing is listening
+          // on and fails with ERR_SSL_PROTOCOL_ERROR — blank, unstyled page,
+          // no JS. `null` here removes the inherited directive instead of
+          // setting it, per helmet's own merge behavior (node_modules/helmet/index.cjs).
+          upgradeInsecureRequests: null,
         },
       },
       hsts: false, // no-op on plain HTTP; a reverse proxy in front would set it
