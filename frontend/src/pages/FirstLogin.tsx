@@ -116,8 +116,9 @@ export default function FirstLogin() {
           </div>
           <p className="subtitle">
             Choose your final username and password to continue. You'll also need the setup token printed in
-            the server logs (<code>docker compose logs</code> / <code>journalctl -u racktemp</code>) when it
-            started.
+            the server logs when it started — <code>docker compose logs</code> (Docker/Portainer),{" "}
+            <code>journalctl -u racktemp</code> (Linux), or <code>C:\ProgramData\RackTemp\service.log</code>{" "}
+            (Windows).
           </p>
           <label>
             Setup token
@@ -170,8 +171,9 @@ export default function FirstLogin() {
           <p className="subtitle">
             Upload a <code>.sqlite</code> file downloaded from Settings → Backup on another RackTemp
             installation. Username and password will be those from the backup, not admin/admin. You'll also
-            need the setup token printed in the server logs (<code>docker compose logs</code> /{" "}
-            <code>journalctl -u racktemp</code>) when it started.
+            need the setup token printed in the server logs when it started —{" "}
+            <code>docker compose logs</code> (Docker/Portainer), <code>journalctl -u racktemp</code> (Linux),
+            or <code>C:\ProgramData\RackTemp\service.log</code> (Windows).
           </p>
           <label>
             Setup token
