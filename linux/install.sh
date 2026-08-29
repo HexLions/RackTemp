@@ -66,6 +66,13 @@ chown -R racktemp:racktemp /var/lib/racktemp
 chown racktemp:racktemp "$ENV_FILE"
 chmod 600 "$ENV_FILE"
 
+# UMask=0077 in racktemp.service only applies to files the service creates
+# from now on - an existing install already has db.sqlite/backups/etc left
+# world-readable (0644, the previous default) from before that was added.
+# go-rwx here closes that retroactively on every upgrade, not just fresh
+# installs, without touching directory listability for racktemp itself.
+chmod -R go-rwx /var/lib/racktemp
+
 echo "== systemd service =="
 cp "$SCRIPT_DIR/racktemp.service" /etc/systemd/system/racktemp.service
 systemctl daemon-reload

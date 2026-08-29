@@ -27,13 +27,48 @@ NoNewPrivileges=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+# AF_NETLINK is required, not optional: generating the self-signed HTTPS
+# certificate (Settings > Network) calls Node's os.networkInterfaces() to
+# list local IPs for the cert's SAN entries, which glibc's getifaddrs()
+# implements via a netlink socket under the hood - without AF_NETLINK
+# here that socket() call is blocked at the seccomp level and the whole
+# process crash-loops (ERR_SYSTEM_ERROR / uv_interface_addresses, errno
+# 97/EOPNOTSUPP), confirmed on real hardware, not theoretical.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
 RestrictSUIDSGID=true
 LockPersonality=true
 # Explicitly false, not the default: V8 needs a JIT (write-then-execute
 # pages) to run at all - MemoryDenyWriteExecute=true here means Node never
 # starts.
 MemoryDenyWriteExecute=false
+
+# Round 2 additions below - each is a directive the app has no legitimate
+# reason to need (no raw device I/O, no namespace creation, no real-time
+# scheduling, no reason to see other processes or read kernel logs), so
+# blocking it is close to free. Deliberately NOT adding SystemCallFilter=
+# here yet: a syscall allow-list is the single biggest score improvement
+# left, but it's also the highest-risk one to get wrong blind (exactly
+# the class of bug AF_NETLINK above just was) - every code path (backup/
+# restore, TLS cert regen, SMTP/Graph notification sending) would need to
+# be exercised under it first. Left for a dedicated follow-up with real
+# testing, not bundled in here.
+CapabilityBoundingSet=
+PrivateDevices=true
+ProtectClock=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+# Files this process creates (db.sqlite, backups, the session-secret and
+# SETUP-TOKEN.txt files) default to world-readable (0644) otherwise - on
+# a shared/multi-user box that's every credential in the database (bcrypt
+# hash aside) readable by any local account, not just racktemp. 0077
+# leaves them owner-only; install.sh also retroactively tightens any
+# files already created before this was added.
+UMask=0077
 
 [Install]
 WantedBy=multi-user.target
