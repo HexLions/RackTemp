@@ -12,6 +12,7 @@ import { PrismaClient } from "@prisma/client";
 import { prisma } from "../db";
 import { resolveDbPath, resolveDataDir } from "../services/dbPath";
 import { encryptField, decryptField } from "../services/fieldEncryption";
+import { checkPasswordNotPwned } from "../services/pwnedPassword";
 import { sendEmail } from "../services/notifier";
 import { logAudit } from "../services/auditLog";
 import { clearSetupTokenFile } from "../services/setupTokenFile";
@@ -138,6 +139,11 @@ authRouter.post("/first-login", ah(async (req, res) => {
   const existing = await prisma.adminUser.findUnique({ where: { username: parsed.data.newUsername } });
   if (existing && existing.id !== user.id) {
     return res.status(400).json({ error: "username already in use" });
+  }
+
+  const pwnedCheck = await checkPasswordNotPwned(parsed.data.newPassword);
+  if (pwnedCheck.pwned) {
+    return res.status(400).json({ error: "this password has appeared in known data breaches - choose a different one" });
   }
 
   const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
@@ -272,6 +278,11 @@ authRouter.post("/change-password", ah(async (req, res) => {
   const user = await prisma.adminUser.findUnique({ where: { id: session.userId } });
   if (!user || !(await bcrypt.compare(parsed.data.currentPassword, user.passwordHash))) {
     return res.status(401).json({ error: "invalid current password" });
+  }
+
+  const pwnedCheck = await checkPasswordNotPwned(parsed.data.newPassword);
+  if (pwnedCheck.pwned) {
+    return res.status(400).json({ error: "this password has appeared in known data breaches - choose a different one" });
   }
 
   const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
@@ -478,6 +489,11 @@ authRouter.post("/reset-password-with-key", ah(async (req, res) => {
     return res.status(400).json({ error: "invalid recovery key" });
   }
 
+  const pwnedCheck = await checkPasswordNotPwned(parsed.data.newPassword);
+  if (pwnedCheck.pwned) {
+    return res.status(400).json({ error: "this password has appeared in known data breaches - choose a different one" });
+  }
+
   const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);
   const newRecoveryKey = generateRecoveryKey();
   const recoveryKeyHash = await bcrypt.hash(newRecoveryKey, 12);
@@ -524,6 +540,11 @@ authRouter.post("/reset-password", ah(async (req, res) => {
   if (!(await bcrypt.compare(parsed.data.token, user.resetTokenHash))) {
     await logAudit("password_reset_email_failed", { ip: req.ip });
     return res.status(400).json({ error: "invalid reset link" });
+  }
+
+  const pwnedCheck = await checkPasswordNotPwned(parsed.data.newPassword);
+  if (pwnedCheck.pwned) {
+    return res.status(400).json({ error: "this password has appeared in known data breaches - choose a different one" });
   }
 
   const passwordHash = await bcrypt.hash(parsed.data.newPassword, 12);

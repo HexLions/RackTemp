@@ -1,0 +1,22 @@
+version: 2
+updates:
+  # audit.yml already runs npm audit on every PR + weekly and flags known
+  # CVEs, but doesn't act on them - Dependabot is what actually opens the PR
+  # to bump a vulnerable dependency, here on the same weekly cadence.
+  - package-ecosystem: "npm"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+  # Also keeps the pinned GitHub Actions versions (checkout, setup-node, ...)
+  # from drifting back out of date the way they did before this got added.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
