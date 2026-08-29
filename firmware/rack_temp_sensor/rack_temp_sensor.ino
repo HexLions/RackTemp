@@ -410,14 +410,24 @@ String buildUrl(bool https, const String &host, uint16_t port, const String &pat
   return String(https ? "https://" : "http://") + host + ":" + String(port) + path;
 }
 
-enum class ConnectOutcome { Ok, ConnectFailed, FingerprintMismatch };
+// Plain #define int constants, not an enum class: arduino-esp32 (Arduino
+// IDE) auto-generates function prototypes via a ctags-based prescan and
+// inserts them right after the #include block, before any type defined
+// later in the file - a custom enum/struct return type used by a
+// function defined below that insertion point breaks with "does not
+// name a type" (confirmed: this exact error, on this exact function,
+// reported from a real compile). int sidesteps it entirely since it is
+// always a known type, no matter where the auto-prototype lands.
+#define CONNECT_OK 0
+#define CONNECT_FAILED 1
+#define CONNECT_FINGERPRINT_MISMATCH 2
 
 // The actual connect attempt for one scheme guess, factored out of
 // beginRequest() so it can be tried twice (see below) without duplicating
 // the TLS setup/fingerprint-check logic.
-ConnectOutcome tryBeginRequest(HTTPClient &http, const String &host, uint16_t port, bool https, const String &path) {
+int tryBeginRequest(HTTPClient &http, const String &host, uint16_t port, bool https, const String &path) {
   if (!https) {
-    return http.begin(buildUrl(false, host, port, path)) ? ConnectOutcome::Ok : ConnectOutcome::ConnectFailed;
+    return http.begin(buildUrl(false, host, port, path)) ? CONNECT_OK : CONNECT_FAILED;
   }
 
   // Default handshake timeout is 120 seconds (arduino-esp32's own
@@ -445,14 +455,14 @@ ConnectOutcome tryBeginRequest(HTTPClient &http, const String &host, uint16_t po
   secureClient.setInsecure();
   if (!secureClient.connect(host.c_str(), port)) {
     secureClient.stop(); // defensive: this instance is reused across calls, never leave a half-open handshake behind
-    return ConnectOutcome::ConnectFailed;
+    return CONNECT_FAILED;
   }
   if (cfgCertFingerprint.length() > 0 && !secureClient.verify(cfgCertFingerprint.c_str(), nullptr)) {
     secureClient.stop();
-    return ConnectOutcome::FingerprintMismatch;
+    return CONNECT_FINGERPRINT_MISMATCH;
   }
 
-  return http.begin(secureClient, buildUrl(true, host, port, path)) ? ConnectOutcome::Ok : ConnectOutcome::ConnectFailed;
+  return http.begin(secureClient, buildUrl(true, host, port, path)) ? CONNECT_OK : CONNECT_FAILED;
 }
 
 // Prepares `http` for a request to cfgServerHost + path, auto-detecting
@@ -479,21 +489,21 @@ bool beginRequest(HTTPClient &http, const String &path) {
     return false;
   }
 
-  ConnectOutcome outcome = tryBeginRequest(http, host, port, cfgHttpsGuess, path);
-  if (outcome == ConnectOutcome::Ok) return true;
-  if (outcome == ConnectOutcome::FingerprintMismatch) {
+  int outcome = tryBeginRequest(http, host, port, cfgHttpsGuess, path);
+  if (outcome == CONNECT_OK) return true;
+  if (outcome == CONNECT_FINGERPRINT_MISMATCH) {
     Serial.println("Server certificate fingerprint does not match the configured one - refusing to send data (possible MITM).");
     return false;
   }
 
   bool otherScheme = !cfgHttpsGuess;
-  ConnectOutcome retryOutcome = tryBeginRequest(http, host, port, otherScheme, path);
-  if (retryOutcome == ConnectOutcome::Ok) {
+  int retryOutcome = tryBeginRequest(http, host, port, otherScheme, path);
+  if (retryOutcome == CONNECT_OK) {
     cfgHttpsGuess = otherScheme;
     Serial.println(String("Server now appears to speak ") + (otherScheme ? "HTTPS" : "HTTP") + " - switching.");
     return true;
   }
-  if (retryOutcome == ConnectOutcome::FingerprintMismatch) {
+  if (retryOutcome == CONNECT_FINGERPRINT_MISMATCH) {
     Serial.println("Server certificate fingerprint does not match the configured one - refusing to send data (possible MITM).");
   } else {
     Serial.println("Could not reach the RackTemp server (tried both HTTP and HTTPS).");
