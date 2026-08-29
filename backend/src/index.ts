@@ -6,7 +6,6 @@ import helmet from "helmet";
 import path from "path";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
-import { createServer as createHttpServer } from "http";
 import { createServer as createHttpsServer } from "https";
 import { Prisma } from "@prisma/client";
 import { prisma } from "./db";
@@ -26,7 +25,6 @@ import { startOfflineWatcher } from "./services/thresholdEngine";
 import { startRetentionWatcher } from "./services/retention";
 import { startBackupScheduler } from "./services/backupScheduler";
 import { resolveSessionSecret } from "./services/sessionSecret";
-import { getServerSettings } from "./services/serverSettings";
 import { resolveTlsCert } from "./services/tls";
 import { writeSetupTokenFile, clearSetupTokenFile } from "./services/setupTokenFile";
 import { initWs } from "./ws";
@@ -87,7 +85,6 @@ async function bootstrapAdmin() {
 
 async function main() {
   await bootstrapAdmin();
-  const { httpsEnabled } = await getServerSettings();
 
   const app = express();
 
@@ -108,20 +105,24 @@ async function main() {
           styleSrc: ["'self'", "'unsafe-inline'"],
           connectSrc: ["'self'", "ws:", "wss:"],
           frameAncestors: ["'none'"],
-          // Helmet's default directive set includes this even though we only
-          // pass our own `directives` (useDefaults defaults to true, and the
-          // two are merged) — it tells the browser to silently rewrite every
-          // http: sub-resource request on the page to https:. Fine behind a
-          // TLS-terminating reverse proxy, but this app is plain HTTP by
-          // default (typical LAN deploy, see hsts below): with it on, every
-          // asset request gets upgraded to an https: URL nothing is listening
-          // on and fails with ERR_SSL_PROTOCOL_ERROR — blank, unstyled page,
-          // no JS. `null` here removes the inherited directive instead of
-          // setting it, per helmet's own merge behavior (node_modules/helmet/index.cjs).
-          upgradeInsecureRequests: null,
+          // No override needed here any more: the app is HTTPS-only now
+          // (self-signed cert, generated on first boot — see tls.ts), so
+          // helmet's default upgradeInsecureRequests directive (rewriting
+          // any stray http: sub-resource reference to https:) is correct
+          // instead of actively harmful, unlike when this could still be
+          // plain HTTP.
         },
       },
-      hsts: false, // no-op on plain HTTP; a reverse proxy in front would set it
+      // Deliberately still off, even though the app is HTTPS-only now:
+      // this is a LAN appliance typically accessed by IP address, not a
+      // stable domain. HSTS is a browser-side, per-host cache with no
+      // expiry the app controls - if this IP is ever reassigned by DHCP to
+      // a different device after RackTemp is decommissioned, any browser
+      // that still remembers "always HTTPS for this IP" would force HTTPS
+      // onto that unrelated future device too. Not worth that pitfall for
+      // the marginal benefit here (a first-visit self-signed-cert warning
+      // already flags anything suspicious about the connection).
+      hsts: false,
     })
   );
 
@@ -144,12 +145,11 @@ async function main() {
       maxAge: sessionMaxAgeMs,
       // "strict" over "lax": nothing in this app links in from another site,
       // so there's no legitimate cross-site GET that needs the cookie —
-      // strict closes that off too. Secure automatically when this process
-      // is serving HTTPS itself (Settings > Network); COOKIE_SECURE=1 covers
-      // the other case, an HTTPS reverse proxy in front while this process
-      // still speaks plain HTTP internally, which httpsEnabled can't see.
+      // strict closes that off too. secure is unconditional now: the app
+      // is HTTPS-only (see below), there's no plain-HTTP mode left where
+      // marking the cookie Secure would break sending it.
       sameSite: "strict",
-      secure: httpsEnabled || process.env.COOKIE_SECURE === "1",
+      secure: true,
       httpOnly: true,
     })
   );
@@ -216,22 +216,21 @@ async function main() {
     res.status(500).json({ error: "internal server error" });
   });
 
-  // httpsEnabled is read once, above, before the app is even built — the
-  // cert (self-signed, generated on first use and reused after that — see
-  // services/tls.ts) is only loaded when it's actually needed. Switching
-  // the toggle in Settings > Network takes effect on the next restart, not
-  // live: there's no live-reload of an active http.Server into an
-  // https.Server, and doing that mid-request (including any open WebSocket
-  // upgrade) isn't worth the complexity for a setting nobody flips often.
-  const server = httpsEnabled ? createHttpsServer(await resolveTlsCert(), app) : createHttpServer(app);
+  // Always HTTPS - no plain-HTTP mode any more. The cert is self-signed,
+  // generated on first boot and reused after that (services/tls.ts); a
+  // fresh install's very first request already gets served over TLS, no
+  // separate opt-in step. Regenerating the cert (Settings > Network) still
+  // needs a restart to actually be served - no live-reload of an active
+  // https.Server's certificate, and doing that mid-request (including any
+  // open WebSocket upgrade) isn't worth the complexity for something
+  // that's rarely needed (e.g. the LAN IP changed).
+  const server = createHttpsServer(await resolveTlsCert(), app);
   initWs(server, SESSION_SECRET);
   startOfflineWatcher();
   startRetentionWatcher();
   startBackupScheduler();
 
-  server.listen(PORT, () =>
-    console.log(`rack-temp-monitor listening on ${httpsEnabled ? "https" : "http"}://0.0.0.0:${PORT}`)
-  );
+  server.listen(PORT, () => console.log(`rack-temp-monitor listening on https://0.0.0.0:${PORT}`));
 }
 
 main().catch((err) => {

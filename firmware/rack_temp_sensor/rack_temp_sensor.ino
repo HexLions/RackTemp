@@ -9,21 +9,19 @@
 // portal closes on its own after 10 minutes of inactivity.
 // Connect and open http://192.168.4.1 (or wait for the
 // automatic "sign in to network" popup): there you enter the WiFi and the RackTemp server's
-// IP address (and port, only if it's not the default 7431) — no http:// or https:// prefix to
-// type, the sensor figures that out on its own (see beginRequest() below) and keeps re-checking
-// it on its own too, so switching the server's HTTPS toggle later doesn't need a portal revisit.
-// If you already know it, also enter the sensor's API key. Save: the device restarts and tries
-// to connect. If you leave the API key empty, the sensor announces itself on the network and
-// shows up in the dashboard under "Sensors discovered on the network" — see the README, section
-// "Discovering sensors on the network".
+// IP address (and port, only if it's not the default 7431) — the server (as of this firmware
+// version) is always HTTPS, so there's no scheme to type. If you already know it, also enter
+// the sensor's API key. Save: the device restarts and tries to connect. If you leave the API
+// key empty, the sensor announces itself on the network and shows up in the dashboard under
+// "Sensors discovered on the network" — see the README, section "Discovering sensors on the
+// network".
 //
-// If the server has HTTPS turned on, also paste its certificate fingerprint (shown in the
-// dashboard under Settings > Network) into the setup portal's fingerprint field: without it the
-// connection is encrypted but not authenticated, so nothing stops an active on-path attacker
-// from presenting their own certificate; with it, the sensor refuses to send data unless the
-// live certificate matches byte-for-byte. Regenerating the server's certificate (or moving a
-// sensor to a different server) means updating this field and re-saving on every sensor that
-// talks to it.
+// Also paste the server's certificate fingerprint (shown in the dashboard under Settings >
+// Network) into the setup portal's fingerprint field: without it the connection is encrypted
+// but not authenticated, so nothing stops an active on-path attacker from presenting their own
+// certificate; with it, the sensor refuses to send data unless the live certificate matches
+// byte-for-byte. Regenerating the server's certificate (or moving a sensor to a different
+// server) means updating this field and re-saving on every sensor that talks to it.
 //
 // Required libraries (Arduino Library Manager):
 //   - Adafruit SHT31 Library
@@ -45,18 +43,16 @@
 // so you can quickly tell if the device is running the latest flashed version.
 // Also used for OTA auto-update: if the server offers a different one, the
 // device downloads it and flashes itself (see checkFirmwareUpdate below).
-#define FIRMWARE_VERSION "2026-08-29.4"
+#define FIRMWARE_VERSION "2026-08-29.5"
 
-// OTA auto-update fetches and flashes a .bin (over HTTP or HTTPS, matching
-// whatever scheme was last detected for cfgServerHost - see beginRequest()),
-// checked against the SHA256 the server reports for it
-// (HTTPUpdate.setSHA256sum, see
+// OTA auto-update fetches and flashes a .bin over HTTPS, checked against
+// the SHA256 the server reports for it (HTTPUpdate.setSHA256sum, see
 // checkFirmwareUpdate below) — that catches corruption and a swapped file,
 // but arduino-esp32's HTTPUpdate has no signature/authenticity API (checked
 // against core 3.3.11's actual HTTPUpdate.h: setMD5sum/setSHA256sum exist,
 // nothing else). So anyone able to ARP- or DNS-spoof cfgServerHost on the LAN
 // can still serve their own .bin together with a matching hash and the check
-// passes. Real authenticity needs ESP-IDF Secure Boot v2 or an app-level
+// passes even over HTTPS. Real authenticity needs ESP-IDF Secure Boot v2 or an app-level
 // RSA/ECDSA signature checked with mbedtls against an embedded public key,
 // which needs its own signing step in the release pipeline — out of scope
 // here, left for a future phase. Off by default; set to 1 only if you've
@@ -91,8 +87,7 @@ WebServer portalServer(80);
 DNSServer dnsServer;
 // Single reused instance instead of a fresh local one per call (as this
 // briefly was): NetworkClientSecure's constructor allocates a full mbedtls
-// SSL context on the heap unconditionally, even for a plain-HTTP server
-// where it's never actually connected - declaring one fresh in
+// SSL context on the heap unconditionally - declaring one fresh in
 // announceDiscovery()/checkFirmwareUpdate()/sendReading() meant doing that
 // heap alloc+free on every single call (every 60s from sendReading alone),
 // which on the ESP32-C3's limited RAM fragments the heap over time and can
@@ -112,19 +107,6 @@ const unsigned long SEND_INTERVAL_MS = SEND_INTERVAL_SEC * 1000UL;
 const unsigned long WIFI_CONNECT_TIMEOUT_MS = 15000UL;
 
 String cfgSsid, cfgPassword, cfgServerHost, cfgApiKey, cfgCertFingerprint;
-// Not persisted to NVS on purpose: re-derived fresh every boot (see
-// loadConfig() below, from any http(s):// prefix a pre-existing install
-// already has saved) and self-corrected at runtime by beginRequest() the
-// first time a request against the assumed scheme fails to connect - so a
-// server whose HTTPS toggle changes after this sensor was set up is picked
-// up automatically within one failed cycle, without reopening the portal.
-bool cfgHttpsGuess = false;
-// Whether cfgHttpsGuess has actually been confirmed to work against the
-// real server (see beginRequest()/probeScheme()) - starts false every
-// boot, and is cleared again the moment any real request fails, so the
-// next call re-probes instead of trusting a guess that just stopped
-// working.
-bool cfgSchemeConfirmed = false;
 
 // Stable chip identifier, used for discovery (POST /api/discovery/announce),
 // for the setup access point's name, and included in every reading so the server can
@@ -143,17 +125,17 @@ bool loadConfig() {
   cfgSsid = prefs.getString("ssid", "");
   cfgPassword = prefs.getString("password", "");
   // Same NVS key as before ("serverUrl") - only what's expected in it
-  // changed. A sensor set up with an older firmware version still has a
-  // full "http://..."/"https://..." URL saved there: strip the prefix so
-  // cfgServerHost is always bare host[:port] either way, and seed the
-  // scheme guess from whatever the admin had explicitly typed back then
-  // instead of starting blind (still self-corrects later if it's wrong).
+  // changed across firmware versions: a sensor set up with an older
+  // firmware may still have a full "http://..."/"https://..." URL saved
+  // there (or, from the brief scheme-auto-detect version in between, a
+  // bare host with no prefix at all) - stripping any prefix here means
+  // cfgServerHost ends up as bare host[:port] regardless of which
+  // previous version last wrote it, with nothing else to migrate since
+  // the server is HTTPS-only now, there's no scheme left to guess.
   String stored = prefs.getString("serverUrl", "");
   if (stored.startsWith("https://")) {
-    cfgHttpsGuess = true;
     stored = stored.substring(8);
   } else if (stored.startsWith("http://")) {
-    cfgHttpsGuess = false;
     stored = stored.substring(7);
   }
   int slash = stored.indexOf('/');
@@ -252,14 +234,14 @@ void handlePortalRoot() {
     "<input id='ssid' name='ssid' placeholder='Network name (SSID)' value='" + htmlEscape(cfgSsid) + "' required>"
     "<label>WiFi password</label>"
     "<input type='password' name='password' placeholder='" + String(cfgPassword.length() > 0 ? "leave empty to keep the current one" : "Password") + "'>"
-    "<label>RackTemp server IP address (no http:// or https:// - detected automatically)</label>"
+    "<label>RackTemp server IP address (HTTPS, no http:// or https:// prefix)</label>"
     "<input name='serverUrl' placeholder='192.168.1.50 (add :port only if not 7431)' value='" + htmlEscape(cfgServerHost) + "' required>"
     "<label>Sensor API key (optional)</label>"
     "<input name='apiKey' placeholder='" +
       String(cfgApiKey.length() > 0 ? "******** (leave empty to keep the current one)"
                                      : "leave it empty to get notified in the dashboard") +
       "'>"
-    "<label>Server certificate fingerprint (HTTPS only, optional)</label>"
+    "<label>Server certificate fingerprint (recommended, optional)</label>"
     "<input name='certFp' placeholder='" +
       String(cfgCertFingerprint.length() > 0 ? "leave empty to keep the current one" : "SHA256, from the dashboard: Settings > Network") +
       "'>"
@@ -283,12 +265,12 @@ void handlePortalSave() {
   newApiKey.trim();
   newCertFingerprint.trim();
 
-  // The field only asks for a bare IP now, but someone might still paste a
+  // The field only asks for a bare IP, but someone might still paste a
   // full URL out of habit (e.g. copied from a browser address bar) -
   // stripping it here rather than rejecting it is friendlier and correct
-  // either way, since the scheme is auto-detected regardless of what was
-  // typed. A trailing "/..." would also break the host:port parsing in
-  // beginRequest() later, so drop that too.
+  // either way, since the server only ever speaks HTTPS regardless of
+  // what was typed. A trailing "/..." would also break the host:port
+  // parsing in beginRequest() later, so drop that too.
   if (newServerHost.startsWith("https://")) {
     newServerHost = newServerHost.substring(8);
   } else if (newServerHost.startsWith("http://")) {
@@ -410,10 +392,9 @@ bool parseServerHost(const String &hostPort, String &host, uint16_t &port) {
   return host.length() > 0;
 }
 
-// (https ? "https://" : "http://") + cfgServerHost + path, spelled out once
-// instead of at every call site.
-String buildUrl(bool https, const String &host, uint16_t port, const String &path) {
-  return String(https ? "https://" : "http://") + host + ":" + String(port) + path;
+// https:// + cfgServerHost + path, spelled out once instead of at every call site.
+String buildUrl(const String &host, uint16_t port, const String &path) {
+  return "https://" + host + ":" + String(port) + path;
 }
 
 // Plain #define int constants, not an enum class: arduino-esp32 (Arduino
@@ -428,23 +409,20 @@ String buildUrl(bool https, const String &host, uint16_t port, const String &pat
 #define CONNECT_FAILED 1
 #define CONNECT_FINGERPRINT_MISMATCH 2
 
-// The actual connect attempt for one scheme guess, factored out of
-// beginRequest() so it can be tried twice (see below) without duplicating
-// the TLS setup/fingerprint-check logic.
-int tryBeginRequest(HTTPClient &http, const String &host, uint16_t port, bool https, const String &path) {
-  if (!https) {
-    return http.begin(buildUrl(false, host, port, path)) ? CONNECT_OK : CONNECT_FAILED;
-  }
-
+// Opens and verifies the shared secureClient connection - shared between
+// beginRequest() below and the OTA .bin download further down, both of
+// which need the same connect-then-optionally-verify-fingerprint sequence
+// before handing the client off (to HTTPClient or httpUpdate respectively).
+int connectSecure(const String &host, uint16_t port) {
   // Default handshake timeout is 120 seconds (arduino-esp32's own
   // NetworkClientSecure constructor sets sslclient->handshake_timeout =
   // 120000 - confirmed by reading it directly) - loop() blocks for the
   // whole duration of connect() below, so a handshake that never
-  // completes (misconfigured fingerprint scenario aside, a flaky AP or a
-  // server mid-restart is enough) would otherwise stall the device for up
-  // to two minutes on every single send, not just fail fast. 15s is
-  // generous for a real handshake against this server's self-signed cert
-  // on an ESP32-C3, nowhere near 120s.
+  // completes (a flaky AP or a server mid-restart is enough) would
+  // otherwise stall the device for up to two minutes on every single
+  // send, not just fail fast. 15s is generous for a real handshake
+  // against this server's self-signed cert on an ESP32-C3, nowhere near
+  // 120s.
   secureClient.setHandshakeTimeout(15000);
   // setInsecure() skips CA-chain validation — required just to let the TLS
   // handshake complete at all against the server's self-signed certificate
@@ -467,53 +445,18 @@ int tryBeginRequest(HTTPClient &http, const String &host, uint16_t port, bool ht
     secureClient.stop();
     return CONNECT_FINGERPRINT_MISMATCH;
   }
-
-  return http.begin(secureClient, buildUrl(true, host, port, path)) ? CONNECT_OK : CONNECT_FAILED;
+  return CONNECT_OK;
 }
 
-// Confirms a scheme guess actually works against the real server, with a
-// real request - not just tryBeginRequest()'s return value. That matters
-// specifically for the plain-HTTP branch: HTTPClient::begin(String) only
-// parses the URL string, it never touches the network, so it returns true
-// unconditionally regardless of whether the guessed scheme is right. Only
-// the HTTPS branch's secureClient.connect() is an actual network test -
-// meaning a wrong HTTP-first guess against an HTTPS-only server used to
-// report CONNECT_OK and never trigger the fallback below, silently
-// failing forever from the very first boot (confirmed: exactly this,
-// reported from a real device against a real HTTPS-only server). GET
-// /api/version is small, unauthenticated, and side-effect-free (see
-// SECURITY.md - deliberately public, made for exactly this kind of
-// zero-setup check) - safe to call purely as a connectivity probe.
-int probeScheme(const String &host, uint16_t port, bool https) {
-  HTTPClient http;
-  int outcome = tryBeginRequest(http, host, port, https, "/api/version");
-  if (outcome != CONNECT_OK) {
-    http.end();
-    return outcome;
-  }
-  int code = http.GET(); // > 0 = a real HTTP response came back, whatever its status; <= 0 = the request itself failed (wrong scheme, unreachable, timed out)
-  http.end();
-  return code > 0 ? CONNECT_OK : CONNECT_FAILED;
-}
-
-// Prepares `http` for a request to cfgServerHost + path, auto-detecting
-// http vs https so the setup portal never has to ask for a scheme.
-// cfgSchemeConfirmed short-circuits this after the first successful probe
-// - re-probing on every single call would double every request's cost for
-// no reason once the scheme is already known good; it's cleared again the
-// moment any real request fails (below), so a server restarting under a
-// different scheme, or its HTTPS toggle flipping, gets re-detected on the
-// next attempt rather than being stuck on a guess that stopped working.
-// This is what lets an admin flip the server's HTTPS toggle later without
-// reopening the setup portal on every sensor.
-// The one failure this never falls back on, at either the probing or the
-// real-request stage, is a fingerprint mismatch: that means the TLS
-// connection itself succeeded but presented the wrong certificate, a
-// possible-MITM signal, not "wrong scheme" - silently retrying over plain
-// HTTP there would turn this safety check into a downgrade an attacker
-// could force by just blocking the legitimate HTTPS response.
+// Prepares `http` for a request to cfgServerHost + path over HTTPS, via the
+// shared global `secureClient` - which has to outlive this function since
+// HTTPClient::begin(Client&, url) just borrows a reference to whatever it's
+// handed, it doesn't take ownership.
 // Returns false (nothing sent, caller should give up on this request) if
-// the address can't be parsed or neither scheme could connect.
+// the address can't be parsed, the TLS connection can't be opened, or the
+// configured fingerprint doesn't match the live certificate - a mismatch
+// always fails closed here, logged as a possible MITM, never treated as
+// something to retry differently.
 bool beginRequest(HTTPClient &http, const String &path) {
   String host;
   uint16_t port;
@@ -522,43 +465,17 @@ bool beginRequest(HTTPClient &http, const String &path) {
     return false;
   }
 
-  if (!cfgSchemeConfirmed) {
-    int probeOutcome = probeScheme(host, port, cfgHttpsGuess);
-    if (probeOutcome == CONNECT_FINGERPRINT_MISMATCH) {
-      Serial.println("Server certificate fingerprint does not match the configured one - refusing to send data (possible MITM).");
-      return false;
-    }
-    if (probeOutcome != CONNECT_OK) {
-      bool otherScheme = !cfgHttpsGuess;
-      int retryProbe = probeScheme(host, port, otherScheme);
-      if (retryProbe == CONNECT_FINGERPRINT_MISMATCH) {
-        Serial.println("Server certificate fingerprint does not match the configured one - refusing to send data (possible MITM).");
-        return false;
-      }
-      if (retryProbe != CONNECT_OK) {
-        Serial.println("Could not reach the RackTemp server (tried both HTTP and HTTPS).");
-        return false;
-      }
-      cfgHttpsGuess = otherScheme;
-      Serial.println(String("Server appears to speak ") + (otherScheme ? "HTTPS" : "HTTP") + " - switching.");
-    }
-    cfgSchemeConfirmed = true;
-  }
-
-  int outcome = tryBeginRequest(http, host, port, cfgHttpsGuess, path);
-  if (outcome == CONNECT_OK) return true;
-
-  // Something changed since the scheme was last confirmed good (network
-  // hiccup, server restarted, HTTPS toggle flipped) - re-probe from
-  // scratch on the next call instead of assuming this same guess is
-  // still right.
-  cfgSchemeConfirmed = false;
+  int outcome = connectSecure(host, port);
   if (outcome == CONNECT_FINGERPRINT_MISMATCH) {
     Serial.println("Server certificate fingerprint does not match the configured one - refusing to send data (possible MITM).");
-  } else {
-    Serial.println("Could not reach the RackTemp server.");
+    return false;
   }
-  return false;
+  if (outcome != CONNECT_OK) {
+    Serial.println("HTTPS connection to the RackTemp server failed.");
+    return false;
+  }
+
+  return http.begin(secureClient, buildUrl(host, port, path));
 }
 
 // Announces the chip to the server until you have an API key: it shows up in the dashboard
@@ -575,13 +492,6 @@ void announceDiscovery() {
   String body = "{\"chipId\":\"" + chipId() + "\",\"firmware\":\"rack_temp_sensor@" FIRMWARE_VERSION "\"}";
   int code = http.POST(body);
   Serial.printf("POST /api/discovery/announce -> %d\n", code);
-  // A non-positive code here means the request itself failed (not just a
-  // non-200 status) despite beginRequest() reporting success - possible
-  // for the plain-HTTP branch specifically, since HTTPClient::begin()
-  // never touches the network and can't fully guarantee the scheme is
-  // still right on its own (see probeScheme()'s comment). Re-probe next
-  // time instead of repeating a scheme that just stopped working.
-  if (code <= 0) cfgSchemeConfirmed = false;
 
   if (code == 200) {
     String payload = http.getString();
@@ -623,7 +533,6 @@ void checkFirmwareUpdate() {
   String latestVersion, latestSha256;
   if (!beginRequest(http, "/api/firmware/latest")) return;
   int code = http.GET();
-  if (code <= 0) cfgSchemeConfirmed = false; // see the same check in announceDiscovery()
 
   if (code == 200) {
     String payload = http.getString();
@@ -654,28 +563,17 @@ void checkFirmwareUpdate() {
   httpUpdate.rebootOnUpdate(true);
   httpUpdate.setSHA256sum(latestSha256);
 
-  // cfgHttpsGuess is already known-good here: the /api/firmware/latest
-  // check above (beginRequest(), a few lines up in this same function)
-  // just succeeded against it, self-correcting it first if needed - no
-  // separate detection/fallback needed for the .bin download itself.
-  t_httpUpdate_return ret;
-  if (cfgHttpsGuess) {
-    // httpUpdate opens and manages its own connection internally, so unlike
-    // the manual requests in beginRequest() above there's no point between
-    // connect and download where we could call verify() against the live
-    // peer certificate — only setInsecure() is applied here (required for
-    // the handshake to complete at all, same as beginRequest()). The
-    // downloaded file is still content-authenticated by the SHA256 check
-    // just above, same as the plain-HTTP path always was; this only adds
-    // encryption in transit against passive packet capture, not fingerprint
-    // pinning against an active MITM.
-    secureClient.setHandshakeTimeout(15000); // see beginRequest() - 120s default is too long to block loop() on
-    secureClient.setInsecure();
-    ret = httpUpdate.update(secureClient, buildUrl(true, host, port, "/api/firmware/latest.bin"));
-  } else {
-    WiFiClient client;
-    ret = httpUpdate.update(client, buildUrl(false, host, port, "/api/firmware/latest.bin"));
-  }
+  // httpUpdate opens and manages its own connection internally, so unlike
+  // beginRequest() above there's no point between connect and download
+  // where we could call verify() against the live peer certificate — only
+  // setInsecure() is applied here (required for the handshake to complete
+  // at all, same as beginRequest()/connectSecure()). The downloaded file
+  // is still content-authenticated by the SHA256 check just above; this
+  // only adds encryption in transit against passive packet capture, not
+  // fingerprint pinning against an active MITM.
+  secureClient.setHandshakeTimeout(15000); // see connectSecure() - 120s default is too long to block loop() on
+  secureClient.setInsecure();
+  t_httpUpdate_return ret = httpUpdate.update(secureClient, buildUrl(host, port, "/api/firmware/latest.bin"));
   if (ret != HTTP_UPDATE_OK) {
     Serial.printf("OTA failed: %s\n", httpUpdate.getLastErrorString().c_str());
   }
@@ -711,7 +609,6 @@ void sendReading(float temperature, float humidity) {
 
   int code = http.POST(body);
   Serial.printf("POST /api/ingest -> %d\n", code);
-  if (code <= 0) cfgSchemeConfirmed = false; // see the same check in announceDiscovery()
 
   // The dashboard has no direct connection to the sensor to push a remote
   // reboot to, so it rides along in the response to whatever we send next:
