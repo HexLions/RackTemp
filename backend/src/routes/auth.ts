@@ -6,7 +6,7 @@ import fs from "fs";
 import path from "path";
 import multer from "multer";
 import { z } from "zod";
-import { authenticator } from "otplib";
+import { generateSecret as generateTotpSecret, generateURI as generateTotpURI, verify as verifyTotp, createGuardrails } from "otplib";
 import QRCode from "qrcode";
 import { PrismaClient } from "@prisma/client";
 import { prisma } from "../db";
@@ -18,6 +18,21 @@ import { logAudit } from "../services/auditLog";
 import { clearSetupTokenFile } from "../services/setupTokenFile";
 
 export const authRouter = Router();
+
+// otplib 13 hard-enforces a 16-byte minimum TOTP secret (throws
+// SecretTooShortError below that, it doesn't just fail validation) - but
+// otplib 12 (used up through the previous release) generated 10-byte
+// secrets by default, and any of those already stored in an existing
+// install's database would otherwise throw on every single verify() call,
+// permanently locking that admin out of login the moment this shipped
+// (their only way back in would be the recovery-key/email-reset flows,
+// which also strip MFA entirely - a real lockout, not just an inconvenience).
+// Relaxed here to the old 10-byte floor, applied only to verification
+// (never to new-secret generation below, which already gets the new
+// stronger 20-byte default and doesn't need it) - so an already-enrolled
+// admin's existing secret keeps working exactly as before, while every
+// new enrollment gets the new, stronger minimum going forward.
+const totpVerifyGuardrails = createGuardrails({ MIN_SECRET_BYTES: 10 });
 
 const loginSchema = z.object({
   username: z.string().min(1),
@@ -70,7 +85,12 @@ authRouter.post("/mfa/login", ah(async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "invalid body" });
 
   const user = await prisma.adminUser.findUnique({ where: { id: session.pendingMfaUserId } });
-  if (!user?.totpEnabled || !user.totpSecret || !authenticator.check(parsed.data.code, decryptField(user.totpSecret)!)) {
+  if (!user?.totpEnabled || !user.totpSecret) {
+    await logAudit("mfa_login_failed", { ip: req.ip });
+    return res.status(401).json({ error: "invalid code" });
+  }
+  const totpResult = await verifyTotp({ secret: decryptField(user.totpSecret)!, token: parsed.data.code, guardrails: totpVerifyGuardrails });
+  if (!totpResult.valid) {
     await logAudit("mfa_login_failed", { ip: req.ip });
     return res.status(401).json({ error: "invalid code" });
   }
@@ -334,10 +354,10 @@ authRouter.post("/mfa/setup", ah(async (req, res) => {
     }
   }
 
-  const secret = authenticator.generateSecret();
+  const secret = generateTotpSecret();
   await prisma.adminUser.update({ where: { id: user.id }, data: { totpSecret: encryptField(secret), totpEnabled: false } });
 
-  const otpauth = authenticator.keyuri(user.username, "RackTemp", secret);
+  const otpauth = generateTotpURI({ issuer: "RackTemp", label: user.username, secret });
   const qrDataUrl = await QRCode.toDataURL(otpauth);
   res.json({ ok: true, secret, qrDataUrl });
 }));
@@ -353,7 +373,8 @@ authRouter.post("/mfa/enable", ah(async (req, res) => {
 
   const user = await prisma.adminUser.findUnique({ where: { id: session.userId } });
   if (!user?.totpSecret) return res.status(400).json({ error: "call /mfa/setup first" });
-  if (!authenticator.check(parsed.data.code, decryptField(user.totpSecret)!)) {
+  const enableResult = await verifyTotp({ secret: decryptField(user.totpSecret)!, token: parsed.data.code, guardrails: totpVerifyGuardrails });
+  if (!enableResult.valid) {
     return res.status(400).json({ error: "invalid code" });
   }
 
