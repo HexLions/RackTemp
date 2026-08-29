@@ -118,9 +118,16 @@ export default function NotificationsSection() {
               </label>
               <label className="checkbox-row">
                 <input type="checkbox" checked={cfg.smtpSecure} onChange={(e) => setCfg({ ...cfg, smtpSecure: e.target.checked })} />
-                TLS/SSL
+                TLS/SSL from the start (port 465)
               </label>
             </div>
+            <p className="muted small">
+              Port and this checkbox have to match, or the connection fails with an SSL error
+              ("wrong version number") — <strong>port 465</strong>: check the box (TLS from the very first
+              byte). <strong>Port 587 or 25</strong>: leave it unchecked (STARTTLS — still encrypted, just
+              negotiated a moment after connecting instead of immediately). Most providers, including
+              Gmail, support 587/unchecked.
+            </p>
             <div className="form-row">
               <label>
                 User

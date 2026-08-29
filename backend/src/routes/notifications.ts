@@ -101,6 +101,25 @@ notificationsRouter.post("/test", ah(async (req, res) => {
     }
     res.json({ ok: true });
   } catch (err: any) {
-    res.status(500).json({ error: err?.message ?? "send failed" });
+    res.status(500).json({ error: describeSendError(err) });
   }
 }));
+
+// The raw OpenSSL/Node TLS error ("wrong version number") is the #1 SMTP
+// support question there is: it means the port and the "TLS/SSL from the
+// start" checkbox don't match (465 needs it checked, 587/25 need it
+// unchecked - STARTTLS, negotiated a moment after connecting, not from
+// the first byte) - translating it here means the fix shows up right in
+// the test-button error instead of sending the admin off to decode an
+// OpenSSL error string by hand.
+function describeSendError(err: any): string {
+  const message = err?.message ?? "send failed";
+  if (typeof message === "string" && /wrong version number/i.test(message)) {
+    return (
+      "TLS error - the port and the \"TLS/SSL from the start\" checkbox don't match. " +
+      "Port 465 needs the box checked; port 587 or 25 need it unchecked (STARTTLS). " +
+      `Original error: ${message}`
+    );
+  }
+  return message;
+}
