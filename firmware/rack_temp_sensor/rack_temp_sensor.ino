@@ -43,7 +43,7 @@
 // so you can quickly tell if the device is running the latest flashed version.
 // Also used for OTA auto-update: if the server offers a different one, the
 // device downloads it and flashes itself (see checkFirmwareUpdate below).
-#define FIRMWARE_VERSION "2026-08-29.1"
+#define FIRMWARE_VERSION "2026-08-29.2"
 
 // OTA auto-update fetches and flashes a .bin (over HTTP or HTTPS, matching
 // cfgServerUrl), checked against the SHA256 the server reports for it
@@ -86,6 +86,20 @@ Adafruit_SHT31 sht31 = Adafruit_SHT31();
 Preferences prefs;
 WebServer portalServer(80);
 DNSServer dnsServer;
+// Single reused instance instead of a fresh local one per call (as this
+// briefly was): NetworkClientSecure's constructor allocates a full mbedtls
+// SSL context on the heap unconditionally, even for a plain-HTTP server
+// where it's never actually connected - declaring one fresh in
+// announceDiscovery()/checkFirmwareUpdate()/sendReading() meant doing that
+// heap alloc+free on every single call (every 60s from sendReading alone),
+// which on the ESP32-C3's limited RAM fragments the heap over time and can
+// hang the device - confirmed on real hardware, not theoretical. Safe to
+// share one instance across all call sites: loop() is single-threaded, no
+// two of these ever run concurrently, and HTTPClient::end() (called after
+// every use, see beginRequest()) always calls stop() on an externally
+// supplied client (confirmed against arduino-esp32's own HTTPClient.cpp),
+// so each call starts from a clean disconnected state.
+WiFiClientSecure secureClient;
 // Set by the portal's HTTP handlers, read (and cleared) by runSetupPortal()'s
 // loop to reset its inactivity timeout — a real request is genuine activity,
 // unlike the constant DNS queries every captive-portal-detection probe sends.
@@ -367,14 +381,14 @@ bool parseHostPort(const String &url, String &host, uint16_t &port, bool &isHttp
 }
 
 // Prepares `http` for a request to cfgServerUrl + path, transparently using
-// TLS when cfgServerUrl is https://. Every call site declares its own
-// `secureClient` and passes it in (only actually used in the https branch)
-// because it has to outlive `http` — HTTPClient::begin(Client&, url) just
-// borrows a reference to whatever we hand it, it doesn't take ownership.
+// TLS when cfgServerUrl is https:// — via the shared global `secureClient`
+// (only actually touched in the https branch), which has to outlive this
+// function since HTTPClient::begin(Client&, url) just borrows a reference
+// to whatever it's handed, it doesn't take ownership.
 // Returns false (nothing sent, caller should give up on this request) if
 // the URL can't be parsed, the TLS connection can't be opened, or the
 // configured fingerprint doesn't match the live certificate.
-bool beginRequest(HTTPClient &http, WiFiClientSecure &secureClient, const String &path) {
+bool beginRequest(HTTPClient &http, const String &path) {
   String host;
   uint16_t port;
   bool isHttps;
@@ -387,6 +401,16 @@ bool beginRequest(HTTPClient &http, WiFiClientSecure &secureClient, const String
     return http.begin(cfgServerUrl + path);
   }
 
+  // Default handshake timeout is 120 seconds (arduino-esp32's own
+  // NetworkClientSecure constructor sets sslclient->handshake_timeout =
+  // 120000 - confirmed by reading it directly) - loop() blocks for the
+  // whole duration of connect() below, so a handshake that never
+  // completes (misconfigured fingerprint scenario aside, a flaky AP or a
+  // server mid-restart is enough) would otherwise stall the device for up
+  // to two minutes on every single send, not just fail fast. 15s is
+  // generous for a real handshake against this server's self-signed cert
+  // on an ESP32-C3, nowhere near 120s.
+  secureClient.setHandshakeTimeout(15000);
   // setInsecure() skips CA-chain validation — required just to let the TLS
   // handshake complete at all against the server's self-signed certificate
   // (arduino-esp32 refuses to negotiate with neither a CA nor this flag set,
@@ -402,6 +426,7 @@ bool beginRequest(HTTPClient &http, WiFiClientSecure &secureClient, const String
   secureClient.setInsecure();
   if (!secureClient.connect(host.c_str(), port)) {
     Serial.println("HTTPS connection to the RackTemp server failed.");
+    secureClient.stop(); // defensive: this instance is reused across calls, never leave a half-open handshake behind
     return false;
   }
   if (cfgCertFingerprint.length() > 0 && !secureClient.verify(cfgCertFingerprint.c_str(), nullptr)) {
@@ -422,8 +447,7 @@ void announceDiscovery() {
   if (cfgApiKey.length() > 0) return;
 
   HTTPClient http;
-  WiFiClientSecure secureClient;
-  if (!beginRequest(http, secureClient, "/api/discovery/announce")) return;
+  if (!beginRequest(http, "/api/discovery/announce")) return;
   http.addHeader("Content-Type", "application/json");
   String body = "{\"chipId\":\"" + chipId() + "\",\"firmware\":\"rack_temp_sensor@" FIRMWARE_VERSION "\"}";
   int code = http.POST(body);
@@ -466,9 +490,8 @@ String jsonStringField(const String &payload, const char *key) {
 
 void checkFirmwareUpdate() {
   HTTPClient http;
-  WiFiClientSecure secureClient;
   String latestVersion, latestSha256;
-  if (!beginRequest(http, secureClient, "/api/firmware/latest")) return;
+  if (!beginRequest(http, "/api/firmware/latest")) return;
   int code = http.GET();
 
   if (code == 200) {
@@ -512,7 +535,7 @@ void checkFirmwareUpdate() {
     // just above, same as the plain-HTTP path always was; this only adds
     // encryption in transit against passive packet capture, not fingerprint
     // pinning against an active MITM.
-    WiFiClientSecure secureClient;
+    secureClient.setHandshakeTimeout(15000); // see beginRequest() - 120s default is too long to block loop() on
     secureClient.setInsecure();
     ret = httpUpdate.update(secureClient, cfgServerUrl + "/api/firmware/latest.bin");
   } else {
@@ -541,8 +564,7 @@ void sendReading(float temperature, float humidity) {
   }
 
   HTTPClient http;
-  WiFiClientSecure secureClient;
-  if (!beginRequest(http, secureClient, "/api/ingest")) return;
+  if (!beginRequest(http, "/api/ingest")) return;
   http.addHeader("Content-Type", "application/json");
   http.addHeader("X-Api-Key", cfgApiKey);
 
