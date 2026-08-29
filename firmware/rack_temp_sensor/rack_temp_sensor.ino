@@ -13,6 +13,16 @@
 // If you leave the API key empty, the sensor announces itself on the network and shows up in the dashboard under
 // "Sensors discovered on the network" — see the README, section "Discovering sensors on the network".
 //
+// The server address can be http:// or https://. For https://, also paste the
+// server's certificate fingerprint (shown in the dashboard under Settings >
+// Network once HTTPS is turned on there) into the setup portal's fingerprint
+// field: without it the connection is encrypted but not authenticated, so
+// nothing stops an active on-path attacker from presenting their own
+// certificate; with it, the sensor refuses to send data unless the live
+// certificate matches byte-for-byte. Regenerating the server's certificate
+// (or moving a sensor to a different server) means updating this field and
+// re-saving on every sensor that talks to it.
+//
 // Required libraries (Arduino Library Manager):
 //   - Adafruit SHT31 Library
 //   - Adafruit BusIO
@@ -33,10 +43,11 @@
 // so you can quickly tell if the device is running the latest flashed version.
 // Also used for OTA auto-update: if the server offers a different one, the
 // device downloads it and flashes itself (see checkFirmwareUpdate below).
-#define FIRMWARE_VERSION "2026-08-27.2"
+#define FIRMWARE_VERSION "2026-08-29.1"
 
-// OTA auto-update fetches and flashes a .bin over plain HTTP, checked against
-// the SHA256 the server reports for it (HTTPUpdate.setSHA256sum, see
+// OTA auto-update fetches and flashes a .bin (over HTTP or HTTPS, matching
+// cfgServerUrl), checked against the SHA256 the server reports for it
+// (HTTPUpdate.setSHA256sum, see
 // checkFirmwareUpdate below) — that catches corruption and a swapped file,
 // but arduino-esp32's HTTPUpdate has no signature/authenticity API (checked
 // against core 3.3.11's actual HTTPUpdate.h: setMD5sum/setSHA256sum exist,
@@ -62,6 +73,7 @@
 #define SEND_INTERVAL_SEC 60
 
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <HTTPUpdate.h>
 #include <WebServer.h>
@@ -82,7 +94,7 @@ bool portalActivitySeen = false;
 const unsigned long SEND_INTERVAL_MS = SEND_INTERVAL_SEC * 1000UL;
 const unsigned long WIFI_CONNECT_TIMEOUT_MS = 15000UL;
 
-String cfgSsid, cfgPassword, cfgServerUrl, cfgApiKey;
+String cfgSsid, cfgPassword, cfgServerUrl, cfgApiKey, cfgCertFingerprint;
 
 // Stable chip identifier, used for discovery (POST /api/discovery/announce),
 // for the setup access point's name, and included in every reading so the server can
@@ -102,6 +114,7 @@ bool loadConfig() {
   cfgPassword = prefs.getString("password", "");
   cfgServerUrl = prefs.getString("serverUrl", "");
   cfgApiKey = prefs.getString("apiKey", "");
+  cfgCertFingerprint = prefs.getString("certFp", "");
   prefs.end();
   return cfgSsid.length() > 0 && cfgServerUrl.length() > 0;
 }
@@ -112,6 +125,7 @@ void saveConfig() {
   prefs.putString("password", cfgPassword);
   prefs.putString("serverUrl", cfgServerUrl);
   prefs.putString("apiKey", cfgApiKey);
+  prefs.putString("certFp", cfgCertFingerprint);
   prefs.end();
 }
 
@@ -199,6 +213,10 @@ void handlePortalRoot() {
       String(cfgApiKey.length() > 0 ? "******** (leave empty to keep the current one)"
                                      : "leave it empty to get notified in the dashboard") +
       "'>"
+    "<label>Server certificate fingerprint (HTTPS only, optional)</label>"
+    "<input name='certFp' placeholder='" +
+      String(cfgCertFingerprint.length() > 0 ? "leave empty to keep the current one" : "SHA256, from the dashboard: Settings > Network") +
+      "'>"
     "<button type='submit'>Save and restart</button>"
     "<small>The sensor restarts and tries to connect. If you got something wrong, power it on "
     "and hold BOOT for 2s once it's already running to come back to this page.</small>"
@@ -213,9 +231,11 @@ void handlePortalSave() {
   String newPassword = portalServer.arg("password");
   String newServerUrl = portalServer.arg("serverUrl");
   String newApiKey = portalServer.arg("apiKey");
+  String newCertFingerprint = portalServer.arg("certFp");
   newSsid.trim();
   newServerUrl.trim();
   newApiKey.trim();
+  newCertFingerprint.trim();
 
   if (newSsid.length() == 0 || newServerUrl.length() == 0) {
     portalServer.send(400, "text/plain", "SSID and server address are required.");
@@ -226,6 +246,7 @@ void handlePortalSave() {
   if (newPassword.length() > 0) cfgPassword = newPassword; // empty = keep the saved one
   cfgServerUrl = newServerUrl;
   if (newApiKey.length() > 0) cfgApiKey = newApiKey; // empty = keep the saved one, same as the WiFi password
+  if (newCertFingerprint.length() > 0) cfgCertFingerprint = newCertFingerprint; // same "empty = keep" pattern
   saveConfig();
 
   portalServer.send(200, "text/html",
@@ -312,6 +333,86 @@ bool connectWiFi() {
   return true;
 }
 
+// Splits a "http(s)://host[:port][/path]" server address into its parts.
+// WiFiClientSecure::connect() needs a bare host + port, unlike
+// HTTPClient::begin(String) which parses the whole URL itself — this is
+// only needed for the HTTPS path, where we have to open and verify the
+// connection by hand before handing it to HTTPClient.
+bool parseHostPort(const String &url, String &host, uint16_t &port, bool &isHttps) {
+  String rest;
+  if (url.startsWith("https://")) {
+    isHttps = true;
+    port = 443;
+    rest = url.substring(8);
+  } else if (url.startsWith("http://")) {
+    isHttps = false;
+    port = 80;
+    rest = url.substring(7);
+  } else {
+    return false;
+  }
+
+  int slash = rest.indexOf('/');
+  if (slash >= 0) rest = rest.substring(0, slash);
+
+  int colon = rest.indexOf(':');
+  if (colon >= 0) {
+    host = rest.substring(0, colon);
+    port = (uint16_t)rest.substring(colon + 1).toInt();
+  } else {
+    host = rest;
+  }
+
+  return host.length() > 0;
+}
+
+// Prepares `http` for a request to cfgServerUrl + path, transparently using
+// TLS when cfgServerUrl is https://. Every call site declares its own
+// `secureClient` and passes it in (only actually used in the https branch)
+// because it has to outlive `http` — HTTPClient::begin(Client&, url) just
+// borrows a reference to whatever we hand it, it doesn't take ownership.
+// Returns false (nothing sent, caller should give up on this request) if
+// the URL can't be parsed, the TLS connection can't be opened, or the
+// configured fingerprint doesn't match the live certificate.
+bool beginRequest(HTTPClient &http, WiFiClientSecure &secureClient, const String &path) {
+  String host;
+  uint16_t port;
+  bool isHttps;
+  if (!parseHostPort(cfgServerUrl, host, port, isHttps)) {
+    Serial.println("Could not parse the configured RackTemp server address: " + cfgServerUrl);
+    return false;
+  }
+
+  if (!isHttps) {
+    return http.begin(cfgServerUrl + path);
+  }
+
+  // setInsecure() skips CA-chain validation — required just to let the TLS
+  // handshake complete at all against the server's self-signed certificate
+  // (arduino-esp32 refuses to negotiate with neither a CA nor this flag set,
+  // confirmed by reading its ssl_client.cpp directly). verify() right after
+  // is what actually provides the security guarantee: it recomputes the
+  // live peer certificate's SHA256 fingerprint and compares it byte-for-byte
+  // against cfgCertFingerprint, so the request only proceeds if it's
+  // talking to the exact certificate configured in the setup portal — not
+  // "any certificate for this host" the way normal CA validation would
+  // accept. Without a fingerprint configured, the link is still encrypted
+  // (defeats passive packet capture) but not authenticated against an
+  // active MITM — same tradeoff called out in the setup portal's field.
+  secureClient.setInsecure();
+  if (!secureClient.connect(host.c_str(), port)) {
+    Serial.println("HTTPS connection to the RackTemp server failed.");
+    return false;
+  }
+  if (cfgCertFingerprint.length() > 0 && !secureClient.verify(cfgCertFingerprint.c_str(), nullptr)) {
+    Serial.println("Server certificate fingerprint does not match the configured one - refusing to send data (possible MITM).");
+    secureClient.stop();
+    return false;
+  }
+
+  return http.begin(secureClient, cfgServerUrl + path);
+}
+
 // Announces the chip to the server until you have an API key: it shows up in the dashboard
 // as a "sensor discovered on the network" (notification on first sighting). If in the
 // meantime an admin has linked this chip to a sensor — by creating a new one
@@ -321,7 +422,8 @@ void announceDiscovery() {
   if (cfgApiKey.length() > 0) return;
 
   HTTPClient http;
-  http.begin(cfgServerUrl + "/api/discovery/announce");
+  WiFiClientSecure secureClient;
+  if (!beginRequest(http, secureClient, "/api/discovery/announce")) return;
   http.addHeader("Content-Type", "application/json");
   String body = "{\"chipId\":\"" + chipId() + "\",\"firmware\":\"rack_temp_sensor@" FIRMWARE_VERSION "\"}";
   int code = http.POST(body);
@@ -364,9 +466,10 @@ String jsonStringField(const String &payload, const char *key) {
 
 void checkFirmwareUpdate() {
   HTTPClient http;
-  http.begin(cfgServerUrl + "/api/firmware/latest");
-  int code = http.GET();
+  WiFiClientSecure secureClient;
   String latestVersion, latestSha256;
+  if (!beginRequest(http, secureClient, "/api/firmware/latest")) return;
+  int code = http.GET();
 
   if (code == 200) {
     String payload = http.getString();
@@ -386,10 +489,36 @@ void checkFirmwareUpdate() {
     return;
   }
   Serial.println("New firmware available: " + latestVersion + " (current: " FIRMWARE_VERSION "). Updating...");
-  WiFiClient client;
+
+  String host;
+  uint16_t port;
+  bool isHttps;
+  if (!parseHostPort(cfgServerUrl, host, port, isHttps)) {
+    Serial.println("Could not parse the configured RackTemp server address, aborting OTA.");
+    return;
+  }
+
   httpUpdate.rebootOnUpdate(true);
   httpUpdate.setSHA256sum(latestSha256);
-  t_httpUpdate_return ret = httpUpdate.update(client, cfgServerUrl + "/api/firmware/latest.bin");
+
+  t_httpUpdate_return ret;
+  if (isHttps) {
+    // httpUpdate opens and manages its own connection internally, so unlike
+    // the manual requests in beginRequest() above there's no point between
+    // connect and download where we could call verify() against the live
+    // peer certificate — only setInsecure() is applied here (required for
+    // the handshake to complete at all, same as beginRequest()). The
+    // downloaded file is still content-authenticated by the SHA256 check
+    // just above, same as the plain-HTTP path always was; this only adds
+    // encryption in transit against passive packet capture, not fingerprint
+    // pinning against an active MITM.
+    WiFiClientSecure secureClient;
+    secureClient.setInsecure();
+    ret = httpUpdate.update(secureClient, cfgServerUrl + "/api/firmware/latest.bin");
+  } else {
+    WiFiClient client;
+    ret = httpUpdate.update(client, cfgServerUrl + "/api/firmware/latest.bin");
+  }
   if (ret != HTTP_UPDATE_OK) {
     Serial.printf("OTA failed: %s\n", httpUpdate.getLastErrorString().c_str());
   }
@@ -412,7 +541,8 @@ void sendReading(float temperature, float humidity) {
   }
 
   HTTPClient http;
-  http.begin(cfgServerUrl + "/api/ingest");
+  WiFiClientSecure secureClient;
+  if (!beginRequest(http, secureClient, "/api/ingest")) return;
   http.addHeader("Content-Type", "application/json");
   http.addHeader("X-Api-Key", cfgApiKey);
 
