@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.Net.Http;
+using System.Runtime.InteropServices;
 using System.ServiceProcess;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
@@ -42,6 +43,7 @@ public class MainForm : Form
     private readonly System.Windows.Forms.Timer _readyTimer;
     private readonly System.Windows.Forms.Timer _setupTokenTimer;
     private ToolStripMenuItem _autostartMenuItem = null!;
+    private ToolStripMenuItem _copySetupTokenMenuItem = null!;
     private bool _navigatedOnce;
     private bool _reallyExit;
     private string? _lastShownSetupToken;
@@ -65,6 +67,15 @@ public class MainForm : Form
             ContextMenuStrip = BuildTrayMenu(),
         };
         _trayIcon.DoubleClick += (_, _) => ShowMainWindow();
+        // Windows 10/11 render ShowBalloonTip as an Action Center toast,
+        // whose text isn't selectable — there's no way to copy the token
+        // straight out of it (confirmed: reported by an actual user,
+        // exactly this). Clicking it is the fast path; BalloonTipClicked's
+        // reliability varies by Windows version/notification settings, so
+        // this isn't the only way to get the token — see the "Copy setup
+        // token" tray-menu item below, which doesn't depend on catching a
+        // transient click at all.
+        _trayIcon.BalloonTipClicked += (_, _) => CopySetupTokenToClipboard();
 
         FormClosing += OnFormClosing;
         Shown += async (_, _) =>
@@ -112,18 +123,43 @@ public class MainForm : Form
         if (string.IsNullOrEmpty(token))
         {
             _lastShownSetupToken = null;
+            _copySetupTokenMenuItem.Enabled = false; // setup finished (or never started) - nothing to copy
             return;
         }
 
         if (token == _lastShownSetupToken) return;
         _lastShownSetupToken = token;
+        _copySetupTokenMenuItem.Enabled = true;
 
         _trayIcon.ShowBalloonTip(
             10000,
             "RackTemp setup token",
-            $"Setup token: {token}\nEnter it on the first-login page to finish setting up RackTemp.",
+            $"Setup token: {token}\nClick this notification to copy it, or use the tray icon's " +
+            "\"Copy setup token\" menu item - toast text can't be selected directly.",
             ToolTipIcon.Info
         );
+    }
+
+    // The toast itself has no selectable text (see the comment on
+    // BalloonTipClicked above) - this is what actually gets the token
+    // somewhere the admin can paste it, reachable two ways: clicking the
+    // live toast, or the tray menu item, which stays available even after
+    // the toast itself has expired/been dismissed.
+    private void CopySetupTokenToClipboard()
+    {
+        if (string.IsNullOrEmpty(_lastShownSetupToken)) return;
+
+        try
+        {
+            Clipboard.SetText(_lastShownSetupToken);
+            _trayIcon.ShowBalloonTip(3000, "RackTemp", "Setup token copied to clipboard.", ToolTipIcon.Info);
+        }
+        catch (ExternalException)
+        {
+            // Clipboard momentarily locked by another process (common,
+            // transient, not worth failing loudly over) - the tray menu
+            // item stays available to just try again.
+        }
     }
 
     private ContextMenuStrip BuildTrayMenu()
@@ -141,6 +177,18 @@ public class MainForm : Form
         };
         menu.Opening += (_, _) => _autostartMenuItem.Checked = GetAutostart();
         menu.Items.Add(_autostartMenuItem);
+        menu.Items.Add(new ToolStripSeparator());
+        // Always available (not just while the toast is still showing) -
+        // toast text can't be selected/copied directly on Windows 10/11,
+        // and BalloonTipClicked isn't guaranteed to fire depending on
+        // notification settings, so this is the reliable path to actually
+        // getting the setup token onto the clipboard. Disabled/enabled by
+        // CheckSetupToken() depending on whether a token currently exists.
+        _copySetupTokenMenuItem = new ToolStripMenuItem("Copy setup token", null, (_, _) => CopySetupTokenToClipboard())
+        {
+            Enabled = false,
+        };
+        menu.Items.Add(_copySetupTokenMenuItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit and stop the service", null, (_, _) =>
         {
