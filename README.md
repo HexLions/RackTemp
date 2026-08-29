@@ -11,7 +11,7 @@
 [![Windows](https://img.shields.io/badge/windows-installer-0078D6.svg?logo=windows&logoColor=white)](#-running-on-windows-without-docker)
 [![Linux](https://img.shields.io/badge/linux-systemd-FCC624.svg?logo=linux&logoColor=black)](#-running-on-linux-without-docker)
 [![Self-hosted](https://img.shields.io/badge/self--hosted-yes-6dc24b.svg)](#-quick-start-docker)
-[![Version](https://img.shields.io/badge/version-1.5.2-6dc24b.svg)](#)
+[![Version](https://img.shields.io/badge/version-1.5.3-6dc24b.svg)](#)
 
 **📦 [See the Docker package →](https://github.com/HexLions/RackTemp/pkgs/container/racktemp)**
 
@@ -49,7 +49,8 @@ PRTG/Prometheus/Grafana/Zabbix, all configured from the same web page.
   (picked up on the sensor's next check-in, no open connection required)
 - 📤 **Firmware OTA updates** — upload a new `.bin` from Settings → Firmware, sensors check
   for it once a day and log when one's available. Self-flashing is off by default (see the
-  note in the firmware section below) — it's unsigned, plain-HTTP OTA, so it's opt-in
+  note in the firmware section below) — the download is unsigned (SHA256-checked, not
+  authenticity-checked) even over HTTPS, so it's opt-in
 
 **Notifications**
 - 🔔 **SMTP + Telegram** — threshold breach, sensor offline, back to normal, new sensor
@@ -305,7 +306,7 @@ The firmware sends a JSON POST to `/api/ingest` every 60 seconds (`SEND_INTERVAL
 of the sketch, if you want to change it):
 
 ```json
-{ "temperature": 23.4, "humidity": 41.2, "rssi": -58, "chipId": "AABBCCDDEEFF0011", "firmwareVersion": "2026-08-27.2" }
+{ "temperature": 23.4, "humidity": 41.2, "rssi": -58, "chipId": "AABBCCDDEEFF0011", "firmwareVersion": "2026-08-29.1" }
 ```
 
 `chipId` is the chip's hardware identifier (used for discovery below): the firmware
@@ -316,10 +317,35 @@ Separately, once a day the sensor checks `/api/firmware/latest` for a newer vers
 it if one's available — it does **not** flash itself automatically by default (`#define
 OTA_AUTO_UPDATE 0` at the top of the sketch). If enabled, the download is checked against the
 SHA256 the server reports for it (rejects a corrupted or swapped-in-transit `.bin`), but there's
-still no signature/authenticity check — no TLS, no pinning — so anyone able to spoof the server
-address on the LAN can serve their own `.bin` together with a matching hash. Set `OTA_AUTO_UPDATE`
-to `1` and reflash if you've weighed that remaining tradeoff for your network; otherwise reflash
-manually over USB to update.
+still no signature/authenticity check on the file itself — no embedded public key, no code
+signing — so anyone able to spoof the server address on the LAN can still serve their own `.bin`
+together with a matching hash even over HTTPS. Set `OTA_AUTO_UPDATE` to `1` and reflash if you've
+weighed that remaining tradeoff for your network; otherwise reflash manually over USB to update.
+
+### 🔒 HTTPS and certificate pinning
+
+The sensor talks HTTP or HTTPS to the server, whichever scheme is in the server address entered
+in the setup portal — this covers all three requests the firmware makes (`/api/discovery/announce`,
+`/api/firmware/latest`, `/api/ingest`), plus the OTA `.bin` download if `OTA_AUTO_UPDATE` is on.
+
+The server's certificate is self-signed (Settings → Network → HTTPS, generated and managed by the
+app itself) — there's no public CA behind it for the sensor to validate against — so this uses
+**certificate fingerprint pinning** instead of the normal CA-chain check a browser does:
+
+- **Server address is `https://`, fingerprint field left empty**: the connection is encrypted
+  (defeats passive packet capture on the LAN) but not authenticated — the sensor accepts
+  whatever certificate is presented, so an active on-path attacker (ARP/DNS spoofing) could still
+  swap in their own certificate and see/tamper with the traffic.
+- **Server address is `https://`, fingerprint field filled in**: the sensor additionally checks
+  the live certificate's SHA256 fingerprint against the one you pasted in and refuses to send
+  data on a mismatch (logged over serial). This is the recommended setup — copy the fingerprint
+  from the dashboard's Settings → Network page into the setup portal's **"Server certificate
+  fingerprint"** field on every sensor.
+
+Regenerating the server's certificate (Settings → Network → Regenerate) changes its fingerprint:
+every sensor pinned to the old one will refuse to send data until you update the field (hold
+BOOT for 2s to reopen the portal) and re-save. Same if you point a sensor at a different server —
+the fingerprint has to match that server's certificate, not the previous one.
 
 ### WiFi setup via captive portal (first boot)
 
@@ -334,7 +360,10 @@ connecting to a network:
    your browser at `http://192.168.4.1`.
 3. Choose your WiFi network from the list (or type it manually) + password, the server address
    (e.g. `http://192.168.1.50:7431`), and, if you already know it, the sensor's API key — otherwise
-   leave it empty.
+   leave it empty. If the server has HTTPS turned on (Settings → Network), enter `https://` in the
+   server address instead, and paste the certificate fingerprint shown on that same page into the
+   **"Server certificate fingerprint"** field — see [HTTPS and certificate pinning](#-https-and-certificate-pinning)
+   below for what it protects against.
 4. **Save**: the sensor restarts and tries to connect. If the API key is empty, it announces itself on
    the network and you link it from the discovery banner in the dashboard (see below); if you already pasted it,
    it starts sending data right away.
