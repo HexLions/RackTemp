@@ -1,6 +1,6 @@
 import { WebSocketServer, WebSocket } from "ws";
 import type { Server, IncomingMessage } from "http";
-import { parse as parseCookies } from "cookie";
+import { parseCookie as parseCookies } from "cookie";
 import Keygrip from "keygrip";
 import { prisma } from "./db";
 
