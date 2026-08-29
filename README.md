@@ -306,7 +306,7 @@ The firmware sends a JSON POST to `/api/ingest` every 60 seconds (`SEND_INTERVAL
 of the sketch, if you want to change it):
 
 ```json
-{ "temperature": 23.4, "humidity": 41.2, "rssi": -58, "chipId": "AABBCCDDEEFF0011", "firmwareVersion": "2026-08-29.3" }
+{ "temperature": 23.4, "humidity": 41.2, "rssi": -58, "chipId": "AABBCCDDEEFF0011", "firmwareVersion": "2026-08-29.4" }
 ```
 
 `chipId` is the chip's hardware identifier (used for discovery below): the firmware
