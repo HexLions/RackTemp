@@ -22,6 +22,7 @@ jobs:
       contents: read
       packages: write
       security-events: write # for the Trivy SARIF upload below
+      id-token: write # for cosign's keyless signing below (GitHub OIDC)
     steps:
       - uses: actions/checkout@v7
 
@@ -60,6 +61,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: docker/build-push-action@v7
+        id: build
         with:
           context: .
           push: true
@@ -97,3 +99,16 @@ jobs:
         with:
           sarif_file: trivy-results.sarif
           category: trivy
+
+      # Keyless signing (Sigstore/Fulcio+Rekor via GitHub's own OIDC token,
+      # no key pair to generate/store/rotate as a repo secret) so anyone
+      # pulling the image can cryptographically verify it was actually
+      # built and pushed by this workflow, not substituted at the registry
+      # or by a compromised/leaked GHCR credential used outside CI. Signs
+      # by digest (steps.build.outputs.digest), which covers every tag
+      # pushed above (:edge/:latest/:sha-.../release tag all point at the
+      # same digest) with one signature.
+      - uses: sigstore/cosign-installer@v4.1.2
+
+      - name: Sign the published image (cosign, keyless)
+        run: cosign sign --yes "${IMAGE}@${{ steps.build.outputs.digest }}"

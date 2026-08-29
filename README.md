@@ -11,7 +11,7 @@
 [![Windows](https://img.shields.io/badge/windows-installer-0078D6.svg?logo=windows&logoColor=white)](#-running-on-windows-without-docker)
 [![Linux](https://img.shields.io/badge/linux-systemd-FCC624.svg?logo=linux&logoColor=black)](#-running-on-linux-without-docker)
 [![Self-hosted](https://img.shields.io/badge/self--hosted-yes-6dc24b.svg)](#-quick-start-docker)
-[![Version](https://img.shields.io/badge/version-1.5.3-6dc24b.svg)](#)
+[![Version](https://img.shields.io/badge/version-1.5.4-6dc24b.svg)](#)
 
 **📦 [See the Docker package →](https://github.com/HexLions/RackTemp/pkgs/container/racktemp)**
 
@@ -606,6 +606,11 @@ reference for exposing an instance beyond a trusted LAN:
   and most monitoring tools only support that form. That key ends up in every reverse proxy's
   access log between the monitoring tool and this app. Treat it like any other credential: don't
   point it through a proxy you don't control the logs of.
+- **Optional breach-database check on new passwords** — set `HIBP_PASSWORD_CHECK=1` to reject a
+  password that's appeared in a known data breach (HaveIBeenPwned, k-anonymity, off by default —
+  see [SECURITY.md](./SECURITY.md#password-strength) for why).
+- **Docker images are signed** (cosign, keyless via GitHub OIDC) and carry build provenance + an
+  SBOM — see [SECURITY.md](./SECURITY.md#supply-chain) for the verify command.
 
 ---
 
