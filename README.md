@@ -99,10 +99,15 @@ PRTG/Prometheus/Grafana/Zabbix, all configured from the same web page.
 │  2. 📥 git clone + cp .env.example .env                  │
 │  3. 🔑 Set your own SESSION_SECRET in .env                │
 │  4. ▶️  docker compose up -d --build                      │
-│  5. 🌐 Open http://<pc-ip>:7431                            │
+│  5. 🌐 Open https://<pc-ip>:7431                           │
 │  6. 👤 First login: admin/admin → choose real credentials  │
 └─────────────────────────────────────────────────────────┘
 ```
+
+> 🔒 The app is HTTPS-only, self-signed certificate generated on first boot — your browser will
+> show a "not secure" warning the first time you connect. That's expected: accept/continue past
+> it (or import the certificate as trusted if you'd rather not see it again). See
+> [HTTPS](#-https) below.
 
 ```bash
 git clone https://github.com/HexLions/RackTemp.git
@@ -162,7 +167,7 @@ for anyone who deliberately wants bleeding-edge) — see
 3. In **Environment variables** add `SESSION_SECRET` with a long, random string.
 4. **Deploy the stack**.
 
-Open `http://<pc-ip>:7431` — same behavior as the CLI deploy, including the first
+Open `https://<pc-ip>:7431` — same behavior as the CLI deploy, including the first
 `admin`/`admin` login you need to change right away.
 
 **Automatic updates (optional)**: this stack does *not* include Watchtower by default — pulling
@@ -249,6 +254,35 @@ bash scripts/build-package-linux.sh
 
 ---
 
+## 🔒 HTTPS
+
+The app is HTTPS-only — there's no plain-HTTP mode and no toggle to turn it off. A self-signed
+certificate is generated automatically the first time it's needed, no domain or external
+certificate authority involved. Your browser shows a "not secure" / self-signed warning the first
+time you connect: that's expected, accept/continue past it (or import the certificate as trusted
+from Settings → Network if you'd rather not see it again).
+
+**Updating an existing install that was on plain HTTP before?** This is a breaking change for
+anything already pointed at `http://your-server:7431` — sensors, PRTG/Prometheus/Zabbix, scripts,
+bookmarks. After upgrading:
+
+- **Sensors**: reflash with the latest firmware if it predates HTTPS support, then reopen each
+  sensor's setup portal (hold BOOT for 2s) and, ideally, paste the certificate fingerprint from
+  Settings → Network into the new fingerprint field — see the
+  [firmware section](#-https-and-certificate-pinning) below.
+- **PRTG/Prometheus/Zabbix/anything else polling this server**: repoint the URL to `https://`
+  and configure that tool to accept the self-signed certificate (usually a "skip certificate
+  verification" or "trust this certificate" option) — see each integration's own settings.
+- **Any reverse proxy in front of this app**: it now needs to proxy to `https://` internally
+  instead of `http://` (and either trust the self-signed cert or have you install one you
+  generated yourself in its place — see [Settings pages](#%EF%B8%8F-settings-pages)).
+
+Regenerate the certificate (Settings → Network) if the server's LAN IP changes — its address
+list won't match the new one otherwise. Needs a restart to take effect, and any sensor with a
+pinned fingerprint needs that field updated too.
+
+---
+
 ## 📋 How to use it
 
 1. **Flash the ESP32-C3** (see below) — same firmware for every sensor, no
@@ -324,26 +358,23 @@ weighed that remaining tradeoff for your network; otherwise reflash manually ove
 
 ### 🔒 HTTPS and certificate pinning
 
-The setup portal only asks for the server's **IP address** (and port, only if it's not the
-default 7431) — no `http://`/`https://` to type. The sensor detects which one the server actually
-speaks on its own the first time it connects, remembers that, and keeps re-checking it in the
-background: flip the server's HTTPS toggle later (Settings → Network) and every sensor picks that
-up automatically within one send cycle, no portal revisit needed. This covers all three requests
-the firmware makes (`/api/discovery/announce`, `/api/firmware/latest`, `/api/ingest`), plus the
-OTA `.bin` download if `OTA_AUTO_UPDATE` is on.
+The server is HTTPS-only (see [HTTPS](#-https) above), so the firmware always connects over
+HTTPS too — the setup portal only asks for the server's **IP address** (and port, only if it's
+not the default 7431), no `http://`/`https://` to type. This covers all three requests the
+firmware makes (`/api/discovery/announce`, `/api/firmware/latest`, `/api/ingest`), plus the OTA
+`.bin` download if `OTA_AUTO_UPDATE` is on.
 
-The server's certificate is self-signed (Settings → Network → HTTPS, generated and managed by the
-app itself) — there's no public CA behind it for the sensor to validate against — so this uses
-**certificate fingerprint pinning** instead of the normal CA-chain check a browser does:
+The server's certificate is self-signed — there's no public CA behind it for the sensor to
+validate against — so this uses **certificate fingerprint pinning** instead of the normal
+CA-chain check a browser does:
 
-- **HTTPS detected, fingerprint field left empty**: the connection is encrypted (defeats passive
-  packet capture on the LAN) but not authenticated — the sensor accepts whatever certificate is
-  presented, so an active on-path attacker (ARP/DNS spoofing) could still swap in their own
-  certificate and see/tamper with the traffic.
-- **HTTPS detected, fingerprint field filled in**: the sensor additionally checks the live
+- **Fingerprint field left empty**: the connection is encrypted (defeats passive packet capture
+  on the LAN) but not authenticated — the sensor accepts whatever certificate is presented, so an
+  active on-path attacker (ARP/DNS spoofing) could still swap in their own certificate and
+  see/tamper with the traffic.
+- **Fingerprint field filled in** (recommended): the sensor additionally checks the live
   certificate's SHA256 fingerprint against the one you pasted in and refuses to send data on a
-  mismatch (logged over serial, never silently falls back to plain HTTP — a fingerprint mismatch
-  is a possible-MITM signal, not "try the other scheme"). This is the recommended setup — copy
+  mismatch (logged over serial as a possible MITM, fails closed rather than sending anyway). Copy
   the fingerprint from the dashboard's Settings → Network page into the setup portal's
   **"Server certificate fingerprint"** field on every sensor.
 
@@ -366,10 +397,10 @@ connecting to a network:
 3. Choose your WiFi network from the list (or type it manually) + password, the server's **IP
    address** (e.g. `192.168.1.50` — no `http://`/`https://`, add `:port` only if it's not the
    default 7431), and, if you already know it, the sensor's API key — otherwise leave it empty.
-   If the server has HTTPS turned on (Settings → Network), also paste the certificate fingerprint
-   shown on that same page into the **"Server certificate fingerprint"** field — the sensor
-   detects HTTPS on its own, the fingerprint is what makes it *verified* HTTPS instead of just
-   encrypted; see [HTTPS and certificate pinning](#-https-and-certificate-pinning) below.
+   Also paste the certificate fingerprint from the dashboard's Settings → Network page into the
+   **"Server certificate fingerprint"** field — optional but recommended, it's what makes the
+   connection *verified* HTTPS instead of just encrypted; see
+   [HTTPS and certificate pinning](#-https-and-certificate-pinning) below.
 4. **Save**: the sensor restarts and tries to connect. If the API key is empty, it announces itself on
    the network and you link it from the discovery banner in the dashboard (see below); if you already pasted it,
    it starts sending data right away.
@@ -463,11 +494,19 @@ sensor: add a rack sensor and it shows up automatically everywhere.
 | **Zabbix, Uptime Kuma, others** | Read the same `/metrics` with no dedicated plugins |
 | **Per-sensor, as its own device** | See below — for when you want one sensor to be its own device/host in the monitoring tool, not a channel inside one aggregated sensor |
 
+> The app is HTTPS-only (see [HTTPS](#-https) above) — whichever tool you point at these paths
+> needs to be told to use HTTPS on port 7431 and to accept the self-signed certificate (most
+> tools have a "skip/ignore certificate verification" or "trust this certificate" option in the
+> sensor/target setup, since there's no public CA behind it to validate against otherwise).
+
 Example `prometheus.yml`:
 
 ```yaml
 scrape_configs:
   - job_name: rack-temp-monitor
+    scheme: https
+    tls_config:
+      insecure_skip_verify: true # self-signed cert, no public CA behind it
     static_configs:
       - targets: ["<host>:7431"]
 ```
@@ -516,7 +555,7 @@ Everything account/deploy-related lives under **Settings**, one page per topic:
 | **Account** | Change password, two-factor authentication setup, recovery key regeneration, Windows autostart toggle (Windows install only) |
 | **Notifications** | SMTP/Graph and Telegram configuration, test buttons, alert history |
 | **Integrations** | PRTG token, Portainer webhook |
-| **Network** | HTTPS toggle (self-signed certificate, generated and managed by the app itself) |
+| **Network** | Self-signed HTTPS certificate info + regenerate button (always on, no toggle) |
 | **Updates** | Current/latest version check, links to the release, manual Portainer redeploy |
 | **Firmware** | Upload a new sensor `.bin` — sensors check for it daily, but only self-flash if built with `OTA_AUTO_UPDATE 1` (off by default) |
 | **Backup** | On-demand download, scheduled automatic backups, saved backups list |
@@ -586,12 +625,12 @@ cd backend
 cp .env.example .env
 npm install
 npx prisma db push
-npm run dev            # http://localhost:7431
+npm run dev            # https://localhost:7431 (self-signed cert)
 
 # frontend, in another terminal
 cd frontend
 npm install
-npm run dev             # http://localhost:5173, proxies to :7431
+npm run dev             # http://localhost:5173, proxies to :7431 over HTTPS internally
 ```
 
 ---
@@ -601,11 +640,12 @@ npm run dev             # http://localhost:5173, proxies to :7431
 Full threat model and how to report a vulnerability: **[SECURITY.md](./SECURITY.md)**. Quick
 reference for exposing an instance beyond a trusted LAN:
 
-- **Put it behind a reverse proxy terminating HTTPS**, and set `COOKIE_SECURE=1` +
-  `TRUST_PROXY_HOPS` (usually `1`) in `.env` — otherwise the session cookie never gets the
-  `Secure` flag and rate limiting sees the proxy's IP instead of the client's. Alternatively,
-  skip the reverse proxy and turn on the built-in self-signed HTTPS from Settings → Network
-  instead — that sets `Secure` on its own, no extra config needed.
+- **The app is HTTPS-only already** (self-signed cert, see [HTTPS](#-https) above) — the session
+  cookie's `Secure` flag is always on, no config needed. A reverse proxy in front is still
+  optional, e.g. for a real (non-self-signed) certificate on a public domain — point it at this
+  app's `https://` port (it'll need to trust the self-signed cert, or you can generate your own
+  and drop it in place of the one this app manages), and set `TRUST_PROXY_HOPS` (usually `1`) in
+  `.env` so rate limiting sees the real client IP instead of the proxy's.
 - **`/metrics` and `/api/version` are public by design**, no auth — Prometheus scraping and
   update checks need to work with zero setup. Nothing sensitive is in either response.
 - **PRTG/status integration keys travel in the query string** (`?key=...`), not a header — PRTG

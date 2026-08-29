@@ -164,6 +164,9 @@ export interface TlsCertInfo {
 }
 
 export interface HttpsSettings {
+  // Always true - the app is HTTPS-only, no more toggle - kept in the API
+  // response instead of removed so an old cached frontend build talking to
+  // a new backend (or vice versa) doesn't break on a missing field.
   httpsEnabled: boolean;
   cert: TlsCertInfo;
 }

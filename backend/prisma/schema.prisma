@@ -173,9 +173,15 @@ model AdminUser {
   updatedAt              DateTime  @updatedAt
 }
 
-// Singleton, same pattern as BackupSettings below. httpsEnabled only takes
-// effect on the next start (index.ts reads it once at boot to decide
-// http.createServer vs https.createServer) — see Settings > Network.
+// Vestigial as of the HTTPS-mandatory change (index.ts no longer reads or
+// writes this) - kept in the schema on purpose rather than dropped: this
+// project runs `prisma db push` (no migration history) on every boot, and
+// dropping a model with existing rows makes db push refuse to run without
+// `--accept-data-loss`. Adding that flag to the boot command would apply
+// to every future schema change too, not just this one - permanently
+// removing a real safety net for a one-time cleanup isn't worth it. Safe
+// to actually remove in a future change that's willing to add a one-time
+// `--accept-data-loss` boot, if that's ever worth doing.
 model ServerSettings {
   id           Int      @id @default(1)
   httpsEnabled Boolean  @default(false)

@@ -10,20 +10,24 @@ credentials, session/cookie handling, unattended supply-chain updates (Docker im
 and firmware/OTA integrity for the ESP32 sensors.
 
 **What it does not protect against:** a hostile actor already on the LAN with time and intent
-(ARP/DNS spoofing, packet capture) can still disrupt an unencrypted HTTP deployment; this is a
-monitoring tool for rack temperature/humidity, not a system handling regulated or high-value data,
-and its defenses are scoped accordingly. Exposing an instance directly to the internet, or onto an
-untrusted/shared network, needs the extra steps in the [README](./README.md) — the Security section
-there covers reverse proxy + HTTPS, or the built-in self-signed HTTPS toggle. Running it bare on an
-untrusted network is not a supported configuration.
+(ARP/DNS spoofing) can still disrupt the deployment or attempt a MITM against a sensor that
+hasn't pinned the server's certificate fingerprint (see below); this is a monitoring tool for
+rack temperature/humidity, not a system handling regulated or high-value data, and its defenses
+are scoped accordingly. Exposing an instance directly to the internet, or onto an
+untrusted/shared network, needs the extra steps in the [README](./README.md) — the Security
+section there covers putting a reverse proxy in front. Running it bare on an untrusted network is
+not a supported configuration.
 
-Sensor-to-server traffic is HTTP by default, same trusted-LAN assumption as the rest of the app —
-readable to anyone on the LAN doing packet capture. The firmware supports HTTPS with certificate
-fingerprint pinning against the server's self-signed cert (see the README's
-[HTTPS and certificate pinning](./README.md#-https-and-certificate-pinning) section) if you want
-that leg encrypted and authenticated too; it's opt-in per sensor (set in its setup portal), not
-the default, since it needs the server's HTTPS toggle on first and a fingerprint copy-pasted into
-every sensor by hand.
+**The server is HTTPS-only** (self-signed certificate, generated automatically, no toggle to turn
+it off — see the README's [HTTPS](./README.md#-https) section) and the sensor firmware is
+HTTPS-only to match. Because the certificate is self-signed, transport encryption alone doesn't
+authenticate the server the way a browser's CA-chain check would; the firmware additionally
+supports **certificate fingerprint pinning** (see
+[HTTPS and certificate pinning](./README.md#-https-and-certificate-pinning)) — optional per
+sensor (pasted into its setup portal), and the one thing that actually closes the active-MITM gap
+on that leg. Without a fingerprint pinned, a sensor's traffic is still encrypted (defeats passive
+packet capture) but not authenticated against an attacker able to actively intercept the
+connection.
 
 **Secrets at rest.** The admin password is a bcrypt hash. Genuine third-party credentials — TOTP
 secret, SMTP password, Telegram bot token, Microsoft Graph client secret — are encrypted
