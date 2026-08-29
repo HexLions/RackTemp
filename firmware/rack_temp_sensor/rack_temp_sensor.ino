@@ -45,7 +45,7 @@
 // so you can quickly tell if the device is running the latest flashed version.
 // Also used for OTA auto-update: if the server offers a different one, the
 // device downloads it and flashes itself (see checkFirmwareUpdate below).
-#define FIRMWARE_VERSION "2026-08-29.3"
+#define FIRMWARE_VERSION "2026-08-29.4"
 
 // OTA auto-update fetches and flashes a .bin (over HTTP or HTTPS, matching
 // whatever scheme was last detected for cfgServerHost - see beginRequest()),
@@ -119,6 +119,12 @@ String cfgSsid, cfgPassword, cfgServerHost, cfgApiKey, cfgCertFingerprint;
 // server whose HTTPS toggle changes after this sensor was set up is picked
 // up automatically within one failed cycle, without reopening the portal.
 bool cfgHttpsGuess = false;
+// Whether cfgHttpsGuess has actually been confirmed to work against the
+// real server (see beginRequest()/probeScheme()) - starts false every
+// boot, and is cleared again the moment any real request fails, so the
+// next call re-probes instead of trusting a guess that just stopped
+// working.
+bool cfgSchemeConfirmed = false;
 
 // Stable chip identifier, used for discovery (POST /api/discovery/announce),
 // for the setup access point's name, and included in every reading so the server can
@@ -465,20 +471,47 @@ int tryBeginRequest(HTTPClient &http, const String &host, uint16_t port, bool ht
   return http.begin(secureClient, buildUrl(true, host, port, path)) ? CONNECT_OK : CONNECT_FAILED;
 }
 
+// Confirms a scheme guess actually works against the real server, with a
+// real request - not just tryBeginRequest()'s return value. That matters
+// specifically for the plain-HTTP branch: HTTPClient::begin(String) only
+// parses the URL string, it never touches the network, so it returns true
+// unconditionally regardless of whether the guessed scheme is right. Only
+// the HTTPS branch's secureClient.connect() is an actual network test -
+// meaning a wrong HTTP-first guess against an HTTPS-only server used to
+// report CONNECT_OK and never trigger the fallback below, silently
+// failing forever from the very first boot (confirmed: exactly this,
+// reported from a real device against a real HTTPS-only server). GET
+// /api/version is small, unauthenticated, and side-effect-free (see
+// SECURITY.md - deliberately public, made for exactly this kind of
+// zero-setup check) - safe to call purely as a connectivity probe.
+int probeScheme(const String &host, uint16_t port, bool https) {
+  HTTPClient http;
+  int outcome = tryBeginRequest(http, host, port, https, "/api/version");
+  if (outcome != CONNECT_OK) {
+    http.end();
+    return outcome;
+  }
+  int code = http.GET(); // > 0 = a real HTTP response came back, whatever its status; <= 0 = the request itself failed (wrong scheme, unreachable, timed out)
+  http.end();
+  return code > 0 ? CONNECT_OK : CONNECT_FAILED;
+}
+
 // Prepares `http` for a request to cfgServerHost + path, auto-detecting
-// http vs https so the setup portal never has to ask for a scheme: tries
-// cfgHttpsGuess first (whatever worked last time, or was inferred from an
-// older firmware's saved http(s):// prefix on first boot after updating —
-// see loadConfig()), and if that fails to even connect, tries the other
-// scheme once before giving up. A successful retry updates cfgHttpsGuess,
-// so the very next call already uses the right one - this is what lets an
-// admin flip the server's HTTPS toggle later without reopening the portal
-// on every sensor. The one failure this never falls back on is a
-// fingerprint mismatch: that means the TLS connection itself succeeded but
-// presented the wrong certificate, which is a possible-MITM signal, not
-// "wrong scheme" - silently retrying over plain HTTP there would turn this
-// safety check into a downgrade an attacker could force by just blocking
-// the legitimate HTTPS response.
+// http vs https so the setup portal never has to ask for a scheme.
+// cfgSchemeConfirmed short-circuits this after the first successful probe
+// - re-probing on every single call would double every request's cost for
+// no reason once the scheme is already known good; it's cleared again the
+// moment any real request fails (below), so a server restarting under a
+// different scheme, or its HTTPS toggle flipping, gets re-detected on the
+// next attempt rather than being stuck on a guess that stopped working.
+// This is what lets an admin flip the server's HTTPS toggle later without
+// reopening the setup portal on every sensor.
+// The one failure this never falls back on, at either the probing or the
+// real-request stage, is a fingerprint mismatch: that means the TLS
+// connection itself succeeded but presented the wrong certificate, a
+// possible-MITM signal, not "wrong scheme" - silently retrying over plain
+// HTTP there would turn this safety check into a downgrade an attacker
+// could force by just blocking the legitimate HTTPS response.
 // Returns false (nothing sent, caller should give up on this request) if
 // the address can't be parsed or neither scheme could connect.
 bool beginRequest(HTTPClient &http, const String &path) {
@@ -489,24 +522,41 @@ bool beginRequest(HTTPClient &http, const String &path) {
     return false;
   }
 
-  int outcome = tryBeginRequest(http, host, port, cfgHttpsGuess, path);
-  if (outcome == CONNECT_OK) return true;
-  if (outcome == CONNECT_FINGERPRINT_MISMATCH) {
-    Serial.println("Server certificate fingerprint does not match the configured one - refusing to send data (possible MITM).");
-    return false;
+  if (!cfgSchemeConfirmed) {
+    int probeOutcome = probeScheme(host, port, cfgHttpsGuess);
+    if (probeOutcome == CONNECT_FINGERPRINT_MISMATCH) {
+      Serial.println("Server certificate fingerprint does not match the configured one - refusing to send data (possible MITM).");
+      return false;
+    }
+    if (probeOutcome != CONNECT_OK) {
+      bool otherScheme = !cfgHttpsGuess;
+      int retryProbe = probeScheme(host, port, otherScheme);
+      if (retryProbe == CONNECT_FINGERPRINT_MISMATCH) {
+        Serial.println("Server certificate fingerprint does not match the configured one - refusing to send data (possible MITM).");
+        return false;
+      }
+      if (retryProbe != CONNECT_OK) {
+        Serial.println("Could not reach the RackTemp server (tried both HTTP and HTTPS).");
+        return false;
+      }
+      cfgHttpsGuess = otherScheme;
+      Serial.println(String("Server appears to speak ") + (otherScheme ? "HTTPS" : "HTTP") + " - switching.");
+    }
+    cfgSchemeConfirmed = true;
   }
 
-  bool otherScheme = !cfgHttpsGuess;
-  int retryOutcome = tryBeginRequest(http, host, port, otherScheme, path);
-  if (retryOutcome == CONNECT_OK) {
-    cfgHttpsGuess = otherScheme;
-    Serial.println(String("Server now appears to speak ") + (otherScheme ? "HTTPS" : "HTTP") + " - switching.");
-    return true;
-  }
-  if (retryOutcome == CONNECT_FINGERPRINT_MISMATCH) {
+  int outcome = tryBeginRequest(http, host, port, cfgHttpsGuess, path);
+  if (outcome == CONNECT_OK) return true;
+
+  // Something changed since the scheme was last confirmed good (network
+  // hiccup, server restarted, HTTPS toggle flipped) - re-probe from
+  // scratch on the next call instead of assuming this same guess is
+  // still right.
+  cfgSchemeConfirmed = false;
+  if (outcome == CONNECT_FINGERPRINT_MISMATCH) {
     Serial.println("Server certificate fingerprint does not match the configured one - refusing to send data (possible MITM).");
   } else {
-    Serial.println("Could not reach the RackTemp server (tried both HTTP and HTTPS).");
+    Serial.println("Could not reach the RackTemp server.");
   }
   return false;
 }
@@ -525,6 +575,13 @@ void announceDiscovery() {
   String body = "{\"chipId\":\"" + chipId() + "\",\"firmware\":\"rack_temp_sensor@" FIRMWARE_VERSION "\"}";
   int code = http.POST(body);
   Serial.printf("POST /api/discovery/announce -> %d\n", code);
+  // A non-positive code here means the request itself failed (not just a
+  // non-200 status) despite beginRequest() reporting success - possible
+  // for the plain-HTTP branch specifically, since HTTPClient::begin()
+  // never touches the network and can't fully guarantee the scheme is
+  // still right on its own (see probeScheme()'s comment). Re-probe next
+  // time instead of repeating a scheme that just stopped working.
+  if (code <= 0) cfgSchemeConfirmed = false;
 
   if (code == 200) {
     String payload = http.getString();
@@ -566,6 +623,7 @@ void checkFirmwareUpdate() {
   String latestVersion, latestSha256;
   if (!beginRequest(http, "/api/firmware/latest")) return;
   int code = http.GET();
+  if (code <= 0) cfgSchemeConfirmed = false; // see the same check in announceDiscovery()
 
   if (code == 200) {
     String payload = http.getString();
@@ -653,6 +711,7 @@ void sendReading(float temperature, float humidity) {
 
   int code = http.POST(body);
   Serial.printf("POST /api/ingest -> %d\n", code);
+  if (code <= 0) cfgSchemeConfirmed = false; // see the same check in announceDiscovery()
 
   // The dashboard has no direct connection to the sensor to push a remote
   // reboot to, so it rides along in the response to whatever we send next:
