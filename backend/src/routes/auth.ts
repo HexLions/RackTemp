@@ -63,6 +63,7 @@ authRouter.post("/login", ah(async (req, res) => {
   }
 
   (req.session as any).userId = user.id;
+  (req.session as any).role = "admin";
   (req.session as any).mustChangePassword = user.mustChangePassword;
   (req.session as any).epoch = user.sessionEpoch;
   await logAudit("login", { detail: `username: ${username}`, ip: req.ip });
@@ -98,15 +99,43 @@ authRouter.post("/mfa/login", ah(async (req, res) => {
   session.pendingMfaUserId = undefined;
   session.pendingMfaExpires = undefined;
   session.userId = user.id;
+  session.role = "admin";
   session.mustChangePassword = user.mustChangePassword;
   session.epoch = user.sessionEpoch;
   await logAudit("mfa_login", { detail: `username: ${user.username}`, ip: req.ip });
   res.json({ ok: true, username: user.username, mustChangePassword: user.mustChangePassword });
 }));
 
+// Separate endpoint rather than trying /login then silently falling back —
+// keeps the two credential spaces (AdminUser vs ViewerUser) unambiguous, no
+// timing/enumeration overlap between "wrong admin password" and "not an
+// admin, try viewer" to reason about. No MFA for viewers (see ViewerUser's
+// schema comment) - session.role is what requireAuth/requireAnyUser
+// actually gate on, this is the one place a viewer session is created.
+authRouter.post("/viewer-login", ah(async (req, res) => {
+  const parsed = loginSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid body" });
+
+  const { username, password } = parsed.data;
+  const viewer = await prisma.viewerUser.findUnique({ where: { username } });
+  if (!viewer || !(await bcrypt.compare(password, viewer.passwordHash))) {
+    await logAudit("viewer_login_failed", { detail: `username: ${username}`, ip: req.ip });
+    return res.status(401).json({ error: "invalid credentials" });
+  }
+
+  (req.session as any).userId = viewer.id;
+  (req.session as any).role = "viewer";
+  (req.session as any).epoch = viewer.sessionEpoch;
+  await logAudit("viewer_login", { detail: `username: ${username}`, ip: req.ip });
+  res.json({ ok: true, username: viewer.username });
+}));
+
 authRouter.post("/logout", ah(async (req, res) => {
   const session = req.session as any;
-  if (session?.userId) {
+  if (session?.userId && session.role === "viewer") {
+    const viewer = await prisma.viewerUser.findUnique({ where: { id: session.userId } });
+    await logAudit("viewer_logout", { detail: viewer ? `username: ${viewer.username}` : undefined, ip: req.ip });
+  } else if (session?.userId) {
     const user = await prisma.adminUser.findUnique({ where: { id: session.userId } });
     await logAudit("logout", { detail: user ? `username: ${user.username}` : undefined, ip: req.ip });
   }
@@ -116,10 +145,17 @@ authRouter.post("/logout", ah(async (req, res) => {
 
 authRouter.get("/me", ah(async (req, res) => {
   const session = req.session as any;
-  if (!session?.userId) return res.status(401).json({ error: "not authenticated" });
+  if (!session?.userId || !session.role) return res.status(401).json({ error: "not authenticated" });
+
+  if (session.role === "viewer") {
+    const viewer = await prisma.viewerUser.findUnique({ where: { id: session.userId } });
+    if (!viewer) return res.status(401).json({ error: "not authenticated" });
+    return res.json({ username: viewer.username, role: "viewer", mustChangePassword: false });
+  }
+
   const user = await prisma.adminUser.findUnique({ where: { id: session.userId } });
   if (!user) return res.status(401).json({ error: "not authenticated" });
-  res.json({ username: user.username, mustChangePassword: user.mustChangePassword });
+  res.json({ username: user.username, role: "admin", mustChangePassword: user.mustChangePassword });
 }));
 
 // Offline account-recovery code: works without SMTP configured, as an
@@ -140,7 +176,7 @@ const firstLoginSchema = z.object({
 
 authRouter.post("/first-login", ah(async (req, res) => {
   const session = req.session as any;
-  if (!session?.userId) return res.status(401).json({ error: "not authenticated" });
+  if (!session?.userId || session.role !== "admin") return res.status(401).json({ error: "not authenticated" });
 
   const user = await prisma.adminUser.findUnique({ where: { id: session.userId } });
   if (!user) return res.status(401).json({ error: "not authenticated" });
@@ -218,7 +254,7 @@ const restoreUpload = multer({
 // stays in the handler below.
 const requireFirstLoginSession: RequestHandler = (req, res, next) => {
   const session = req.session as any;
-  if (!session?.userId) return res.status(401).json({ error: "not authenticated" });
+  if (!session?.userId || session.role !== "admin") return res.status(401).json({ error: "not authenticated" });
   next();
 };
 
@@ -289,7 +325,7 @@ const changePasswordSchema = z.object({
 
 authRouter.post("/change-password", ah(async (req, res) => {
   const session = req.session as any;
-  if (!session?.userId) return res.status(401).json({ error: "not authenticated" });
+  if (!session?.userId || session.role !== "admin") return res.status(401).json({ error: "not authenticated" });
   if (session.mustChangePassword) return res.status(403).json({ error: "must_change_password" });
 
   const parsed = changePasswordSchema.safeParse(req.body);
@@ -322,7 +358,7 @@ authRouter.post("/change-password", ah(async (req, res) => {
 
 authRouter.get("/mfa/status", ah(async (req, res) => {
   const session = req.session as any;
-  if (!session?.userId) return res.status(401).json({ error: "not authenticated" });
+  if (!session?.userId || session.role !== "admin") return res.status(401).json({ error: "not authenticated" });
   const user = await prisma.adminUser.findUnique({ where: { id: session.userId } });
   res.json({ enabled: user?.totpEnabled ?? false });
 }));
@@ -334,7 +370,7 @@ const mfaSetupSchema = z.object({ currentPassword: z.string().min(1).optional() 
 
 authRouter.post("/mfa/setup", ah(async (req, res) => {
   const session = req.session as any;
-  if (!session?.userId) return res.status(401).json({ error: "not authenticated" });
+  if (!session?.userId || session.role !== "admin") return res.status(401).json({ error: "not authenticated" });
 
   const user = await prisma.adminUser.findUnique({ where: { id: session.userId } });
   if (!user) return res.status(401).json({ error: "not authenticated" });
@@ -366,7 +402,7 @@ const mfaEnableSchema = z.object({ code: z.string().min(1) });
 
 authRouter.post("/mfa/enable", ah(async (req, res) => {
   const session = req.session as any;
-  if (!session?.userId) return res.status(401).json({ error: "not authenticated" });
+  if (!session?.userId || session.role !== "admin") return res.status(401).json({ error: "not authenticated" });
 
   const parsed = mfaEnableSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid body" });
@@ -394,7 +430,7 @@ const mfaDisableSchema = z.object({ currentPassword: z.string().min(1) });
 
 authRouter.post("/mfa/disable", ah(async (req, res) => {
   const session = req.session as any;
-  if (!session?.userId) return res.status(401).json({ error: "not authenticated" });
+  if (!session?.userId || session.role !== "admin") return res.status(401).json({ error: "not authenticated" });
 
   const parsed = mfaDisableSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid body" });
@@ -474,7 +510,7 @@ const regenerateRecoveryKeySchema = z.object({ currentPassword: z.string().min(1
 
 authRouter.post("/regenerate-recovery-key", ah(async (req, res) => {
   const session = req.session as any;
-  if (!session?.userId) return res.status(401).json({ error: "not authenticated" });
+  if (!session?.userId || session.role !== "admin") return res.status(401).json({ error: "not authenticated" });
 
   const parsed = regenerateRecoveryKeySchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid body" });
@@ -585,5 +621,96 @@ authRouter.post("/reset-password", ah(async (req, res) => {
   });
 
   await logAudit("password_reset_email", { ip: req.ip });
+  res.json({ ok: true });
+}));
+
+// --- Viewer account management (admin-only) ---
+// Read-only accounts — see ViewerUser's schema comment. Created/reset with a
+// real password chosen by the admin directly, no placeholder + forced-change
+// flow, no self-signup, no email involved — deliberately smaller than the
+// admin account's own onboarding for a feature meant to just hand a few
+// trusted people read access.
+
+authRouter.get("/viewers", ah(async (req, res) => {
+  const session = req.session as any;
+  if (!session?.userId || session.role !== "admin") return res.status(401).json({ error: "not authenticated" });
+
+  const viewers = await prisma.viewerUser.findMany({
+    select: { id: true, username: true, createdAt: true },
+    orderBy: { createdAt: "asc" },
+  });
+  res.json(viewers);
+}));
+
+const createViewerSchema = z.object({
+  username: z.string().min(3),
+  password: z.string().min(8),
+});
+
+authRouter.post("/viewers", ah(async (req, res) => {
+  const session = req.session as any;
+  if (!session?.userId || session.role !== "admin") return res.status(401).json({ error: "not authenticated" });
+
+  const parsed = createViewerSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid body" });
+
+  const existing = await prisma.viewerUser.findUnique({ where: { username: parsed.data.username } });
+  if (existing) return res.status(400).json({ error: "username already in use" });
+
+  const pwnedCheck = await checkPasswordNotPwned(parsed.data.password);
+  if (pwnedCheck.pwned) {
+    return res.status(400).json({ error: "this password has appeared in known data breaches - choose a different one" });
+  }
+
+  const passwordHash = await bcrypt.hash(parsed.data.password, 12);
+  const viewer = await prisma.viewerUser.create({
+    data: { username: parsed.data.username, passwordHash },
+    select: { id: true, username: true, createdAt: true },
+  });
+  await logAudit("viewer_created", { detail: `username: ${viewer.username}`, ip: req.ip });
+  res.json(viewer);
+}));
+
+const resetViewerPasswordSchema = z.object({ password: z.string().min(8) });
+
+authRouter.post("/viewers/:id/reset-password", ah(async (req, res) => {
+  const session = req.session as any;
+  if (!session?.userId || session.role !== "admin") return res.status(401).json({ error: "not authenticated" });
+
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: "invalid id" });
+
+  const parsed = resetViewerPasswordSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid body" });
+
+  const viewer = await prisma.viewerUser.findUnique({ where: { id } });
+  if (!viewer) return res.status(404).json({ error: "not found" });
+
+  const pwnedCheck = await checkPasswordNotPwned(parsed.data.password);
+  if (pwnedCheck.pwned) {
+    return res.status(400).json({ error: "this password has appeared in known data breaches - choose a different one" });
+  }
+
+  const passwordHash = await bcrypt.hash(parsed.data.password, 12);
+  // Bump sessionEpoch same as the admin's own change-password route — any
+  // session this viewer already has open stops working, same real
+  // revocation mechanism (see ViewerUser.sessionEpoch's schema comment).
+  await prisma.viewerUser.update({ where: { id }, data: { passwordHash, sessionEpoch: { increment: 1 } } });
+  await logAudit("viewer_password_reset", { detail: `username: ${viewer.username}`, ip: req.ip });
+  res.json({ ok: true });
+}));
+
+authRouter.delete("/viewers/:id", ah(async (req, res) => {
+  const session = req.session as any;
+  if (!session?.userId || session.role !== "admin") return res.status(401).json({ error: "not authenticated" });
+
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: "invalid id" });
+
+  const viewer = await prisma.viewerUser.findUnique({ where: { id } });
+  if (!viewer) return res.status(404).json({ error: "not found" });
+
+  await prisma.viewerUser.delete({ where: { id } });
+  await logAudit("viewer_deleted", { detail: `username: ${viewer.username}`, ip: req.ip });
   res.json({ ok: true });
 }));

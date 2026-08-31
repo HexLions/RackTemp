@@ -3,18 +3,32 @@ import { ah } from "../middleware/asyncHandler";
 import { randomBytes } from "crypto";
 import { z } from "zod";
 import { prisma } from "../db";
-import { requireAuth } from "../middleware/auth";
+import { requireAuth, requireAnyUser } from "../middleware/auth";
 import { logAudit } from "../services/auditLog";
 
 export const sensorsRouter = Router();
-sensorsRouter.use(ah(requireAuth));
+// Read routes are open to both roles (requireAnyUser); every mutating route
+// below adds ah(requireAuth) on top of this, admin-only - see the
+// role/apiKey comments on those routes and on redactForViewer() below.
+sensorsRouter.use(ah(requireAnyUser));
 
 // How long /api/discovery/announce will hand back a linked sensor's API key
 // for. Opened by an admin action (creating/claiming with a chipId, or
 // POST /:id/reopen-handoff) — see discovery.ts for the consuming side.
 export const KEY_HANDOUT_WINDOW_MS = 10 * 60_000;
 
-sensorsRouter.get("/", ah(async (_req, res) => {
+// apiKey is real credential material (whoever has it can POST readings as
+// that sensor) - a read-only viewer seeing the dashboard must not be able to
+// read it out, including straight from this JSON via curl/devtools, not
+// just "hidden" in the UI. Everything else on a sensor (name, location,
+// thresholds, readings) is fine for a viewer to see as-is.
+function redactForViewer<T extends { apiKey: string }>(sensor: T, role: string): Omit<T, "apiKey"> | T {
+  if (role !== "viewer") return sensor;
+  const { apiKey: _apiKey, ...rest } = sensor;
+  return rest;
+}
+
+sensorsRouter.get("/", ah(async (req, res) => {
   const sensors = await prisma.sensor.findMany({
     include: {
       threshold: true,
@@ -22,7 +36,8 @@ sensorsRouter.get("/", ah(async (_req, res) => {
     },
     orderBy: { createdAt: "asc" },
   });
-  res.json(sensors);
+  const role = (req.session as any)?.role;
+  res.json(sensors.map((s) => redactForViewer(s, role)));
 }));
 
 // max(80): this ends up as a Prometheus label value (metrics.ts) and a
@@ -38,7 +53,7 @@ const createSchema = z.object({
   chipId: z.string().optional(),
 });
 
-sensorsRouter.post("/", ah(async (req, res) => {
+sensorsRouter.post("/", ah(requireAuth), ah(async (req, res) => {
   const parsed = createSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid body" });
 
@@ -74,7 +89,7 @@ sensorsRouter.get("/:id", ah(async (req, res) => {
     include: { threshold: true },
   });
   if (!sensor) return res.status(404).json({ error: "not found" });
-  res.json(sensor);
+  res.json(redactForViewer(sensor, (req.session as any)?.role));
 }));
 
 const updateSchema = z.object({
@@ -83,7 +98,7 @@ const updateSchema = z.object({
   staticIp: z.string().optional().nullable(),
 });
 
-sensorsRouter.put("/:id", ah(async (req, res) => {
+sensorsRouter.put("/:id", ah(requireAuth), ah(async (req, res) => {
   const parsed = updateSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid body" });
 
@@ -94,14 +109,14 @@ sensorsRouter.put("/:id", ah(async (req, res) => {
   res.json(sensor);
 }));
 
-sensorsRouter.delete("/:id", ah(async (req, res) => {
+sensorsRouter.delete("/:id", ah(requireAuth), ah(async (req, res) => {
   const id = req.params.id as string;
   await prisma.sensor.delete({ where: { id } });
   await logAudit("sensor_deleted", { detail: `sensor id: ${id}`, ip: req.ip });
   res.status(204).end();
 }));
 
-sensorsRouter.post("/:id/regenerate-key", ah(async (req, res) => {
+sensorsRouter.post("/:id/regenerate-key", ah(requireAuth), ah(async (req, res) => {
   const apiKey = randomBytes(32).toString("hex");
   const sensor = await prisma.sensor.update({
     where: { id: req.params.id as string },
@@ -115,7 +130,7 @@ sensorsRouter.post("/:id/regenerate-key", ah(async (req, res) => {
 // before the device actually picked up its key — e.g. it wasn't powered on
 // yet, or the WiFi/server address in the setup portal was wrong the first
 // time. Reopens the same 10-minute one-shot handoff.
-sensorsRouter.post("/:id/reopen-handoff", ah(async (req, res) => {
+sensorsRouter.post("/:id/reopen-handoff", ah(requireAuth), ah(async (req, res) => {
   const sensor = await prisma.sensor.update({
     where: { id: req.params.id as string },
     data: { keyHandoutUntil: new Date(Date.now() + KEY_HANDOUT_WINDOW_MS), keyHandedOut: false },
@@ -127,7 +142,7 @@ sensorsRouter.post("/:id/reopen-handoff", ah(async (req, res) => {
 // us when it POSTs a reading (every SEND_INTERVAL_SEC). So this just sets a
 // flag; the actual reboot happens the next time /api/ingest sees it and
 // answers with {reboot:true}, which can take up to ~1 minute.
-sensorsRouter.post("/:id/reboot", ah(async (req, res) => {
+sensorsRouter.post("/:id/reboot", ah(requireAuth), ah(async (req, res) => {
   const sensor = await prisma.sensor.update({
     where: { id: req.params.id as string },
     data: { rebootRequested: true },
@@ -179,7 +194,7 @@ const thresholdSchema = z.object({
   mutedUntil: z.coerce.date().nullable().optional(),
 });
 
-sensorsRouter.put("/:id/threshold", ah(async (req, res) => {
+sensorsRouter.put("/:id/threshold", ah(requireAuth), ah(async (req, res) => {
   const parsed = thresholdSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "invalid body" });
 
