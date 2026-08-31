@@ -382,7 +382,13 @@ CA-chain check a browser does:
 Regenerating the server's certificate (Settings → Network → Regenerate) changes its fingerprint:
 every sensor pinned to the old one will refuse to send data until you update the field (hold
 BOOT for 2s to reopen the portal) and re-save. Same if you point a sensor at a different server —
-the fingerprint has to match that server's certificate, not the previous one.
+the fingerprint has to match that server's certificate, not the previous one. The field follows
+the same "leave it blank to keep what's already saved" pattern as the WiFi password and API key —
+which means just clearing the field does **not** unpin the old fingerprint. If you're
+reconfiguring a sensor for a different (or rebuilt) server, either paste in the *new* server's
+fingerprint directly, or tick the **"Clear the saved fingerprint instead"** checkbox that appears
+next to the field once one is already saved — connects unpinned to the new server, then re-pin it
+the normal way once you've confirmed it's the right one.
 
 ### WiFi setup via captive portal (first boot)
 
