@@ -134,7 +134,7 @@ export default function Login() {
           {asViewer ? "Log in as admin instead" : "Log in as viewer (read-only)"}
         </button>
         {!asViewer && (
-          <Link to="/forgot-password" className="btn-link" style={{ display: "block", textAlign: "center", marginTop: 4 }}>
+          <Link to="/forgot-password" className="btn-link" style={{ display: "block", textAlign: "center", marginTop: 14 }}>
             Forgot password?
           </Link>
         )}
