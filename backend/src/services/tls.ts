@@ -42,11 +42,21 @@ function localSanEntries(): { type: 7; ip: string }[] {
 // needs loopback + IPv6 too since anything reachable should also be a valid
 // cert SAN, this one only needs plain IPv4 addresses someone would actually
 // type into the sensor's setup portal or a monitoring tool's config.
+//
+// Also excludes 169.254.0.0/16 (APIPA/link-local) - Windows self-assigns one
+// of these to any adapter that's up but never got a real DHCP lease (a
+// disconnected Wi-Fi card, a virtual adapter for a VPN/Hyper-V/Docker Desktop
+// that's installed but idle, ...). It's real to the OS but not reachable from
+// anywhere else on the actual LAN, so listing it next to the real address
+// alongside it (confirmed: reported by an actual user, exactly this) is
+// actively misleading rather than just extra noise.
 export function lanIps(): string[] {
   const ips: string[] = [];
   for (const addrs of Object.values(os.networkInterfaces())) {
     for (const addr of addrs ?? []) {
-      if (!addr.internal && addr.family === "IPv4") ips.push(addr.address);
+      if (!addr.internal && addr.family === "IPv4" && !addr.address.startsWith("169.254.")) {
+        ips.push(addr.address);
+      }
     }
   }
   return ips;
