@@ -166,6 +166,14 @@ export interface TlsCertInfo {
   fingerprint: string | null;
 }
 
+export interface NetworkInfo {
+  // LAN-reachable IPv4 addresses only, no loopback - see the /network-info
+  // route's comment for why this exists (Windows tray WebView2 always shows
+  // localhost, which is meaningless off that one machine).
+  ips: string[];
+  port: number;
+}
+
 export interface HttpsSettings {
   // Always true - the app is HTTPS-only, no more toggle - kept in the API
   // response instead of removed so an old cached frontend build talking to

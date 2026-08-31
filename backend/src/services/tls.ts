@@ -36,6 +36,22 @@ function localSanEntries(): { type: 7; ip: string }[] {
   return [...ips].map((ip) => ({ type: 7 as const, ip }));
 }
 
+// LAN-reachable IPv4 addresses this machine currently has, no loopback - the
+// admin-facing "what address do I actually use" answer (Settings > Network,
+// system.ts's /network-info). Separate from localSanEntries() above: that one
+// needs loopback + IPv6 too since anything reachable should also be a valid
+// cert SAN, this one only needs plain IPv4 addresses someone would actually
+// type into the sensor's setup portal or a monitoring tool's config.
+export function lanIps(): string[] {
+  const ips: string[] = [];
+  for (const addrs of Object.values(os.networkInterfaces())) {
+    for (const addr of addrs ?? []) {
+      if (!addr.internal && addr.family === "IPv4") ips.push(addr.address);
+    }
+  }
+  return ips;
+}
+
 interface TlsCertInfo {
   key: string;
   cert: string;
