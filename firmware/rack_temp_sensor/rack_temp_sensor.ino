@@ -43,7 +43,7 @@
 // so you can quickly tell if the device is running the latest flashed version.
 // Also used for OTA auto-update: if the server offers a different one, the
 // device downloads it and flashes itself (see checkFirmwareUpdate below).
-#define FIRMWARE_VERSION "2026-08-31.2"
+#define FIRMWARE_VERSION "2026-08-31.3"
 
 // OTA auto-update fetches and flashes a .bin over HTTPS, checked against
 // the MD5 the server reports for it (HTTPUpdate.setMD5sum, see
@@ -246,14 +246,13 @@ void handlePortalRoot() {
     "<label>Server certificate fingerprint (recommended, optional)</label>"
     "<input name='certFp' placeholder='" +
       String(cfgCertFingerprint.length() > 0 ? "leave empty to keep the current one" : "SHA256, from the dashboard: Settings > Network") +
-      "'>" +
-      (cfgCertFingerprint.length() > 0
-        ? "<label style='display:flex;align-items:center;gap:8px;margin-top:10px'>"
-          "<input type='checkbox' name='clearFp' value='1' style='width:auto;margin:0'>"
-          "Clear the saved fingerprint instead (check this if you're pointing at a different/rebuilt "
-          "server - keeping the old one here would refuse to connect to the new one)"
-          "</label>"
-        : "") +
+      "'>"
+    "<label style='display:flex;align-items:center;gap:8px;margin-top:14px'>"
+    "<input type='checkbox' name='resetLink' value='1' style='width:auto;margin:0'>"
+    "Reset this sensor's server link (clears the saved API key and certificate fingerprint - use "
+    "this when pointing at a new or reinstalled server; it'll show up in the dashboard to be "
+    "linked again, same as right after flashing)"
+    "</label>"
     "<button type='submit'>Save and restart</button>"
     "<small>The sensor restarts and tries to connect. If you got something wrong, power it on "
     "and hold BOOT for 2s once it's already running to come back to this page.</small>"
@@ -271,15 +270,19 @@ void handlePortalSave() {
   String newCertFingerprint = portalServer.arg("certFp");
   // Only present in the submitted form when the checkbox was actually
   // ticked (standard unchecked-checkbox-omits-the-field HTML behavior) -
-  // lets "clear it" be a distinct, deliberate choice from "leave it
+  // lets "reset the link" be a distinct, deliberate choice from "leave it
   // blank", which otherwise means "keep the current one" for every field
-  // on this form, fingerprint included until now. Reconfiguring the same
-  // sensor for a different (or rebuilt) server while keeping its old
-  // fingerprint is exactly the case that used to silently refuse to
-  // connect - fail-closed and correctly logged, but with no way back into
-  // the portal to fix it other than realizing the fingerprint field was
-  // the problem.
-  bool clearFingerprint = portalServer.hasArg("clearFp");
+  // on this form. Both apiKey and certFp are tied to *which server* this
+  // sensor talks to, not just to this WiFi network - reconfiguring for a
+  // new/reinstalled server (a fresh database, so the old apiKey matches no
+  // sensor row anymore - 401 on every send; and/or a fresh self-signed
+  // cert with a different fingerprint) while leaving both fields blank
+  // used to silently carry the stale values over. First reported as a
+  // fingerprint mismatch, turned out (server log: "POST /api/ingest ->
+  // 401") to actually be the stale apiKey - one checkbox clears both at
+  // once instead of two separate ones for what's really the same
+  // "pointing this sensor at a different server" situation.
+  bool resetLink = portalServer.hasArg("resetLink");
   newSsid.trim();
   newServerHost.trim();
   newApiKey.trim();
@@ -307,14 +310,22 @@ void handlePortalSave() {
   cfgSsid = newSsid;
   if (newPassword.length() > 0) cfgPassword = newPassword; // empty = keep the saved one
   cfgServerHost = newServerHost;
-  if (newApiKey.length() > 0) cfgApiKey = newApiKey; // empty = keep the saved one, same as the WiFi password
-  // A typed fingerprint always wins; otherwise the checkbox explicitly
-  // clears it (connects unpinned until re-pinned - see connectSecure()'s
-  // comment); with neither, keep the existing one, same as every other
-  // field on this form.
+  // A typed value always wins over the checkbox for both fields below;
+  // otherwise resetLink explicitly clears them (an empty apiKey makes
+  // loop() call announceDiscovery() instead of sendReading() - see
+  // loop()'s own branch on cfgApiKey - so the sensor shows up in the new
+  // server's dashboard to be linked, same as a sensor that's never been
+  // configured; an empty fingerprint just means unpinned until re-pinned -
+  // see connectSecure()'s comment); with neither typed nor reset, keep the
+  // existing values, same as every other field on this form.
+  if (newApiKey.length() > 0) {
+    cfgApiKey = newApiKey;
+  } else if (resetLink) {
+    cfgApiKey = "";
+  }
   if (newCertFingerprint.length() > 0) {
     cfgCertFingerprint = newCertFingerprint;
-  } else if (clearFingerprint) {
+  } else if (resetLink) {
     cfgCertFingerprint = "";
   }
   saveConfig();
