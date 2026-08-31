@@ -43,7 +43,7 @@
 // so you can quickly tell if the device is running the latest flashed version.
 // Also used for OTA auto-update: if the server offers a different one, the
 // device downloads it and flashes itself (see checkFirmwareUpdate below).
-#define FIRMWARE_VERSION "2026-08-31.1"
+#define FIRMWARE_VERSION "2026-08-31.2"
 
 // OTA auto-update fetches and flashes a .bin over HTTPS, checked against
 // the MD5 the server reports for it (HTTPUpdate.setMD5sum, see
@@ -246,7 +246,14 @@ void handlePortalRoot() {
     "<label>Server certificate fingerprint (recommended, optional)</label>"
     "<input name='certFp' placeholder='" +
       String(cfgCertFingerprint.length() > 0 ? "leave empty to keep the current one" : "SHA256, from the dashboard: Settings > Network") +
-      "'>"
+      "'>" +
+      (cfgCertFingerprint.length() > 0
+        ? "<label style='display:flex;align-items:center;gap:8px;margin-top:10px'>"
+          "<input type='checkbox' name='clearFp' value='1' style='width:auto;margin:0'>"
+          "Clear the saved fingerprint instead (check this if you're pointing at a different/rebuilt "
+          "server - keeping the old one here would refuse to connect to the new one)"
+          "</label>"
+        : "") +
     "<button type='submit'>Save and restart</button>"
     "<small>The sensor restarts and tries to connect. If you got something wrong, power it on "
     "and hold BOOT for 2s once it's already running to come back to this page.</small>"
@@ -262,6 +269,17 @@ void handlePortalSave() {
   String newServerHost = portalServer.arg("serverUrl");
   String newApiKey = portalServer.arg("apiKey");
   String newCertFingerprint = portalServer.arg("certFp");
+  // Only present in the submitted form when the checkbox was actually
+  // ticked (standard unchecked-checkbox-omits-the-field HTML behavior) -
+  // lets "clear it" be a distinct, deliberate choice from "leave it
+  // blank", which otherwise means "keep the current one" for every field
+  // on this form, fingerprint included until now. Reconfiguring the same
+  // sensor for a different (or rebuilt) server while keeping its old
+  // fingerprint is exactly the case that used to silently refuse to
+  // connect - fail-closed and correctly logged, but with no way back into
+  // the portal to fix it other than realizing the fingerprint field was
+  // the problem.
+  bool clearFingerprint = portalServer.hasArg("clearFp");
   newSsid.trim();
   newServerHost.trim();
   newApiKey.trim();
@@ -290,7 +308,15 @@ void handlePortalSave() {
   if (newPassword.length() > 0) cfgPassword = newPassword; // empty = keep the saved one
   cfgServerHost = newServerHost;
   if (newApiKey.length() > 0) cfgApiKey = newApiKey; // empty = keep the saved one, same as the WiFi password
-  if (newCertFingerprint.length() > 0) cfgCertFingerprint = newCertFingerprint; // same "empty = keep" pattern
+  // A typed fingerprint always wins; otherwise the checkbox explicitly
+  // clears it (connects unpinned until re-pinned - see connectSecure()'s
+  // comment); with neither, keep the existing one, same as every other
+  // field on this form.
+  if (newCertFingerprint.length() > 0) {
+    cfgCertFingerprint = newCertFingerprint;
+  } else if (clearFingerprint) {
+    cfgCertFingerprint = "";
+  }
   saveConfig();
 
   portalServer.send(200, "text/html",
