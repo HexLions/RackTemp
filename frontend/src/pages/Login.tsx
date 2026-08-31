@@ -6,9 +6,10 @@ import ThemeToggle from "../components/ThemeToggle";
 import Footer from "../components/Footer";
 
 export default function Login() {
-  const { username, login, verifyMfa } = useAuth();
+  const { username, login, viewerLogin, verifyMfa } = useAuth();
   const [user, setUser] = useState("");
   const [pass, setPass] = useState("");
+  const [asViewer, setAsViewer] = useState(false);
   const [mfaCode, setMfaCode] = useState("");
   const [mfaStep, setMfaStep] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,8 +22,12 @@ export default function Login() {
     setError(null);
     setBusy(true);
     try {
-      const res = await login(user, pass);
-      if (res.mfaRequired) setMfaStep(true);
+      if (asViewer) {
+        await viewerLogin(user, pass);
+      } else {
+        const res = await login(user, pass);
+        if (res.mfaRequired) setMfaStep(true);
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Network error");
     } finally {
@@ -102,7 +107,9 @@ export default function Login() {
           </span>
           Rack Temp Monitor
         </div>
-        <p className="subtitle">Log in to manage sensors and notifications.</p>
+        <p className="subtitle">
+          {asViewer ? "Log in to view sensors and history — read-only." : "Log in to manage sensors and notifications."}
+        </p>
         <label>
           Username
           <input value={user} onChange={(e) => setUser(e.target.value)} autoFocus required />
@@ -115,9 +122,22 @@ export default function Login() {
         <button className="btn-primary" type="submit" disabled={busy}>
           {busy ? "Logging in…" : "Log in"}
         </button>
-        <Link to="/forgot-password" className="btn-link" style={{ display: "block", textAlign: "center", marginTop: 12 }}>
-          Forgot password?
-        </Link>
+        <button
+          type="button"
+          className="btn-link"
+          style={{ display: "block", textAlign: "center", marginTop: 12 }}
+          onClick={() => {
+            setAsViewer(!asViewer);
+            setError(null);
+          }}
+        >
+          {asViewer ? "Log in as admin instead" : "Log in as viewer (read-only)"}
+        </button>
+        {!asViewer && (
+          <Link to="/forgot-password" className="btn-link" style={{ display: "block", textAlign: "center", marginTop: 4 }}>
+            Forgot password?
+          </Link>
+        )}
       </form>
       <Footer />
     </div>

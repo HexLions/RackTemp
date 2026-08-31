@@ -174,6 +174,14 @@ export interface NetworkInfo {
   port: number;
 }
 
+export type Role = "admin" | "viewer";
+
+export interface ViewerUser {
+  id: number;
+  username: string;
+  createdAt: string;
+}
+
 export interface HttpsSettings {
   // Always true - the app is HTTPS-only, no more toggle - kept in the API
   // response instead of removed so an old cached frontend build talking to
