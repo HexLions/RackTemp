@@ -40,15 +40,23 @@ const upload = multer({
 });
 
 // Public, no auth: devices poll this to decide whether to self-update.
-// Includes the uploaded .bin's SHA256 so the firmware can verify it wasn't
-// corrupted or swapped in transit (HTTPUpdate.setSHA256sum) before flashing —
-// see the OTA_AUTO_UPDATE comment in the .ino for what this does and doesn't cover.
+// Includes the uploaded .bin's MD5 so the firmware can verify it wasn't
+// corrupted or swapped in transit (HTTPUpdate.setMD5sum() - the only hash
+// arduino-esp32's HTTPUpdate actually supports) before flashing — see the
+// OTA_AUTO_UPDATE comment in the .ino for what this does and doesn't cover.
+// sha256 is also included, informational only (not used by the firmware).
 firmwareRouter.get("/latest", ah(async (_req, res) => {
   const release = await prisma.firmwareRelease.findUnique({ where: { id: 1 } });
   if (!release || !fs.existsSync(BIN_PATH)) {
     return res.status(404).json({ error: "no firmware uploaded yet" });
   }
-  res.json({ version: release.version, notes: release.notes, sha256: release.sha256, uploadedAt: release.uploadedAt });
+  res.json({
+    version: release.version,
+    notes: release.notes,
+    sha256: release.sha256,
+    md5: release.md5,
+    uploadedAt: release.uploadedAt,
+  });
 }));
 
 firmwareRouter.get("/latest.bin", (_req, res) => {
@@ -69,8 +77,15 @@ firmwareRouter.post("/", ah(requireAuth), upload.single("firmware"), ah(async (r
     return res.status(400).json({ error: "version and .bin file are required" });
   }
 
-  const sha256 = createHash("sha256").update(fs.readFileSync(req.file.path)).digest("hex");
-  // Only now, with a validated version and a computed hash in hand, replace
+  const fileBuffer = fs.readFileSync(req.file.path);
+  const sha256 = createHash("sha256").update(fileBuffer).digest("hex");
+  // md5 is what the firmware's own OTA check actually verifies against
+  // (HTTPUpdate.setMD5sum() - the class has no setSHA256sum(), confirmed
+  // by reading the real installed header after a real compile error).
+  // Computed alongside sha256, not instead of it - sha256 stays in the
+  // response too, still useful for anyone verifying the file by hand.
+  const md5 = createHash("md5").update(fileBuffer).digest("hex");
+  // Only now, with a validated version and computed hashes in hand, replace
   // the binary sensors are actually served — rename is atomic on the same
   // filesystem (temp file and BIN_PATH are both in FIRMWARE_DIR), so
   // /latest.bin never serves a half-written file either.
@@ -78,8 +93,8 @@ firmwareRouter.post("/", ah(requireAuth), upload.single("firmware"), ah(async (r
 
   const release = await prisma.firmwareRelease.upsert({
     where: { id: 1 },
-    update: { version, notes, sha256, uploadedAt: new Date() },
-    create: { id: 1, version, notes, sha256 },
+    update: { version, notes, sha256, md5, uploadedAt: new Date() },
+    create: { id: 1, version, notes, sha256, md5 },
   });
   res.json(release);
 }));

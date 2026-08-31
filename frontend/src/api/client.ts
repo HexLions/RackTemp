@@ -140,6 +140,9 @@ export interface FirmwareRelease {
   version: string;
   notes: string | null;
   sha256: string | null;
+  // What the firmware's own OTA check actually verifies against
+  // (HTTPUpdate.setMD5sum) - sha256 stays informational-only.
+  md5: string | null;
   uploadedAt: string;
 }
 
