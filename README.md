@@ -382,13 +382,19 @@ CA-chain check a browser does:
 Regenerating the server's certificate (Settings → Network → Regenerate) changes its fingerprint:
 every sensor pinned to the old one will refuse to send data until you update the field (hold
 BOOT for 2s to reopen the portal) and re-save. Same if you point a sensor at a different server —
-the fingerprint has to match that server's certificate, not the previous one. The field follows
-the same "leave it blank to keep what's already saved" pattern as the WiFi password and API key —
-which means just clearing the field does **not** unpin the old fingerprint. If you're
-reconfiguring a sensor for a different (or rebuilt) server, either paste in the *new* server's
-fingerprint directly, or tick the **"Clear the saved fingerprint instead"** checkbox that appears
-next to the field once one is already saved — connects unpinned to the new server, then re-pin it
-the normal way once you've confirmed it's the right one.
+the fingerprint has to match that server's certificate, not the previous one.
+
+**Pointing an already-configured sensor at a new or reinstalled server?** Both the API key and the
+certificate fingerprint are tied to *that* server, and both fields follow the same "leave it blank
+to keep what's already saved" pattern as the WiFi password — so just typing in the new IP and
+leaving the rest blank silently keeps the old server's now-stale API key and fingerprint. The
+stale key alone is enough to break it on its own: the new server's database has no sensor with
+that key, so every send gets rejected (`POST /api/ingest -> 401` in the serial log) — not a
+certificate/fingerprint problem, even though a stale fingerprint would also cause its own separate
+failure if the key happened to still be valid. The setup portal's **"Reset this sensor's server
+link"** checkbox clears both at once — check it, save, and the sensor comes back up exactly as if
+freshly flashed: shows up in the new server's dashboard to be linked/discovered again, and connects
+unpinned until you paste in the new server's fingerprint the normal way.
 
 ### WiFi setup via captive portal (first boot)
 
