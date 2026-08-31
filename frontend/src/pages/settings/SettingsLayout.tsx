@@ -2,6 +2,7 @@ import { NavLink, Outlet } from "react-router-dom";
 
 const SECTIONS = [
   { to: "/settings/account", label: "Account" },
+  { to: "/settings/users", label: "Users" },
   { to: "/settings/notifications", label: "Notifications" },
   { to: "/settings/integrations", label: "Integrations" },
   { to: "/settings/network", label: "Network" },

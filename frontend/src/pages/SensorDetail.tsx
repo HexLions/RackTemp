@@ -5,10 +5,13 @@ import { api, FirmwareRelease, Reading, Sensor, Threshold } from "../api/client"
 import CopyField from "../components/CopyField";
 import WifiSignalIcon from "../components/WifiSignalIcon";
 import { useDashboardOrigin } from "../hooks/useDashboardOrigin";
+import { useAuth } from "../api/AuthContext";
 
 export default function SensorDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { role } = useAuth();
+  const isAdmin = role === "admin";
   const [sensor, setSensor] = useState<Sensor | null>(null);
   const [readings, setReadings] = useState<Reading[]>([]);
   const [threshold, setThreshold] = useState<Threshold | null>(null);
@@ -233,17 +236,19 @@ export default function SensorDetail() {
             </p>
           )}
         </div>
-        <div className="row-actions">
-          <button className="btn-ghost" onClick={rebootSensor} disabled={sensor.rebootRequested}>
-            {sensor.rebootRequested ? "Reboot pending…" : "Reboot sensor"}
-          </button>
-          <button className="btn-danger" onClick={deleteSensor}>
-            Delete sensor
-          </button>
-        </div>
+        {isAdmin && (
+          <div className="row-actions">
+            <button className="btn-ghost" onClick={rebootSensor} disabled={sensor.rebootRequested}>
+              {sensor.rebootRequested ? "Reboot pending…" : "Reboot sensor"}
+            </button>
+            <button className="btn-danger" onClick={deleteSensor}>
+              Delete sensor
+            </button>
+          </div>
+        )}
       </div>
 
-      {!hasData && connectionPanel}
+      {isAdmin && !hasData && connectionPanel}
 
       <div className="card">
         <div className="row-actions" style={{ justifyContent: "space-between", marginBottom: 16 }}>
@@ -351,6 +356,7 @@ export default function SensorDetail() {
         )}
       </div>
 
+      {isAdmin && (
       <form className="card" onSubmit={saveThreshold}>
         <h2>Thresholds and notifications</h2>
         <div className="form-row">
@@ -457,10 +463,12 @@ export default function SensorDetail() {
           {saved && <span className="success-text">✓ saved</span>}
         </div>
       </form>
+      )}
 
-      {hasData && connectionPanel}
-      {hasData && perDevicePanel}
+      {isAdmin && hasData && connectionPanel}
+      {isAdmin && hasData && perDevicePanel}
 
+      {isAdmin && (
       <form className="card" onSubmit={saveInfo}>
         <h2>Sensor info</h2>
         <div className="form-row">
@@ -484,6 +492,7 @@ export default function SensorDetail() {
           {infoSaved && <span className="success-text">✓ saved</span>}
         </div>
       </form>
+      )}
     </div>
   );
 }

@@ -12,6 +12,7 @@ import SensorDetail from "./pages/SensorDetail";
 import BulkThresholds from "./pages/BulkThresholds";
 import SettingsLayout from "./pages/settings/SettingsLayout";
 import AccountSection from "./pages/settings/AccountSection";
+import UsersSection from "./pages/settings/UsersSection";
 import NotificationsSection from "./pages/settings/NotificationsSection";
 import IntegrationsSection from "./pages/settings/IntegrationsSection";
 import NetworkSection from "./pages/settings/NetworkSection";
@@ -19,12 +20,19 @@ import UpdatesSection from "./pages/settings/UpdatesSection";
 import FirmwareSection from "./pages/settings/FirmwareSection";
 import BackupSection from "./pages/settings/BackupSection";
 
-function ProtectedLayout({ children }: { children: React.ReactNode }) {
-  const { username, mustChangePassword, loading, logout } = useAuth();
+// adminOnly: BulkThresholds and everything under /settings are admin-only —
+// a viewer session hitting one of these routes gets bounced back to "/"
+// (the backend already rejects the API calls those pages would make; this
+// is just defense in depth / not showing a broken page). Dashboard and
+// SensorDetail are the two pages a viewer is actually meant to reach,
+// rendered read-only by the pages themselves based on role.
+function ProtectedLayout({ children, adminOnly = false }: { children: React.ReactNode; adminOnly?: boolean }) {
+  const { username, role, mustChangePassword, loading, logout } = useAuth();
 
   if (loading) return <div className="center-screen">Loading…</div>;
   if (!username) return <Navigate to="/login" replace />;
   if (mustChangePassword) return <Navigate to="/first-login" replace />;
+  if (adminOnly && role === "viewer") return <Navigate to="/" replace />;
 
   return (
     <div className="app-shell">
@@ -39,14 +47,22 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
           <NavLink to="/" end>
             Dashboard
           </NavLink>
-          <NavLink to="/bulk-thresholds">Multiple thresholds</NavLink>
-          <NavLink to="/settings">Settings</NavLink>
+          {role === "admin" && (
+            <>
+              <NavLink to="/bulk-thresholds">Multiple thresholds</NavLink>
+              <NavLink to="/settings">Settings</NavLink>
+            </>
+          )}
         </nav>
         <div className="topbar-right">
           <ThemeToggle />
-          <NavLink to="/settings/account" className="user" style={{ textDecoration: "none" }}>
-            {username}
-          </NavLink>
+          {role === "admin" ? (
+            <NavLink to="/settings/account" className="user" style={{ textDecoration: "none" }}>
+              {username}
+            </NavLink>
+          ) : (
+            <span className="user">{username} (viewer)</span>
+          )}
           <button className="btn-link" onClick={() => logout()}>
             Log out
           </button>
@@ -84,7 +100,7 @@ export default function App() {
       <Route
         path="/bulk-thresholds"
         element={
-          <ProtectedLayout>
+          <ProtectedLayout adminOnly>
             <BulkThresholds />
           </ProtectedLayout>
         }
@@ -92,13 +108,14 @@ export default function App() {
       <Route
         path="/settings"
         element={
-          <ProtectedLayout>
+          <ProtectedLayout adminOnly>
             <SettingsLayout />
           </ProtectedLayout>
         }
       >
         <Route index element={<Navigate to="account" replace />} />
         <Route path="account" element={<AccountSection />} />
+        <Route path="users" element={<UsersSection />} />
         <Route path="notifications" element={<NotificationsSection />} />
         <Route path="integrations" element={<IntegrationsSection />} />
         <Route path="network" element={<NetworkSection />} />
