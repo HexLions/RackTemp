@@ -4,6 +4,7 @@ import { api, DiscoveredDevice, Sensor } from "../api/client";
 import Sparkline from "../components/Sparkline";
 import ThermometerIcon from "../components/ThermometerIcon";
 import WifiSignalIcon from "../components/WifiSignalIcon";
+import { useAuth } from "../api/AuthContext";
 
 type Status = "ok" | "warn" | "crit" | "offline" | "pending";
 
@@ -50,6 +51,8 @@ const STATUS_COLOR: Record<Status, string> = {
 };
 
 export default function Dashboard() {
+  const { role } = useAuth();
+  const isAdmin = role === "admin";
   const [sensors, setSensors] = useState<Sensor[] | null>(null);
   const [discovered, setDiscovered] = useState<DiscoveredDevice[]>([]);
   const [showAdd, setShowAdd] = useState(false);
@@ -59,13 +62,18 @@ export default function Dashboard() {
   const [pendingChipId, setPendingChipId] = useState<string | null>(null);
   const [linkTarget, setLinkTarget] = useState<Record<string, string>>({});
 
+  // /api/discovery is admin-only (linking/creating sensors, both actions a
+  // viewer can't do anyway) - fetched separately from /api/sensors, and
+  // skipped entirely for a viewer session, so a 401 there (Promise.all
+  // rejecting as a whole) can never leave setSensors uncalled and the page
+  // stuck on "Loading…" forever (confirmed: reported by an actual viewer
+  // session, exactly this).
   async function load() {
-    const [s, d] = await Promise.all([
-      api.get<Sensor[]>("/sensors"),
-      api.get<DiscoveredDevice[]>("/discovery"),
-    ]);
-    setSensors(s);
-    setDiscovered(d);
+    const sensorsPromise = api.get<Sensor[]>("/sensors").then(setSensors);
+    const discoveryPromise = isAdmin
+      ? api.get<DiscoveredDevice[]>("/discovery").then(setDiscovered)
+      : Promise.resolve();
+    await Promise.all([sensorsPromise, discoveryPromise]);
   }
 
   useEffect(() => {
@@ -130,9 +138,11 @@ export default function Dashboard() {
                 : `${sensors.length} sensors configured`}
           </p>
         </div>
-        <button className="btn-primary" onClick={() => setShowAdd((v) => !v)}>
-          + New sensor
-        </button>
+        {isAdmin && (
+          <button className="btn-primary" onClick={() => setShowAdd((v) => !v)}>
+            + New sensor
+          </button>
+        )}
       </div>
 
       {sensors.length > 0 && (
