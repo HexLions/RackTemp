@@ -11,8 +11,11 @@ using Microsoft.Win32;
 
 namespace RackTempTray;
 
-// The app's single window: shows RackTemp (WebView2 pointed at http://localhost:7431)
-// inside a real window instead of the default browser. Closing it with the
+// The app's single window: shows RackTemp (WebView2 pointed at https://localhost:7431 -
+// the backend is HTTPS-only, self-signed cert generated on first boot - see
+// InitializeWebViewAsync()/TryNavigateWhenReadyAsync() for the two places that
+// have to explicitly accept it, or the window stays blank forever) inside a
+// real window instead of the default browser. Closing it with the
 // X doesn't exit the app: it hides it and it stays in the tray, exactly like Discord/
 // Slack, and the Windows "RackTemp" service (nssm) stays running. "Exit" from the
 // tray menu instead also stops the service (requires UAC, stopping a
@@ -21,7 +24,7 @@ namespace RackTempTray;
 // on its own if it's found stopped.
 public class MainForm : Form
 {
-    private const string BackendUrl = "http://localhost:7431";
+    private const string BackendUrl = "https://localhost:7431";
     private const string ServiceName = "RackTemp";
     private const string AutostartRunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string AutostartValueName = "RackTemp";
@@ -316,6 +319,25 @@ public class MainForm : Form
         var environment = await CoreWebView2Environment.CreateAsync(userDataFolder: userDataFolder);
         await _webView.EnsureCoreWebView2Async(environment);
 
+        // The backend's cert is self-signed - without this, WebView2 shows
+        // its own "Your connection isn't private" interstitial instead of
+        // RackTemp (blank until dismissed, and there's no visible way to
+        // click through it inside an embedded WebView2 the way there is in
+        // a real Edge/Chrome tab - confirmed: reported by an actual user,
+        // exactly this, right after HTTPS became mandatory). AlwaysAllow
+        // only for BackendUrl's own host:port and only for the
+        // "certificate is invalid" error class (self-signed, no public CA
+        // behind it - the expected/only reason this backend's cert would
+        // ever fail validation) - anything else (expired, wrong hostname,
+        // an actual MITM presenting a different cert) still gets rejected.
+        _webView.CoreWebView2.ServerCertificateErrorDetected += (_, e) =>
+        {
+            var isOwnBackend = e.RequestUri.StartsWith(BackendUrl, StringComparison.OrdinalIgnoreCase);
+            e.Action = isOwnBackend && e.ErrorStatus == CoreWebView2WebErrorStatus.CertificateIsInvalid
+                ? CoreWebView2ServerCertificateErrorAction.AlwaysAllow
+                : CoreWebView2ServerCertificateErrorAction.Cancel;
+        };
+
         // Exposes the "start with Windows" toggle to the Settings page —
         // window.chrome.webview.hostObjects.racktempHost on the JS side. Works
         // only in here (this window), never from a normal browser or
@@ -334,7 +356,14 @@ public class MainForm : Form
     {
         if (_navigatedOnce) return;
 
-        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
+        // Same self-signed-cert situation as WebView2's ServerCertificateErrorDetected
+        // handler above - this HttpClient only ever calls BackendUrl (the
+        // constant right at the top of this file, never anything
+        // user/network-supplied), so bypassing validation entirely here is
+        // scoped to exactly the one known-safe target, not a blanket "trust
+        // any HTTPS server" policy.
+        using var handler = new HttpClientHandler { ServerCertificateCustomValidationCallback = (_, _, _, _) => true };
+        using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(2) };
         try
         {
             var res = await http.GetAsync(BackendUrl);
