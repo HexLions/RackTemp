@@ -3,7 +3,7 @@ import { ah } from "../middleware/asyncHandler";
 import { z } from "zod";
 import { prisma } from "../db";
 import { requireAuth } from "../middleware/auth";
-import { sendEmail, sendTelegram } from "../services/notifier";
+import { sendTestEmail, sendTelegram } from "../services/notifier";
 import { encryptField, decryptField } from "../services/fieldEncryption";
 
 export const notificationsRouter = Router();
@@ -95,11 +95,12 @@ notificationsRouter.post("/test", ah(async (req, res) => {
 
   try {
     if (parsed.data.channel === "smtp") {
-      await sendEmail("Rack Temp Monitor - Test", "SMTP test message succeeded.");
+      const detail = await sendTestEmail();
+      res.json({ ok: true, detail });
     } else {
       await sendTelegram("Rack Temp Monitor - Telegram test message succeeded.");
+      res.json({ ok: true });
     }
-    res.json({ ok: true });
   } catch (err: any) {
     res.status(500).json({ error: describeSendError(err) });
   }

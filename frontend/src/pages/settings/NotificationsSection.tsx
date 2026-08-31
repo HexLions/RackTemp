@@ -54,8 +54,18 @@ export default function NotificationsSection() {
   async function test(channel: "smtp" | "telegram") {
     setTestMsg(null);
     try {
-      await api.post("/notifications/test", { channel });
-      setTestMsg({ channel, ok: true, text: "Test message sent." });
+      const res = await api.post<{ ok: true; detail?: string }>("/notifications/test", { channel });
+      // For SMTP, res.detail is the destination server's own raw response
+      // line — the mail server accepted the message here means it's
+      // genuinely out of this app's hands from this point on; if it still
+      // never arrives, check the destination's spam folder next, and
+      // whether "From" is an address this SMTP account/relay is actually
+      // allowed to send as (the #1 cause of a silent accept-then-drop).
+      setTestMsg({
+        channel,
+        ok: true,
+        text: res.detail ? `Accepted for delivery. ${res.detail}` : "Test message sent.",
+      });
     } catch (err) {
       setTestMsg({ channel, ok: false, text: err instanceof ApiError ? err.message : "Error" });
     }
@@ -153,6 +163,14 @@ export default function NotificationsSection() {
                 <input value={cfg.smtpTo ?? ""} onChange={(e) => setCfg({ ...cfg, smtpTo: e.target.value })} placeholder="alerts@yourdomain.com" />
               </label>
             </div>
+            <p className="muted small">
+              A "Test" that reports success and a message that never arrives usually means the SMTP
+              server accepted it (out of this app's control from that point on) but something after
+              that silently dropped or spam-filtered it. Check the destination's spam/junk folder
+              first; if that's empty too, "From" not being an address this SMTP account/relay is
+              actually allowed to send as is the most common cause (most providers, Gmail included,
+              require it to match the authenticated account or a verified alias).
+            </p>
           </>
         ) : (
           <>
