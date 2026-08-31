@@ -7,7 +7,7 @@ import { requireAuth } from "../middleware/auth";
 import { prisma } from "../db";
 import { resolveDbPath } from "../services/dbPath";
 import { BACKUPS_DIR, getBackupSettings, listBackups, performBackup } from "../services/backupScheduler";
-import { tlsCertInfo, regenerateTlsCert } from "../services/tls";
+import { tlsCertInfo, regenerateTlsCert, lanIps } from "../services/tls";
 import pkg from "../../package.json";
 
 export const systemRouter = Router();
@@ -165,6 +165,23 @@ systemRouter.post("/https-settings/regenerate-cert", ah(async (_req, res) => {
   // computed the same way (Node's X509Certificate) as the GET endpoint's —
   // selfsigned's own .fingerprint field uses a different format.
   res.json(tlsCertInfo());
+}));
+
+// Mirrors index.ts's own PORT constant — can't import it directly (index.ts
+// imports this router, so importing back would be circular).
+const PORT = Number(process.env.PORT) || 7431;
+
+// The admin-facing "what address do I actually use" answer. window.location
+// on its own isn't enough: the Windows tray's embedded WebView2 always
+// navigates to https://localhost:<port> regardless of the server's real LAN
+// IP (see windows-tray/RackTempTray/MainForm.cs), so any integration URL or
+// the sensor's ingest endpoint built from window.location.origin in there
+// would show "localhost" - meaningless to a remote ESP32 sensor or a
+// monitoring tool running elsewhere on the LAN. The frontend falls back to
+// this whenever window.location's hostname is a loopback address, and
+// Settings > Network shows it plainly for anyone typing the address by hand.
+systemRouter.get("/network-info", ah(async (_req, res) => {
+  res.json({ ips: lanIps(), port: PORT });
 }));
 
 // Security-relevant events only (auth attempts, credential/config changes) —

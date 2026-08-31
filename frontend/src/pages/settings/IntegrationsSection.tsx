@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { api, IntegrationSettings } from "../../api/client";
 import CopyField from "../../components/CopyField";
+import { useDashboardOrigin } from "../../hooks/useDashboardOrigin";
 
 export default function IntegrationsSection() {
   const [settings, setSettings] = useState<IntegrationSettings | null>(null);
   const [busy, setBusy] = useState(false);
+  const dashboardOrigin = useDashboardOrigin();
 
   useEffect(() => {
     api.get<IntegrationSettings>("/integrations").then(setSettings);
@@ -23,9 +25,9 @@ export default function IntegrationsSection() {
 
   if (!settings) return <div className="center-screen">Loading…</div>;
 
-  const origin = window.location.origin;
-  const prtgUrl = `${origin}/api/prtg/all?key=${settings.prtgToken}`;
-  const metricsUrl = `${origin}/metrics`;
+  const prtgUrl = `${dashboardOrigin}/api/prtg/all?key=${settings.prtgToken}`;
+  const metricsUrl = `${dashboardOrigin}/metrics`;
+  const dashboardHost = dashboardOrigin.replace(/^https?:\/\//, "");
 
   return (
     <>
@@ -55,7 +57,7 @@ export default function IntegrationsSection() {
           Example <code>prometheus.yml</code>:
         </p>
         <pre className="code-block">
-          <code>{`scrape_configs:\n  - job_name: rack-temp-monitor\n    static_configs:\n      - targets: ["${window.location.host}"]`}</code>
+          <code>{`scrape_configs:\n  - job_name: rack-temp-monitor\n    static_configs:\n      - targets: ["${dashboardHost}"]`}</code>
         </pre>
       </div>
     </>

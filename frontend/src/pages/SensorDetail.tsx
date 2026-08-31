@@ -4,6 +4,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, Ca
 import { api, FirmwareRelease, Reading, Sensor, Threshold } from "../api/client";
 import CopyField from "../components/CopyField";
 import WifiSignalIcon from "../components/WifiSignalIcon";
+import { useDashboardOrigin } from "../hooks/useDashboardOrigin";
 
 export default function SensorDetail() {
   const { id } = useParams<{ id: string }>();
@@ -19,6 +20,7 @@ export default function SensorDetail() {
   const [editStaticIp, setEditStaticIp] = useState("");
   const [infoSaved, setInfoSaved] = useState(false);
   const [latestFirmware, setLatestFirmware] = useState<FirmwareRelease | null>(null);
+  const dashboardOrigin = useDashboardOrigin();
 
   async function load() {
     if (!id) return;
@@ -137,9 +139,9 @@ export default function SensorDetail() {
   const handoutWindowOpen = !sensor.keyHandedOut && handoutUntil !== null && handoutUntil > handoffNow;
   const handoutRemainingSec = handoutWindowOpen ? Math.max(0, Math.round((handoutUntil! - handoffNow) / 1000)) : 0;
 
-  const ingestUrl = `${window.location.origin}/api/ingest`;
-  const prtgUrl = `${window.location.origin}/api/prtg/${sensor.id}?key=${sensor.apiKey}`;
-  const statusUrl = `${window.location.origin}/api/status/${sensor.id}?key=${sensor.apiKey}`;
+  const ingestUrl = `${dashboardOrigin}/api/ingest`;
+  const prtgUrl = `${dashboardOrigin}/api/prtg/${sensor.id}?key=${sensor.apiKey}`;
+  const statusUrl = `${dashboardOrigin}/api/status/${sensor.id}?key=${sensor.apiKey}`;
   const hasData = readings.length > 0;
 
   const connectionPanel = (
