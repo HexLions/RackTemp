@@ -168,6 +168,7 @@ async function main() {
   const firmwarePublicLimiter = rateLimit({ windowMs: 60_000, limit: 60, legacyHeaders: false });
 
   app.use("/api/auth/login", authLimiter);
+  app.use("/api/auth/viewer-login", authLimiter);
   app.use("/api/auth/mfa/login", authLimiter);
   app.use("/api/auth/reset-password", authLimiter);
   app.use("/api/auth/reset-password-with-key", authLimiter);

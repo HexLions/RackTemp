@@ -182,6 +182,27 @@ model AdminUser {
   updatedAt              DateTime  @updatedAt
 }
 
+// Read-only accounts — see the dashboard/sensor history, nothing else. A
+// real, separate table (normal auto-increment id), not another singleton
+// like AdminUser: multiple viewers can exist, and critically, requireAuth
+// (middleware/auth.ts) only ever treats a session as privileged when
+// session.role === "admin" - a viewer's own id (which starts at 1, same as
+// AdminUser's fixed id) is never enough on its own to match the admin
+// account. Created/deleted/reset directly by the admin (POST/DELETE
+// /api/auth/viewers) - no self-signup, no forced-password-change flow, no
+// MFA in this pass (mirrors AdminUser's totpSecret/totpEnabled if that's
+// ever wanted later).
+model ViewerUser {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String
+  // Same real-revocation mechanism as AdminUser.sessionEpoch above (see
+  // that field's comment) - bumped on password reset to invalidate any
+  // outstanding session cookie for this viewer.
+  sessionEpoch Int      @default(0)
+  createdAt    DateTime @default(now())
+}
+
 // Vestigial as of the HTTPS-mandatory change (index.ts no longer reads or
 // writes this) - kept in the schema on purpose rather than dropped: this
 // project runs `prisma db push` (no migration history) on every boot, and
