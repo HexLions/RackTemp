@@ -43,14 +43,16 @@
 // so you can quickly tell if the device is running the latest flashed version.
 // Also used for OTA auto-update: if the server offers a different one, the
 // device downloads it and flashes itself (see checkFirmwareUpdate below).
-#define FIRMWARE_VERSION "2026-08-29.5"
+#define FIRMWARE_VERSION "2026-08-31.1"
 
 // OTA auto-update fetches and flashes a .bin over HTTPS, checked against
-// the SHA256 the server reports for it (HTTPUpdate.setSHA256sum, see
-// checkFirmwareUpdate below) — that catches corruption and a swapped file,
-// but arduino-esp32's HTTPUpdate has no signature/authenticity API (checked
-// against core 3.3.11's actual HTTPUpdate.h: setMD5sum/setSHA256sum exist,
-// nothing else). So anyone able to ARP- or DNS-spoof cfgServerHost on the LAN
+// the MD5 the server reports for it (HTTPUpdate.setMD5sum, see
+// checkFirmwareUpdate below - the only hash arduino-esp32's HTTPUpdate class
+// actually exposes, confirmed by reading the real installed HTTPUpdate.h;
+// setSHA256sum doesn't exist on it despite an earlier version of this file
+// claiming otherwise) — that catches corruption and a swapped file,
+// but arduino-esp32's HTTPUpdate has no signature/authenticity API. So
+// anyone able to ARP- or DNS-spoof cfgServerHost on the LAN
 // can still serve their own .bin together with a matching hash and the check
 // passes even over HTTPS. Real authenticity needs ESP-IDF Secure Boot v2 or an app-level
 // RSA/ECDSA signature checked with mbedtls against an embedded public key,
@@ -58,7 +60,7 @@
 // here, left for a future phase. Off by default; set to 1 only if you've
 // weighed that remaining tradeoff for your network. The version check itself
 // (just a GET, no download) still runs and logs when an update is available either way.
-#define OTA_AUTO_UPDATE 0
+#define OTA_AUTO_UPDATE 1
 
 // BOOT button, held down AFTER boot (not at power-on — see setup()) to
 // re-enter WiFi setup. On many "Super Mini" clones it's on the same GPIO9
@@ -530,14 +532,14 @@ String jsonStringField(const String &payload, const char *key) {
 
 void checkFirmwareUpdate() {
   HTTPClient http;
-  String latestVersion, latestSha256;
+  String latestVersion, latestMd5;
   if (!beginRequest(http, "/api/firmware/latest")) return;
   int code = http.GET();
 
   if (code == 200) {
     String payload = http.getString();
     latestVersion = jsonStringField(payload, "version");
-    latestSha256 = jsonStringField(payload, "sha256");
+    latestMd5 = jsonStringField(payload, "md5");
   }
   http.end();
 
@@ -545,10 +547,14 @@ void checkFirmwareUpdate() {
 
 #if OTA_AUTO_UPDATE
   // No verified hash from the server: refuse to flash rather than trust an
-  // unverified download (an old server predating FASE 4.2, or a striped/
+  // unverified download (an old server predating this field, or a striped/
   // malformed response, both look the same from here — fail closed either way).
-  if (latestSha256.length() != 64) {
-    Serial.println("New firmware available: " + latestVersion + " but server did not report a SHA256 - not flashing.");
+  // 32 hex chars = MD5 - arduino-esp32's HTTPUpdate class only exposes
+  // setMD5sum(), never setSHA256sum() (confirmed by reading the real
+  // installed HTTPUpdate.h directly - a real compile error proved a
+  // previous version of this file wrong about that).
+  if (latestMd5.length() != 32) {
+    Serial.println("New firmware available: " + latestVersion + " but server did not report an MD5 - not flashing.");
     return;
   }
   Serial.println("New firmware available: " + latestVersion + " (current: " FIRMWARE_VERSION "). Updating...");
@@ -561,14 +567,14 @@ void checkFirmwareUpdate() {
   }
 
   httpUpdate.rebootOnUpdate(true);
-  httpUpdate.setSHA256sum(latestSha256);
+  httpUpdate.setMD5sum(latestMd5);
 
   // httpUpdate opens and manages its own connection internally, so unlike
   // beginRequest() above there's no point between connect and download
   // where we could call verify() against the live peer certificate — only
   // setInsecure() is applied here (required for the handshake to complete
   // at all, same as beginRequest()/connectSecure()). The downloaded file
-  // is still content-authenticated by the SHA256 check just above; this
+  // is still content-authenticated by the MD5 check just above; this
   // only adds encryption in transit against passive packet capture, not
   // fingerprint pinning against an active MITM.
   secureClient.setHandshakeTimeout(15000); // see connectSecure() - 120s default is too long to block loop() on

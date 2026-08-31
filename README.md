@@ -49,7 +49,7 @@ PRTG/Prometheus/Grafana/Zabbix, all configured from the same web page.
   (picked up on the sensor's next check-in, no open connection required)
 - 📤 **Firmware OTA updates** — upload a new `.bin` from Settings → Firmware, sensors check
   for it once a day and log when one's available. Self-flashing is off by default (see the
-  note in the firmware section below) — the download is unsigned (SHA256-checked, not
+  note in the firmware section below) — the download is unsigned (MD5-checked, not
   authenticity-checked) even over HTTPS, so it's opt-in
 
 **Notifications**
@@ -350,7 +350,8 @@ includes it on its own, no need to configure it. The ingest response can also ca
 Separately, once a day the sensor checks `/api/firmware/latest` for a newer version and logs
 it if one's available — it does **not** flash itself automatically by default (`#define
 OTA_AUTO_UPDATE 0` at the top of the sketch). If enabled, the download is checked against the
-SHA256 the server reports for it (rejects a corrupted or swapped-in-transit `.bin`), but there's
+MD5 the server reports for it (the only hash arduino-esp32's HTTPUpdate class actually supports —
+rejects a corrupted or swapped-in-transit `.bin`), but there's
 still no signature/authenticity check on the file itself — no embedded public key, no code
 signing — so anyone able to spoof the server address on the LAN can still serve their own `.bin`
 together with a matching hash even over HTTPS. Set `OTA_AUTO_UPDATE` to `1` and reflash if you've

@@ -136,6 +136,15 @@ model FirmwareRelease {
   version    String
   notes      String?
   sha256     String?
+  // What the firmware's own OTA check (checkFirmwareUpdate() in the .ino)
+  // actually uses: arduino-esp32's HTTPUpdate class only exposes
+  // setMD5sum(), never setSHA256sum() - confirmed by reading the real
+  // installed HTTPUpdate.h directly (core 3.3.11) after a real compile
+  // error proved the earlier sha256-based design wrong. sha256 stays
+  // around too - still cheap to compute, still useful for anyone
+  // verifying a downloaded .bin by hand with a standard sha256sum tool -
+  // it's just not what the firmware itself checks against any more.
+  md5        String?
   uploadedAt DateTime @default(now())
 }
 

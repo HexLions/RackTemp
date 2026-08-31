@@ -19,3 +19,7 @@ dist-windows/
 dist-linux/
 windows-tray/**/bin/
 windows-tray/**/obj/
+
+# Arduino IDE compile output (.ino.bin, .elf, .map, etc.) - regenerated on
+# every compile, never meant to be committed.
+firmware/**/build/
