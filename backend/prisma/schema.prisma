@@ -33,6 +33,19 @@ model Sensor {
   rebootRequested Boolean  @default(false)
   createdAt   DateTime @default(now())
   lastSeenAt  DateTime?
+  // Stable row index in the SNMP table services/snmpAgent.ts exposes for
+  // PRTG's own Auto-Discovery (see IntegrationSettings.snmpEnabled below).
+  // Assigned once, lazily, the first time the SNMP agent sees a sensor
+  // without one - never reused after a delete, since PRTG's own
+  // sensor-to-row identity across re-scans depends on it staying stable.
+  // Deliberately not @unique: a real prisma db push against this column
+  // (tried while writing this feature) flags adding a unique constraint
+  // as a data-loss risk even though it's nullable and safe - the
+  // automatic boot-time `db push` (Dockerfile/racktemp.service) never
+  // passes --accept-data-loss, so that would break every existing
+  // install's next boot. Uniqueness is enforced in
+  // services/snmpAgent.ts's ensureSnmpIndex() instead (max-existing + 1).
+  snmpIndex   Int?
 
   readings    Reading[]
   threshold   Threshold?
@@ -125,6 +138,23 @@ model IntegrationSettings {
   // randomBytes(32) in integrations.ts, not cuid.
   prtgToken           String
   portainerWebhookUrl String?
+  // Real SNMP agent (services/snmpAgent.ts) for PRTG's own native
+  // Auto-Discovery - see that file's top comment for why (API v2 push
+  // automation was tried and abandoned first: experimental, off by
+  // default, not what "enterprise reliable" means).
+  snmpEnabled         Boolean  @default(false)
+  // Not 161 (the standard SNMP port) on purpose: binding it needs
+  // CAP_NET_BIND_SERVICE, a privilege this app has never needed anywhere
+  // (linux/racktemp.service runs with every capability stripped,
+  // Dockerfile runs as non-root `node`) - PRTG lets you set a custom port
+  // per device, so this costs nothing on the PRTG side either.
+  snmpPort            Int      @default(1161)
+  // Same treatment as prtgToken above (not encrypted at rest) - a bearer
+  // credential checked on every single SNMP poll (hot path), already
+  // shown back to the admin in the UI to copy into PRTG - see
+  // fieldEncryption.ts's own top comment for why this class of secret
+  // stays unencrypted while SMTP/Graph/TOTP secrets don't.
+  snmpCommunity       String?
   updatedAt           DateTime @updatedAt
 }
 

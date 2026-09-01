@@ -4,6 +4,7 @@ import { randomBytes } from "crypto";
 import { z } from "zod";
 import { prisma } from "../db";
 import { requireAuth } from "../middleware/auth";
+import { startSnmpAgent, stopSnmpAgent } from "../services/snmpAgent";
 
 export const integrationsRouter = Router();
 integrationsRouter.use(ah(requireAuth));
@@ -18,7 +19,13 @@ async function getSettings() {
 
 integrationsRouter.get("/", ah(async (_req, res) => {
   const settings = await getSettings();
-  res.json({ prtgToken: settings.prtgToken, portainerWebhookUrl: settings.portainerWebhookUrl });
+  res.json({
+    prtgToken: settings.prtgToken,
+    portainerWebhookUrl: settings.portainerWebhookUrl,
+    snmpEnabled: settings.snmpEnabled,
+    snmpPort: settings.snmpPort,
+    snmpCommunity: settings.snmpCommunity,
+  });
 }));
 
 // This URL gets POSTed to from the server itself (/api/system/trigger-update)
@@ -68,4 +75,50 @@ integrationsRouter.post("/regenerate-prtg-token", ah(async (_req, res) => {
     data: { prtgToken },
   });
   res.json({ prtgToken: updated.prtgToken });
+}));
+
+const snmpSchema = z.object({
+  snmpEnabled: z.boolean(),
+  snmpPort: z.number().int().min(1).max(65535),
+});
+
+// Turning SNMP on/off (or changing its port) takes effect immediately, no
+// restart needed - same "live" UX as regenerate-prtg-token above, just
+// with an actual running agent to start/stop/restart instead of a value
+// to hand back. Community string is generated here the first time SNMP
+// is enabled with none set yet, same randomBytes(32) pattern as
+// prtgToken - never blank once SNMP has ever been turned on.
+integrationsRouter.put("/snmp", ah(async (req, res) => {
+  const parsed = snmpSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.message });
+
+  const current = await getSettings();
+  const snmpCommunity = current.snmpCommunity ?? randomBytes(16).toString("hex");
+
+  const updated = await prisma.integrationSettings.update({
+    where: { id: 1 },
+    data: { snmpEnabled: parsed.data.snmpEnabled, snmpPort: parsed.data.snmpPort, snmpCommunity },
+  });
+
+  stopSnmpAgent();
+  if (updated.snmpEnabled) {
+    await startSnmpAgent(updated.snmpPort, updated.snmpCommunity!);
+  }
+
+  res.json({ snmpEnabled: updated.snmpEnabled, snmpPort: updated.snmpPort, snmpCommunity: updated.snmpCommunity });
+}));
+
+integrationsRouter.post("/regenerate-snmp-community", ah(async (_req, res) => {
+  const current = await getSettings();
+  const snmpCommunity = randomBytes(16).toString("hex");
+  const updated = await prisma.integrationSettings.update({ where: { id: 1 }, data: { snmpCommunity } });
+
+  // Live-restart with the new community if the agent's currently running,
+  // same "regenerate and it's live immediately" contract as /snmp above.
+  if (current.snmpEnabled) {
+    stopSnmpAgent();
+    await startSnmpAgent(updated.snmpPort, updated.snmpCommunity!);
+  }
+
+  res.json({ snmpCommunity: updated.snmpCommunity });
 }));

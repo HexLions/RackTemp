@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../db";
 import { checkReading } from "../services/thresholdEngine";
 import { broadcastReading } from "../ws";
+import { syncSensorRow } from "../services/snmpAgent";
 
 export const ingestRouter = Router();
 
@@ -54,6 +55,10 @@ ingestRouter.post("/", ah(async (req, res) => {
 
   broadcastReading(sensor.id, reading);
   await checkReading(sensor.id, readingData.temperature, readingData.humidity);
+  // First line is `if (!agent) return` (services/snmpAgent.ts) - near-zero
+  // cost added to this hot path (every sensor, every ~60s) when SNMP is
+  // disabled, which it is by default.
+  await syncSensorRow(sensor.id);
 
   // One-shot: the firmware reboots as soon as it sees this and there's no
   // separate ack, so clear it here rather than waiting to hear back —

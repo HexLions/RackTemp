@@ -5,6 +5,7 @@ import { z } from "zod";
 import { prisma } from "../db";
 import { requireAuth, requireAnyUser } from "../middleware/auth";
 import { logAudit } from "../services/auditLog";
+import { syncSensorRow, removeSensorRow } from "../services/snmpAgent";
 
 export const sensorsRouter = Router();
 // Read routes are open to both roles (requireAnyUser); every mutating route
@@ -76,6 +77,12 @@ sensorsRouter.post("/", ah(requireAuth), ah(async (req, res) => {
     await prisma.discoveredDevice.deleteMany({ where: { chipId: parsed.data.chipId } });
   }
 
+  // No-ops cleanly if SNMP isn't enabled - see snmpAgent.ts. Patches the
+  // response so it doesn't show a stale snmpIndex: null when SNMP is on
+  // (create() above ran before this assigned one).
+  const snmpIndex = await syncSensorRow(sensor.id);
+  if (snmpIndex != null) sensor.snmpIndex = snmpIndex;
+
   res.status(201).json(sensor);
 }));
 
@@ -106,12 +113,16 @@ sensorsRouter.put("/:id", ah(requireAuth), ah(async (req, res) => {
     where: { id: req.params.id as string },
     data: parsed.data,
   });
+  // Renaming touches the SNMP table's sensorName column too.
+  await syncSensorRow(sensor.id);
   res.json(sensor);
 }));
 
 sensorsRouter.delete("/:id", ah(requireAuth), ah(async (req, res) => {
   const id = req.params.id as string;
+  const sensor = await prisma.sensor.findUnique({ where: { id }, select: { snmpIndex: true } });
   await prisma.sensor.delete({ where: { id } });
+  removeSensorRow(sensor?.snmpIndex ?? null);
   await logAudit("sensor_deleted", { detail: `sensor id: ${id}`, ip: req.ip });
   res.status(204).end();
 }));

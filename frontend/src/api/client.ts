@@ -120,6 +120,9 @@ export interface DiscoveredDevice {
 export interface IntegrationSettings {
   prtgToken: string;
   portainerWebhookUrl: string | null;
+  snmpEnabled: boolean;
+  snmpPort: number;
+  snmpCommunity: string | null;
 }
 
 export interface UpdateCheck {

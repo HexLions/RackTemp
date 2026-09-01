@@ -532,10 +532,36 @@ Exposed metrics: `rack_temp_celsius`, `rack_temp_humidity_percent`, `rack_temp_o
 > Prometheus endpoints): if this instance is reachable beyond your trusted LAN, put it
 > behind a reverse proxy with an IP allowlist or basic auth.
 
+### PRTG auto-discovery via SNMP
+
+PRTG's (and most tools') auto-discovery only understands standard protocols (SNMP, WMI, …), not a
+custom JSON API — this is the one exception: RackTemp can also speak real SNMP, so PRTG's own
+native Auto-Discovery does the work.
+
+Enable it from **Settings → Integrations → SNMP** (off by default). Default port **1161**, not
+the standard 161 — binding 161 needs a privilege this app never asks for anywhere else (root/
+Administrator), and PRTG lets you set a custom port per device, so this costs nothing on the PRTG
+side. A community string is generated the first time you enable it; copy it into PRTG.
+
+One-time PRTG setup (repeats for nothing after this):
+1. Add a Device in PRTG pointed at this server's address, on the configured SNMP port, SNMP v2c
+   with the community string from Settings → Integrations.
+2. Add one **SNMP Custom Table** sensor for the table at OID `1.3.6.1.4.1.55555.1.1` (columns:
+   sensor name, temperature ×10, humidity ×10, online 1/0, age in minutes).
+3. Save that Device as a **Device Template** (PRTG Manual → *Create Device Template*).
+4. Set that Device's **Auto-Discovery** to use the saved template, on a schedule (e.g. hourly).
+
+From then on, every RackTemp sensor you add shows up in PRTG as its own sensor automatically
+within that schedule's interval — Temperature/Humidity/Online/Age land as channels of that one
+sensor (PRTG's SNMP Custom Table auto-discovery creates one sensor per table row, not a separate
+tile per channel — see the code comments in `backend/src/services/snmpAgent.ts` if you're curious
+why: every other path to separate tiles either needs PRTG's own protocol-specific plugin code
+(WMI/Redfish, not available to a custom device), an experimental/unmaintained PRTG API, or giving
+every sensor its own LAN IP).
+
 ### One sensor as its own device
 
-PRTG's (and most tools') auto-discovery only understands standard protocols (SNMP, WMI, …) —
-there's no way for it to auto-detect a custom JSON API like this one. Instead, each sensor's own
+Instead, each sensor's own
 page (**ready-made URLs, under "This sensor as its own device"**) gives you what you need to
 manually create one device per sensor, each with its own sensors/channels instead of being a
 channel inside one big aggregated one:
@@ -567,7 +593,7 @@ Everything account/deploy-related lives under **Settings**, one page per topic:
 |---|---|
 | **Account** | Change password, two-factor authentication setup, recovery key regeneration, Windows autostart toggle (Windows install only) |
 | **Notifications** | SMTP/Graph and Telegram configuration, test buttons, alert history |
-| **Integrations** | PRTG token, Portainer webhook |
+| **Integrations** | PRTG token, SNMP (PRTG auto-discovery), Portainer webhook |
 | **Network** | Self-signed HTTPS certificate info + regenerate button (always on, no toggle) |
 | **Updates** | Current/latest version check, links to the release, manual Portainer redeploy |
 | **Firmware** | Upload a new sensor `.bin` — sensors check for it daily, but only self-flash if built with `OTA_AUTO_UPDATE 1` (off by default) |

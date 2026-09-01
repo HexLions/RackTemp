@@ -1,5 +1,6 @@
 import { prisma } from "../db";
 import { notifyAll } from "./notifier";
+import { syncSensorRow } from "./snmpAgent";
 
 const OFFLINE_CHECK_INTERVAL_MS = 60_000;
 
@@ -124,6 +125,14 @@ export async function checkReading(sensorId: string, temperature: number, humidi
 async function checkOffline() {
   const sensors = await prisma.sensor.findMany({ include: { threshold: true } });
   for (const sensor of sensors) {
+    // Runs on every sensor regardless of notification settings below -
+    // SNMP's online/offline column (services/snmpAgent.ts) isn't tied to
+    // whether this sensor's threshold/notifications are enabled or muted.
+    // No-ops in ~zero time when SNMP is disabled (its first line is
+    // `if (!agent) return`), so this piggybacks on the existing 60s
+    // offline-check timer instead of needing a second one just for this.
+    await syncSensorRow(sensor.id);
+
     const t = sensor.threshold;
     if (!t || !t.enabled || isMuted(t.mutedUntil)) continue;
 

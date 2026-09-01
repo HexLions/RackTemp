@@ -22,6 +22,7 @@ import { versionRouter } from "./routes/version";
 import { firmwareRouter } from "./routes/firmware";
 import { systemRouter } from "./routes/system";
 import { startOfflineWatcher } from "./services/thresholdEngine";
+import { startSnmpAgent } from "./services/snmpAgent";
 import { startRetentionWatcher } from "./services/retention";
 import { startBackupScheduler } from "./services/backupScheduler";
 import { resolveSessionSecret } from "./services/sessionSecret";
@@ -230,6 +231,13 @@ async function main() {
   startOfflineWatcher();
   startRetentionWatcher();
   startBackupScheduler();
+
+  // Off by default (IntegrationSettings.snmpEnabled) - see
+  // services/snmpAgent.ts's top comment for what this is and why.
+  const integrationSettings = await prisma.integrationSettings.findUnique({ where: { id: 1 } });
+  if (integrationSettings?.snmpEnabled && integrationSettings.snmpCommunity) {
+    await startSnmpAgent(integrationSettings.snmpPort, integrationSettings.snmpCommunity);
+  }
 
   server.listen(PORT, () => console.log(`rack-temp-monitor listening on https://0.0.0.0:${PORT}`));
 }
