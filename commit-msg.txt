@@ -1,0 +1,39 @@
+fix(snmp): register the standard MIB-II System group so PRTG Auto-Discovery finds the custom table sensor
+
+Real bug found against the user's real PRTG: Auto-Discovery with the
+saved Device Template only ever found Ping, never the SNMP Custom
+Table sensor. Root cause, confirmed via a real Paessler support
+article: Auto-Discovery only considers a device "really SNMP", and so
+only tries any SNMP sensor types on it at all, after a validation
+check against three standard MIB-II System group OIDs succeeds
+(sysDescr .1, sysName .5, sysLocation .6) - this agent never
+registered those, only the custom table, so that check always failed
+and Auto-Discovery silently skipped every SNMP sensor type.
+
+Added sysDescr/sysObjectID/sysUpTime/sysName/sysLocation. sysObjectID
+uses this agent's own placeholder enterprise OID; sysUpTime is
+computed live from when the agent started.
+
+Second, separate bug found while fixing the first one: registering a
+Scalar provider alone does not make it queryable - a real client GET
+came back NoSuchInstance for all five, until net-snmp's own
+Mib.prototype.registerProvider source (not just its README) showed
+why: it only auto-creates a scalar's instance via setScalarValue() when
+options.addScalarDefaultsOnRegistration + provider.defVal are both
+set, neither of which this agent uses. Fixed by calling
+mib.setScalarValue() explicitly right after registering each one - a
+handler alone was never enough. Also fixed each scalar's registered
+oid to drop the trailing ".0" (that's the instance suffix a client
+queries at, appended by the library itself - matches net-snmp's own
+README example for sysDescr, which registers at "1.3.6.1.2.1.1.1", not
+"...1.1.0"; the same wrong ".0" would have silently broken the fix
+even after adding the System group).
+
+Verified with a real net-snmp client Session in this repo's dev
+environment: GET on all five System group OIDs now returns correct
+values (previously NoSuchObject, then NoSuchInstance after the first,
+incomplete fix attempt), and a table walk in the same session still
+returns correct row data - both together, one session, same as a real
+Auto-Discovery scan would do.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>

@@ -30,6 +30,71 @@ const ENTRY_OID = `${BASE_OID}.1.1`; // rackTempSensorEntry
 const TABLE_NAME = "rackTempSensorTable";
 
 let agent: any = null;
+let agentStartedAt = 0;
+
+// PRTG's Auto-Discovery only considers a device "really SNMP" - and so
+// only tries any SNMP sensor types on it, including SNMP Custom Table -
+// after a validation check against three standard MIB-II System group
+// OIDs (sysDescr, sysName, sysLocation) succeeds. Confirmed via a real
+// Paessler support article after this exact symptom (Auto-Discovery only
+// finding Ping, never the custom table sensor) showed up against a real
+// PRTG instance - this agent originally only registered the custom
+// table, nothing at the standard System group OIDs, so that check always
+// failed. sysObjectID/sysUpTime added too since most SNMP tooling's own
+// "is this alive/what is it" probes read those as well, not just PRTG.
+//
+// registerProvider() alone does NOT create a queryable instance for a
+// Scalar - confirmed the hard way (real client GET returned NoSuchInstance
+// until this was added), by reading net-snmp's own Mib.prototype.registerProvider
+// source: it only auto-creates the instance via setScalarValue() when
+// options.addScalarDefaultsOnRegistration + provider.defVal are both set,
+// neither of which this agent uses - so setScalarValue() has to be called
+// explicitly for every scalar, right after registering it, or it 404s
+// forever regardless of what the handler would have returned.
+function registerSystemGroup(mib: any) {
+  const scalar = (
+    number: number,
+    name: string,
+    scalarType: number,
+    initialValue: string | number,
+    handler: (req: any) => void
+  ) => {
+    // No trailing ".0" here - that's the instance suffix a client actually
+    // queries at, added by the library itself; the provider registers at
+    // the bare object OID (matches net-snmp's own README example for
+    // sysDescr, which registers at "1.3.6.1.2.1.1.1", not "...1.1.0").
+    mib.registerProvider({
+      name,
+      type: snmp.MibProviderType.Scalar,
+      oid: `1.3.6.1.2.1.1.${number}`,
+      scalarType,
+      maxAccess: snmp.MaxAccess["read-only"],
+      handler,
+    });
+    mib.setScalarValue(name, initialValue);
+  };
+
+  scalar(1, "sysDescr", snmp.ObjectType.OctetString, "RackTemp SNMP Agent", (req: any) => {
+    req.instanceNode.value = "RackTemp SNMP Agent";
+    req.done();
+  });
+  scalar(2, "sysObjectID", snmp.ObjectType.OID, BASE_OID, (req: any) => {
+    req.instanceNode.value = BASE_OID; // this agent's own placeholder enterprise OID
+    req.done();
+  });
+  scalar(3, "sysUpTime", snmp.ObjectType.TimeTicks, 0, (req: any) => {
+    req.instanceNode.value = Math.round((Date.now() - agentStartedAt) / 10); // hundredths of a second
+    req.done();
+  });
+  scalar(5, "sysName", snmp.ObjectType.OctetString, "RackTemp", (req: any) => {
+    req.instanceNode.value = "RackTemp";
+    req.done();
+  });
+  scalar(6, "sysLocation", snmp.ObjectType.OctetString, "", (req: any) => {
+    req.instanceNode.value = "";
+    req.done();
+  });
+}
 
 // -1 is used for "no value yet" (never seen a reading, or no humidity
 // sensor) - Integer32 has no null, and PRTG's own numeric channels treat
@@ -131,8 +196,10 @@ export async function startSnmpAgent(port: number, community: string) {
     if (error) console.error("[snmp] agent error:", error.message);
   });
   agent.getAuthorizer().addCommunity(community);
+  agentStartedAt = Date.now();
 
   const mib = agent.getMib();
+  registerSystemGroup(mib);
   mib.registerProvider({
     name: TABLE_NAME,
     type: snmp.MibProviderType.Table,
