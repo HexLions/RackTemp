@@ -1,0 +1,25 @@
+node_modules/
+dist/
+*.tsbuildinfo
+backend/public/
+backend/data/
+backend/data.sqlite
+*.sqlite
+*.sqlite-journal
+.env
+.DS_Store
+*.bak
+.agents/
+.claude/
+skills-lock.json
+
+# Windows installer / Linux package build
+tools/
+dist-windows/
+dist-linux/
+windows-tray/**/bin/
+windows-tray/**/obj/
+
+# Arduino IDE compile output (.ino.bin, .elf, .map, etc.) - regenerated on
+# every compile, never meant to be committed.
+firmware/**/build/

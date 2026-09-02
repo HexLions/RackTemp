@@ -1,0 +1,41 @@
+name: Build and publish Windows installer
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build-installer:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer
+        shell: pwsh
+        run: ./scripts/build-installer-windows.ps1
+
+      - name: Upload installer to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v3
+        with:
+          files: dist-windows/RackTemp-Setup-*.exe
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: racktemp-windows-installer
+          path: dist-windows/RackTemp-Setup-*.exe

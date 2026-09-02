@@ -1,0 +1,43 @@
+name: Dependency audit
+
+# FASE 5.3: catches known-vulnerable dependencies before they land (per PR)
+# and on a schedule (already-merged deps that got a CVE after the fact).
+# --omit=dev: this app ships only its runtime deps (see the Dockerfile /
+# installer scripts) — devDependencies like vite/esbuild never reach a
+# user's machine, so a finding limited to the dev toolchain (e.g. esbuild's
+# dev-server-only advisory) isn't a real risk here and fixing it would mean
+# a breaking major-version bump with no security benefit for this app.
+# audit-level=moderate, not high: a moderate finding on a *production*
+# dependency is still a real finding once --omit=dev has already filtered
+# out the dev-toolchain noise (e.g. react-router's open-redirect advisory,
+# GHSA-wrjc-x8rr-h8h6) — high would hide it.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/package.json"
+      - "backend/package-lock.json"
+      - "frontend/package.json"
+      - "frontend/package-lock.json"
+      - ".github/workflows/audit.yml"
+  schedule:
+    - cron: "0 6 * * 1" # every Monday, 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        workspace: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: npm audit (${{ matrix.workspace }})
+        working-directory: ${{ matrix.workspace }}
+        run: npm audit --omit=dev --audit-level=moderate

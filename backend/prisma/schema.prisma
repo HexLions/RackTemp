@@ -1,0 +1,248 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  // Switch to "postgresql" + DATABASE_URL later for multi-instance / bigger deploys.
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Sensor {
+  id          String   @id @default(cuid())
+  name        String
+  location    String?
+  staticIp    String?
+  // No @default here on purpose — generated explicitly with randomBytes(32)
+  // in sensors.ts. cuid isn't meant to be unguessable credential material
+  // (k-sortable, embeds a timestamp + a process/host fingerprint, only the
+  // last block is actually random) — fine for the `id` field above, wrong
+  // for something that authenticates a device.
+  apiKey      String   @unique
+  chipId      String?  @unique
+  // chipId isn't a secret (derived from the MAC via ARP scan, visible in the
+  // portal's own AP SSID, shown in the dashboard) — so /announce handing
+  // back the API key just because it knows a linked chipId was effectively
+  // a permanent, unauthenticated credential grab for anyone on the LAN. Now
+  // it's a one-shot handoff, only valid inside a short window opened by an
+  // admin action (creating/claiming the sensor, or explicitly reopening it).
+  keyHandoutUntil DateTime?
+  keyHandedOut    Boolean  @default(false)
+  firmwareVersion String?
+  rebootRequested Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  lastSeenAt  DateTime?
+
+  readings    Reading[]
+  threshold   Threshold?
+  notifLogs   NotificationLog[]
+}
+
+model Reading {
+  id          String   @id @default(cuid())
+  sensorId    String
+  sensor      Sensor   @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+  temperature Float
+  humidity    Float?
+  rssi        Int?
+  createdAt   DateTime @default(now())
+
+  @@index([sensorId, createdAt])
+}
+
+model Threshold {
+  id            String   @id @default(cuid())
+  sensorId      String   @unique
+  sensor        Sensor   @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+  minTemp       Float?
+  maxTemp       Float?
+  minHumidity   Float?
+  maxHumidity   Float?
+  maxOfflineMin Int      @default(15)
+  hysteresis    Float    @default(0.5)
+  cooldownMin   Int      @default(15)
+  enabled       Boolean  @default(true)
+  mutedUntil    DateTime?
+  updatedAt     DateTime @updatedAt
+}
+
+model NotificationLog {
+  id        String   @id @default(cuid())
+  sensorId  String
+  sensor    Sensor   @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+  type      String   // "high_temp" | "low_temp" | "offline" | "recovered"
+  message   String
+  sentAt    DateTime @default(now())
+}
+
+model NotificationConfig {
+  id            Int      @id @default(1)
+  smtpEnabled   Boolean  @default(false)
+  smtpHost      String?
+  smtpPort      Int?
+  smtpSecure    Boolean  @default(true)
+  smtpUser      String?
+  smtpPass      String?
+  smtpFrom      String?
+  smtpTo        String?
+
+  // "smtp" (username/password) or "graph" (Microsoft Graph API, OAuth2 client
+  // credentials) — Microsoft is retiring SMTP basic auth for Exchange
+  // Online/Outlook.com at the end of 2026, Graph is the replacement for
+  // anyone on those providers. smtpEnabled/smtpTo are shared by both; the
+  // rest of the smtp* fields are ignored when emailProvider is "graph".
+  emailProvider     String  @default("smtp")
+  graphTenantId     String?
+  graphClientId     String?
+  graphClientSecret String?
+  graphSenderEmail  String?
+
+  telegramEnabled Boolean @default(false)
+  telegramToken   String?
+  telegramChatId  String?
+
+  updatedAt     DateTime @updatedAt
+}
+
+// A device that announced itself via POST /api/discovery/announce but has
+// no matching Sensor yet (no reading has arrived with its chipId). Cleared
+// out automatically once a real ingest with that chipId succeeds.
+model DiscoveredDevice {
+  id          String   @id @default(cuid())
+  chipId      String   @unique
+  ip          String?
+  firmware    String?
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @updatedAt
+}
+
+// Controller-wide secrets for integrations that aggregate every sensor
+// (unlike the per-sensor apiKey/PRTG endpoint, these aren't tied to one device).
+model IntegrationSettings {
+  id                  Int      @id @default(1)
+  // Same reasoning as Sensor.apiKey — generated explicitly with
+  // randomBytes(32) in integrations.ts, not cuid.
+  prtgToken           String
+  portainerWebhookUrl String?
+  updatedAt           DateTime @updatedAt
+}
+
+// Single current firmware build available for sensors to self-update to.
+// The binary lives on disk (backend/data/firmware/latest.bin); this row is
+// just the version label devices compare against.
+model FirmwareRelease {
+  id         Int      @id @default(1)
+  version    String
+  notes      String?
+  sha256     String?
+  // What the firmware's own OTA check (checkFirmwareUpdate() in the .ino)
+  // actually uses: arduino-esp32's HTTPUpdate class only exposes
+  // setMD5sum(), never setSHA256sum() - confirmed by reading the real
+  // installed HTTPUpdate.h directly (core 3.3.11) after a real compile
+  // error proved the earlier sha256-based design wrong. sha256 stays
+  // around too - still cheap to compute, still useful for anyone
+  // verifying a downloaded .bin by hand with a standard sha256sum tool -
+  // it's just not what the firmware itself checks against any more.
+  md5        String?
+  uploadedAt DateTime @default(now())
+}
+
+model AdminUser {
+  id                     Int       @id @default(1)
+  username               String    @unique
+  passwordHash           String
+  mustChangePassword     Boolean   @default(true)
+  resetTokenHash         String?
+  resetTokenExpiresAt    DateTime?
+  resetRequestedAt       DateTime?
+  // Offline account-recovery code, generated once at first login and
+  // re-rolled every time it's used. Lets the admin reset their password
+  // without SMTP configured, as long as they saved the code somewhere safe.
+  recoveryKeyHash        String?
+  // TOTP secret is written on /mfa/setup but totpEnabled only flips to true
+  // once the admin proves they scanned it right via /mfa/enable.
+  totpSecret             String?
+  totpEnabled            Boolean   @default(false)
+  // Printed to the server logs at boot while mustChangePassword is still
+  // true (see bootstrapAdmin() in index.ts) — required, alongside the
+  // authenticated session, by /first-login and /restore-backup. Whoever
+  // completes setup needs log access (docker compose logs / journalctl),
+  // not just "got there first" over the network. Cleared once first-login
+  // succeeds.
+  bootstrapTokenHash     String?
+  // cookie-session is stateless — the signed cookie itself is the only
+  // record of a session, valid for 7 days with nothing server-side to
+  // revoke. Bumped whenever an action should invalidate every other
+  // outstanding session (password change/reset, MFA enable/disable); a
+  // session's own copy (session.epoch) is checked against this on every
+  // authenticated request in requireAuth (middleware/auth.ts) and rejected
+  // on mismatch, which is the only actual revocation mechanism this app has.
+  sessionEpoch           Int       @default(0)
+  updatedAt              DateTime  @updatedAt
+}
+
+// Read-only accounts — see the dashboard/sensor history, nothing else. A
+// real, separate table (normal auto-increment id), not another singleton
+// like AdminUser: multiple viewers can exist, and critically, requireAuth
+// (middleware/auth.ts) only ever treats a session as privileged when
+// session.role === "admin" - a viewer's own id (which starts at 1, same as
+// AdminUser's fixed id) is never enough on its own to match the admin
+// account. Created/deleted/reset directly by the admin (POST/DELETE
+// /api/auth/viewers) - no self-signup, no forced-password-change flow, no
+// MFA in this pass (mirrors AdminUser's totpSecret/totpEnabled if that's
+// ever wanted later).
+model ViewerUser {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String
+  // Same real-revocation mechanism as AdminUser.sessionEpoch above (see
+  // that field's comment) - bumped on password reset to invalidate any
+  // outstanding session cookie for this viewer.
+  sessionEpoch Int      @default(0)
+  createdAt    DateTime @default(now())
+}
+
+// Vestigial as of the HTTPS-mandatory change (index.ts no longer reads or
+// writes this) - kept in the schema on purpose rather than dropped: this
+// project runs `prisma db push` (no migration history) on every boot, and
+// dropping a model with existing rows makes db push refuse to run without
+// `--accept-data-loss`. Adding that flag to the boot command would apply
+// to every future schema change too, not just this one - permanently
+// removing a real safety net for a one-time cleanup isn't worth it. Safe
+// to actually remove in a future change that's willing to add a one-time
+// `--accept-data-loss` boot, if that's ever worth doing.
+model ServerSettings {
+  id           Int      @id @default(1)
+  httpsEnabled Boolean  @default(false)
+  updatedAt    DateTime @updatedAt
+}
+
+// Scheduled full-database backup (settings + sensors + thresholds + readings
+// history), independent of the on-demand download in Settings > Backup.
+model BackupSettings {
+  id             Int       @id @default(1)
+  enabled        Boolean   @default(false)
+  intervalHours  Int       @default(24)
+  retentionCount Int       @default(7)
+  emailOnBackup  Boolean   @default(false)
+  lastBackupAt   DateTime?
+  updatedAt      DateTime  @updatedAt
+}
+
+// Security-relevant events — auth attempts, credential/config changes —
+// not a general activity log. Useful even with a single admin account: it's
+// the only record of "did this really happen, and from where" if a session
+// was stolen or someone had physical/network access. See services/auditLog.ts.
+// Note the obvious limitation: /restore-backup replaces this table along
+// with everything else, so a restore is the one event that erases its own
+// trail — same as it would for any other row in the database.
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String
+  detail    String?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}

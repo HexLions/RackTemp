@@ -1,0 +1,33 @@
+name: Build and publish Linux native package
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build-package:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Build package
+        run: bash scripts/build-package-linux.sh
+
+      - name: Upload to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v3
+        with:
+          files: dist-linux/racktemp-linux-x64.tar.gz
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: racktemp-linux-x64
+          path: dist-linux/racktemp-linux-x64.tar.gz

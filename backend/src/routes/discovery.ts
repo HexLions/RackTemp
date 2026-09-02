@@ -1,0 +1,156 @@
+import { Router } from "express";
+import { ah } from "../middleware/asyncHandler";
+import { z } from "zod";
+import { prisma } from "../db";
+import { requireAuth } from "../middleware/auth";
+import { notifyAll } from "../services/notifier";
+import { KEY_HANDOUT_WINDOW_MS } from "./sensors";
+
+export const discoveryRouter = Router();
+
+const ACTIVE_WINDOW_MS = 10 * 60_000;
+
+// A flood of /announce calls with new chipIds (each one legitimately
+// triggers a "new sensor detected" notification) shouldn't be able to burn
+// through an SMTP quota or get the account rate-limited by the provider.
+// This is on top of the request-level rate limit on the route itself —
+// that caps request volume, this caps how many of them actually reach
+// notifyAll(). Resets every 24h; not persisted, a restart also resets it,
+// which is fine for a soft cap like this.
+const DISCOVERY_NOTIFY_CAP = 10;
+const DISCOVERY_NOTIFY_WINDOW_MS = 24 * 3600_000;
+let discoveryNotifyCount = 0;
+let discoveryNotifyWindowStart = Date.now();
+
+function discoveryNotifyAllowed(): boolean {
+  const now = Date.now();
+  if (now - discoveryNotifyWindowStart > DISCOVERY_NOTIFY_WINDOW_MS) {
+    discoveryNotifyWindowStart = now;
+    discoveryNotifyCount = 0;
+  }
+  if (discoveryNotifyCount >= DISCOVERY_NOTIFY_CAP) return false;
+  discoveryNotifyCount++;
+  return true;
+}
+
+// Exactly 16 hex chars: firmware/rack_temp_sensor/rack_temp_sensor.ino's
+// chipId() does snprintf(buf, sizeof(buf), "%016llX", mac) — a zero-padded
+// 64-bit MAC, always 16 chars, uppercase (case-insensitive here anyway,
+// costs nothing and both cases are the same value). Unauthenticated
+// endpoint, 30 req/min — without a shape check chipId was an unbounded
+// string with no charset limit, straight into a unique DiscoveredDevice row.
+const announceSchema = z.object({
+  chipId: z.string().regex(/^[0-9A-Fa-f]{16}$/),
+  firmware: z.string().max(32).optional(),
+});
+
+// Called by ESP32/ESP8266 firmware on boot, and repeatedly on every loop
+// cycle while it has no API key, no auth: the device doesn't have one yet
+// at this point. Any client on the network can technically ping this, but
+// all it does is add a row to a "seen on the network" list an admin has to
+// act on — it can't read or change anything, UNLESS an admin has already
+// linked this exact chipId to a Sensor (via /claim, or by creating the
+// sensor from this device's discovery entry), in which case the device's
+// own next poll is handed that sensor's API key — but only inside the
+// short one-shot window opened by that admin action (see sensors.ts).
+// chipId isn't secret (derived from the MAC, visible in the portal's own
+// AP SSID, shown in the dashboard), so without that window this endpoint
+// would hand out a permanent, unauthenticated credential to anyone on the
+// LAN who already knows — or can see — a linked chipId.
+discoveryRouter.post("/announce", ah(async (req, res) => {
+  const parsed = announceSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid body" });
+
+  const { chipId, firmware } = parsed.data;
+  // req.ip, not a hand-rolled X-Forwarded-For read: index.ts only sets
+  // "trust proxy" when TRUST_PROXY_HOPS is explicitly configured, precisely
+  // so an untrusted client can't spoof its own IP via that header. Reading
+  // it here directly bypassed that — the IP shown in the dashboard and sent
+  // in notifications was whatever the client claimed, trust proxy or not.
+  const ip = req.ip;
+
+  const linkedSensor = await prisma.sensor.findUnique({ where: { chipId } });
+  if (linkedSensor) {
+    const windowOpen =
+      !linkedSensor.keyHandedOut && !!linkedSensor.keyHandoutUntil && linkedSensor.keyHandoutUntil > new Date();
+    if (windowOpen) {
+      await prisma.sensor.update({ where: { id: linkedSensor.id }, data: { keyHandedOut: true } });
+      await prisma.discoveredDevice.deleteMany({ where: { chipId } });
+      return res.json({ apiKey: linkedSensor.apiKey });
+    }
+    // Window closed or already used: respond exactly like an unknown chip
+    // (204, no body) so a caller can't distinguish "unknown" from "linked
+    // but too late" — but stop here, don't fall through to the
+    // DiscoveredDevice/notify path below. This chipId already belongs to a
+    // real Sensor; treating it as newly discovered would create a phantom
+    // discovery entry and re-fire "new sensor detected" on every poll.
+    return res.status(204).end();
+  }
+
+  const existing = await prisma.discoveredDevice.findUnique({ where: { chipId } });
+  await prisma.discoveredDevice.upsert({
+    where: { chipId },
+    update: { ip, firmware },
+    create: { chipId, ip, firmware },
+  });
+
+  if (!existing) {
+    if (discoveryNotifyAllowed()) {
+      await notifyAll(
+        "Rack Temp Monitor - new sensor detected",
+        `A new ESP32 was detected on the network (chip ${chipId}${ip ? `, IP ${ip}` : ""}). Create a sensor in the dashboard and link it to get it started automatically.`
+      );
+    } else {
+      console.warn(`[discovery] notification cap reached, chip ${chipId} detected but not notified`);
+    }
+  }
+
+  res.status(204).end();
+}));
+
+discoveryRouter.get("/", ah(requireAuth), ah(async (_req, res) => {
+  const since = new Date(Date.now() - ACTIVE_WINDOW_MS);
+  const devices = await prisma.discoveredDevice.findMany({
+    where: { lastSeenAt: { gte: since } },
+    orderBy: { firstSeenAt: "desc" },
+  });
+  res.json(devices);
+}));
+
+// `as string`: Express 5 widened req.params values to `string | string[]`
+// for wildcard (`*name`) params — every route here uses a plain `:id`, so
+// it's always a single string at runtime.
+discoveryRouter.delete("/:id", ah(requireAuth), ah(async (req, res) => {
+  await prisma.discoveredDevice.deleteMany({ where: { id: req.params.id as string } });
+  res.status(204).end();
+}));
+
+const claimSchema = z.object({ sensorId: z.string().min(1) });
+
+// Links an already-existing Sensor (e.g. one created directly from the
+// dashboard, not from this discovery entry) to a device that's still
+// polling /announce for a key. Opens a fresh 10-minute handout window —
+// the device picks the key up on its next poll, no manual copy-paste, no
+// re-opening the setup portal, as long as that poll lands inside the window.
+discoveryRouter.post("/:id/claim", ah(requireAuth), ah(async (req, res) => {
+  const parsed = claimSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "invalid body" });
+
+  const device = await prisma.discoveredDevice.findUnique({ where: { id: req.params.id as string } });
+  if (!device) return res.status(404).json({ error: "device not found" });
+
+  try {
+    const sensor = await prisma.sensor.update({
+      where: { id: parsed.data.sensorId },
+      data: {
+        chipId: device.chipId,
+        keyHandoutUntil: new Date(Date.now() + KEY_HANDOUT_WINDOW_MS),
+        keyHandedOut: false,
+      },
+    });
+    await prisma.discoveredDevice.delete({ where: { id: device.id } });
+    res.json(sensor);
+  } catch {
+    res.status(409).json({ error: "sensor not found or already linked to another chip" });
+  }
+}));

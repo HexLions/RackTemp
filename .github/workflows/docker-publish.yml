@@ -1,0 +1,114 @@
+name: Build and publish Docker image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - "backend/**"
+      - "frontend/**"
+      - ".github/workflows/docker-publish.yml"
+  release:
+    types: [published]
+  workflow_dispatch:
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      security-events: write # for the Trivy SARIF upload below
+      id-token: write # for cosign's keyless signing below (GitHub OIDC)
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Lowercase image name
+        run: echo "IMAGE=$(echo $IMAGE | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
+      - name: Compute tags
+        # :latest only moves on a published release, not on every push to
+        # main (FASE 5.2) — Portainer/Watchtower deploys pinned to :latest
+        # otherwise pick up unreleased, still-in-progress work the moment
+        # it lands on main. A main push instead gets :edge (deliberately
+        # opt-in for anyone who wants bleeding-edge) and a short-sha tag;
+        # a release gets :latest, its own version tag, and a short-sha tag.
+        run: |
+          SHORT_SHA="${GITHUB_SHA:0:7}"
+          echo "SHORT_SHA=$SHORT_SHA" >> "$GITHUB_ENV"
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAGS="${IMAGE}:latest
+          ${IMAGE}:${{ github.event.release.tag_name }}
+          ${IMAGE}:sha-${SHORT_SHA}"
+          else
+            TAGS="${IMAGE}:edge
+          ${IMAGE}:sha-${SHORT_SHA}"
+          fi
+          echo "TAGS<<EOF" >> "$GITHUB_ENV"
+          echo "$TAGS" >> "$GITHUB_ENV"
+          echo "EOF" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v7
+        id: build
+        with:
+          context: .
+          push: true
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+          tags: ${{ env.TAGS }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # SLSA build provenance + SBOM attached to the image, so anyone
+          # pulling it can verify it was actually built by this workflow
+          # from this source, not tampered with in transit or substituted
+          # at the registry. Completes the FASE 5 supply-chain work
+          # (:latest only on release, Watchtower opt-in+pinned).
+          provenance: mode=max
+          sbom: true
+
+      # Reporting only, not a gate: findings land in the repo's Security >
+      # Code scanning tab (SARIF), reviewed by a human rather than failing
+      # the publish on something that might be a false positive or a
+      # fix-pending upstream base-image CVE with no action to take here.
+      - name: Scan published image for vulnerabilities (Trivy)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE }}:sha-${{ env.SHORT_SHA }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          # Without this the SARIF output includes every severity
+          # regardless of the filter above (only table/json output would
+          # actually be filtered) — this makes severity apply to SARIF too.
+          limit-severities-for-sarif: true
+
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy
+
+      # Keyless signing (Sigstore/Fulcio+Rekor via GitHub's own OIDC token,
+      # no key pair to generate/store/rotate as a repo secret) so anyone
+      # pulling the image can cryptographically verify it was actually
+      # built and pushed by this workflow, not substituted at the registry
+      # or by a compromised/leaked GHCR credential used outside CI. Signs
+      # by digest (steps.build.outputs.digest), which covers every tag
+      # pushed above (:edge/:latest/:sha-.../release tag all point at the
+      # same digest) with one signature.
+      - uses: sigstore/cosign-installer@v4.1.2
+
+      - name: Sign the published image (cosign, keyless)
+        run: cosign sign --yes "${IMAGE}@${{ steps.build.outputs.digest }}"
