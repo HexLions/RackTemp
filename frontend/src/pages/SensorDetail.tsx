@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { LineChart, Line, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer, CartesianGrid } from "recharts";
 import { api, FirmwareRelease, Reading, Sensor, Threshold } from "../api/client";
@@ -25,6 +25,19 @@ export default function SensorDetail() {
   const [latestFirmware, setLatestFirmware] = useState<FirmwareRelease | null>(null);
   const dashboardOrigin = useDashboardOrigin();
 
+  // load() runs on a 20s timer below, and used to overwrite these form
+  // fields with the server copy on every tick - wiping out whatever the
+  // admin was in the middle of typing. Refs, not state: the interval closure
+  // is created once per [id, rangeHours], so a state value read inside
+  // load() would stay stuck at its initial false forever.
+  const thresholdDirty = useRef(false);
+  const infoDirty = useRef(false);
+
+  function editThreshold(patch: Partial<Threshold>) {
+    thresholdDirty.current = true;
+    setThreshold((t) => (t ? { ...t, ...patch } : t));
+  }
+
   async function load() {
     if (!id) return;
     const [s, r] = await Promise.all([
@@ -32,11 +45,13 @@ export default function SensorDetail() {
       api.get<Reading[]>(`/sensors/${id}/readings?hours=${rangeHours}`),
     ]);
     setSensor(s);
-    setThreshold(s.threshold);
     setReadings(r);
-    setEditName(s.name);
-    setEditLocation(s.location ?? "");
-    setEditStaticIp(s.staticIp ?? "");
+    if (!thresholdDirty.current) setThreshold(s.threshold);
+    if (!infoDirty.current) {
+      setEditName(s.name);
+      setEditLocation(s.location ?? "");
+      setEditStaticIp(s.staticIp ?? "");
+    }
   }
 
   useEffect(() => {
@@ -70,6 +85,7 @@ export default function SensorDetail() {
       location: editLocation || null,
       staticIp: editStaticIp || null,
     });
+    infoDirty.current = false;
     setSensor((prev) => (prev ? { ...prev, ...updated } : updated));
     setInfoSaved(true);
     setTimeout(() => setInfoSaved(false), 2000);
@@ -88,6 +104,7 @@ export default function SensorDetail() {
       cooldownMin: threshold.cooldownMin,
       enabled: threshold.enabled,
     });
+    thresholdDirty.current = false;
     setThreshold(updated);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -366,7 +383,7 @@ export default function SensorDetail() {
               type="number"
               step="0.1"
               value={threshold.minTemp ?? ""}
-              onChange={(e) => setThreshold({ ...threshold, minTemp: e.target.value === "" ? null : Number(e.target.value) })}
+              onChange={(e) => editThreshold({ minTemp: e.target.value === "" ? null : Number(e.target.value) })}
             />
           </label>
           <label>
@@ -375,7 +392,7 @@ export default function SensorDetail() {
               type="number"
               step="0.1"
               value={threshold.maxTemp ?? ""}
-              onChange={(e) => setThreshold({ ...threshold, maxTemp: e.target.value === "" ? null : Number(e.target.value) })}
+              onChange={(e) => editThreshold({ maxTemp: e.target.value === "" ? null : Number(e.target.value) })}
             />
           </label>
         </div>
@@ -386,7 +403,7 @@ export default function SensorDetail() {
               type="number"
               step="1"
               value={threshold.minHumidity ?? ""}
-              onChange={(e) => setThreshold({ ...threshold, minHumidity: e.target.value === "" ? null : Number(e.target.value) })}
+              onChange={(e) => editThreshold({ minHumidity: e.target.value === "" ? null : Number(e.target.value) })}
             />
           </label>
           <label>
@@ -395,7 +412,7 @@ export default function SensorDetail() {
               type="number"
               step="1"
               value={threshold.maxHumidity ?? ""}
-              onChange={(e) => setThreshold({ ...threshold, maxHumidity: e.target.value === "" ? null : Number(e.target.value) })}
+              onChange={(e) => editThreshold({ maxHumidity: e.target.value === "" ? null : Number(e.target.value) })}
             />
           </label>
         </div>
@@ -406,7 +423,7 @@ export default function SensorDetail() {
               type="number"
               step="0.1"
               value={threshold.hysteresis}
-              onChange={(e) => setThreshold({ ...threshold, hysteresis: Number(e.target.value) })}
+              onChange={(e) => editThreshold({ hysteresis: Number(e.target.value) })}
             />
           </label>
           <label>
@@ -414,7 +431,7 @@ export default function SensorDetail() {
             <input
               type="number"
               value={threshold.cooldownMin}
-              onChange={(e) => setThreshold({ ...threshold, cooldownMin: Number(e.target.value) })}
+              onChange={(e) => editThreshold({ cooldownMin: Number(e.target.value) })}
             />
           </label>
           <label>
@@ -422,7 +439,7 @@ export default function SensorDetail() {
             <input
               type="number"
               value={threshold.maxOfflineMin}
-              onChange={(e) => setThreshold({ ...threshold, maxOfflineMin: Number(e.target.value) })}
+              onChange={(e) => editThreshold({ maxOfflineMin: Number(e.target.value) })}
             />
           </label>
         </div>
@@ -430,7 +447,7 @@ export default function SensorDetail() {
           <input
             type="checkbox"
             checked={threshold.enabled}
-            onChange={(e) => setThreshold({ ...threshold, enabled: e.target.checked })}
+            onChange={(e) => editThreshold({ enabled: e.target.checked })}
           />
           Notifications active for this sensor
         </label>
@@ -474,15 +491,15 @@ export default function SensorDetail() {
         <div className="form-row">
           <label>
             Name
-            <input value={editName} onChange={(e) => setEditName(e.target.value)} required />
+            <input value={editName} onChange={(e) => { infoDirty.current = true; setEditName(e.target.value); }} required />
           </label>
           <label>
             Location (optional)
-            <input value={editLocation} onChange={(e) => setEditLocation(e.target.value)} placeholder="Server room 1" />
+            <input value={editLocation} onChange={(e) => { infoDirty.current = true; setEditLocation(e.target.value); }} placeholder="Server room 1" />
           </label>
           <label>
             Static IP (optional)
-            <input value={editStaticIp} onChange={(e) => setEditStaticIp(e.target.value)} placeholder="192.168.1.50" />
+            <input value={editStaticIp} onChange={(e) => { infoDirty.current = true; setEditStaticIp(e.target.value); }} placeholder="192.168.1.50" />
           </label>
         </div>
         <div className="row-actions">
