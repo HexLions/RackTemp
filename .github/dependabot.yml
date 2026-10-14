@@ -14,6 +14,12 @@ updates:
     groups:
       minor-patch:
         update-types: ["minor", "patch"]
+    # @types/node tracks the runtime Node major (node:24-alpine in the
+    # Dockerfile). A newer major would type APIs the runtime doesn't have,
+    # so bump it by hand together with the base image.
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "npm"
     directory: "/frontend"
     schedule:
