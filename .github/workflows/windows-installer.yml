@@ -4,6 +4,11 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing release tag to attach the installer to (e.g. v1.0.2). Leave empty to only build."
+        required: false
+        default: ""
 
 jobs:
   build-installer:
@@ -33,6 +38,16 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: dist-windows/RackTemp-Setup-*.exe
+
+      # Re-attaches the installer to a release whose own build failed
+      # (e.g. a download outage), without re-tagging it.
+      - name: Upload installer to an existing release
+        if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: gh release upload "$RELEASE_TAG" dist-windows/RackTemp-Setup-*.exe --clobber
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v7
