@@ -21,8 +21,43 @@ $outDir = Join-Path $root "dist-windows"
 
 $nodeVersion = "24.20.0"
 $nodeDirName = "node-v$nodeVersion-win-x64"
+# From https://nodejs.org/dist/v24.20.0/SHASUMS256.txt - update together
+# with $nodeVersion.
+$nodeSha256 = "6cac9ffbca8f6a47091e4b5c772e0606049c3871cb67d900c0cedde630e545ba"
 $nssmVersion = "2.24"
 $nssmDirName = "nssm-$nssmVersion"
+# nssm is vendored in installer\vendor\ (the upstream zip, unmodified):
+# nssm.cc is often down (503) and used to break release builds.
+$nssmZip = Join-Path $root "installer\vendor\$nssmDirName.zip"
+$nssmSha256 = "727d1e42275c605e0f04aba98095c38a8e1e46def453cdffce42869428aa6743"
+
+function Assert-Sha256([string]$Path, [string]$Expected) {
+    $actual = (Get-FileHash -Path $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actual -ne $Expected) {
+        throw "SHA256 mismatch for ${Path}: expected $Expected, got $actual"
+    }
+}
+
+# Downloads $Uri to $OutFile with retries, then checks its SHA256. A cached
+# file from an earlier run is reused only if its hash still matches.
+function Get-VerifiedDownload([string]$Uri, [string]$OutFile, [string]$Sha256) {
+    if (Test-Path $OutFile) {
+        try { Assert-Sha256 $OutFile $Sha256; return } catch { Remove-Item $OutFile -Force }
+    }
+    $attempts = 4
+    for ($i = 1; $i -le $attempts; $i++) {
+        try {
+            Invoke-WebRequest -Uri $Uri -OutFile $OutFile
+            break
+        } catch {
+            if ($i -eq $attempts) { throw }
+            $delay = [math]::Pow(2, $i) * 5
+            Write-Host "Download failed ($($_.Exception.Message)), retrying in ${delay}s..."
+            Start-Sleep -Seconds $delay
+        }
+    }
+    Assert-Sha256 $OutFile $Sha256
+}
 
 function Get-ISCC {
     $candidates = @(
@@ -67,21 +102,15 @@ New-Item -ItemType Directory -Force -Path $tools | Out-Null
 $nodeZip = Join-Path $tools "$nodeDirName.zip"
 $nodeDir = Join-Path $tools $nodeDirName
 if (-not (Test-Path $nodeDir)) {
-    if (-not (Test-Path $nodeZip)) {
-        Write-Host "Downloading Node.js $nodeVersion..."
-        Invoke-WebRequest -Uri "https://nodejs.org/dist/v$nodeVersion/$nodeDirName.zip" -OutFile $nodeZip
-    }
+    Write-Host "Downloading Node.js $nodeVersion..."
+    Get-VerifiedDownload "https://nodejs.org/dist/v$nodeVersion/$nodeDirName.zip" $nodeZip $nodeSha256
     Expand-Archive -Path $nodeZip -DestinationPath $tools -Force
 }
 
 Write-Host "== 5/7: nssm (Windows service wrapper) ==" -ForegroundColor Cyan
-$nssmZip = Join-Path $tools "$nssmDirName.zip"
 $nssmDir = Join-Path $tools $nssmDirName
+Assert-Sha256 $nssmZip $nssmSha256
 if (-not (Test-Path $nssmDir)) {
-    if (-not (Test-Path $nssmZip)) {
-        Write-Host "Downloading nssm $nssmVersion..."
-        Invoke-WebRequest -Uri "https://nssm.cc/release/$nssmDirName.zip" -OutFile $nssmZip
-    }
     Expand-Archive -Path $nssmZip -DestinationPath $tools -Force
 }
 
