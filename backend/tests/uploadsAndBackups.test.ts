@@ -35,9 +35,27 @@ describe("restore-backup upload", () => {
       .field("bootstrapToken", "abcd1234")
       .attach("backup", Buffer.from("not a database"), "backup.sqlite");
     expect(res.status).toBe(403);
-    // cleanup() unlinks asynchronously.
-    await new Promise((r) => setTimeout(r, 50));
+    // No upload file is left behind (the 403 itself now comes before multer).
     expect(fs.readdirSync(restoreTmpDir)).toEqual([]);
+  });
+});
+
+describe("firmware upload", () => {
+  it("answers 400, not 500, to a repeated version field", async () => {
+    const agent = await loginAdmin();
+    const res = await agent
+      .post("/api/firmware")
+      .field("version", "1.0.0")
+      .field("version", "1.0.1")
+      .attach("firmware", Buffer.from("bin"), "fw.bin");
+    expect(res.status).toBe(400);
+  });
+
+  it("accepts a normal upload", async () => {
+    const agent = await loginAdmin();
+    const res = await agent.post("/api/firmware").field("version", " 2.0.0 ").attach("firmware", Buffer.from("bin"), "fw.bin");
+    expect(res.status).toBe(200);
+    expect(res.body.version).toBe("2.0.0");
   });
 });
 
