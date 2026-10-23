@@ -3,12 +3,18 @@
 # Deploy this as a SEPARATE Portainer stack (or with `docker compose -f
 # docker-compose.watchtower.yml up -d`) alongside docker-compose.portainer.yml
 # or docker-compose.yml — not merged into either, so enabling it is a
-# deliberate, separate choice (FASE 5.1). As soon as a new image is out on
-# GHCR — which only happens on a published RackTemp release, see
-# docker-publish.yml — the controller pulls it, restarts
-# rack-temp-monitor (matched via the "com.centurylinklabs.watchtower.enable"
-# label already on that service), and removes the old image. The data volume
-# is not touched.
+# deliberate, separate choice (FASE 5.1). Every 6 hours it checks GHCR for a
+# new image — which only happens on a published RackTemp release, see
+# docker-publish.yml — for rack-temp-monitor (matched via the
+# "com.centurylinklabs.watchtower.enable" label already on that service).
+# By default it only reports the update (WATCHTOWER_MONITOR_ONLY below);
+# with that set to "false" it pulls the image, restarts the container and
+# removes the old image. The data volume is not touched.
+#
+# Docker socket: Watchtower needs /var/run/docker.sock to inspect, pull and
+# restart containers. Whatever holds that socket controls the Docker daemon,
+# which means root on the host — in monitor-only mode too. Deploying this
+# stack means trusting the pinned Watchtower image below with that access.
 #
 # Tradeoff: this pulls and restarts a production container unattended, with
 # no review step between "new release published" and "running on your
@@ -32,6 +38,7 @@ services:
     container_name: rack-temp-watchtower
     restart: unless-stopped
     volumes:
+      # Root-equivalent access to the host, see the header above.
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       WATCHTOWER_LABEL_ENABLE: "true"

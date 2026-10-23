@@ -174,9 +174,11 @@ Open `https://<pc-ip>:7431` — same behavior as the CLI deploy, including the f
 and restarting a container unattended, on a fixed poll, with no review step is worth choosing
 deliberately rather than getting it for free. If you want it anyway, deploy
 [`docker-compose.watchtower.yml`](docker-compose.watchtower.yml) as a second stack alongside this
-one: as soon as a new image is out on GHCR (i.e. a new release is published), it updates and
-restarts `rack-temp-monitor` within 6 hours. The data stays intact either way (it lives in the
-`rack-temp-data` volume, not in the image). In **Settings → Updates** you'll still find a version
+one: every 6 hours it checks GHCR for a new image (i.e. a newly published release). By default it
+only reports it (`WATCHTOWER_MONITOR_ONLY: "true"`); set that to `"false"` and it pulls the image
+and restarts `rack-temp-monitor` on its own. The data stays intact either way (it lives in the
+`rack-temp-data` volume, not in the image). Watchtower mounts the Docker socket, which gives it
+root-equivalent access to the host whichever mode it runs in — see [SECURITY.md](./SECURITY.md). In **Settings → Updates** you'll still find a version
 indicator with a link to the release and a button to force an immediate redeploy via an optional
 Portainer webhook, whether or not Watchtower is deployed.
 
