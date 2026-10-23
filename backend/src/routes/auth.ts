@@ -10,6 +10,7 @@ import { generateSecret as generateTotpSecret, generateURI as generateTotpURI, v
 import QRCode from "qrcode";
 import { PrismaClient } from "@prisma/client";
 import { prisma } from "../db";
+import { requireAdminSession, requireAuth } from "../middleware/auth";
 import { resolveDbPath, resolveDataDir } from "../services/dbPath";
 import { encryptField, decryptField } from "../services/fieldEncryption";
 import { checkPasswordNotPwned } from "../services/pwnedPassword";
@@ -149,12 +150,18 @@ authRouter.get("/me", ah(async (req, res) => {
 
   if (session.role === "viewer") {
     const viewer = await prisma.viewerUser.findUnique({ where: { id: session.userId } });
-    if (!viewer) return res.status(401).json({ error: "not authenticated" });
+    if (!viewer || session.epoch !== viewer.sessionEpoch) {
+      req.session = null;
+      return res.status(401).json({ error: "not authenticated" });
+    }
     return res.json({ username: viewer.username, role: "viewer", mustChangePassword: false });
   }
 
   const user = await prisma.adminUser.findUnique({ where: { id: session.userId } });
-  if (!user) return res.status(401).json({ error: "not authenticated" });
+  if (!user || session.epoch !== user.sessionEpoch) {
+    req.session = null;
+    return res.status(401).json({ error: "not authenticated" });
+  }
   res.json({ username: user.username, role: "admin", mustChangePassword: user.mustChangePassword });
 }));
 
@@ -174,7 +181,7 @@ const firstLoginSchema = z.object({
   bootstrapToken: z.string().min(1),
 });
 
-authRouter.post("/first-login", ah(async (req, res) => {
+authRouter.post("/first-login", ah(requireAdminSession), ah(async (req, res) => {
   const session = req.session as any;
   if (!session?.userId || session.role !== "admin") return res.status(401).json({ error: "not authenticated" });
 
@@ -252,11 +259,7 @@ const restoreUpload = multer({
 // bootstrapToken can't be checked here: it arrives as a multipart form
 // field, which doesn't exist until multer has parsed the body — that check
 // stays in the handler below.
-const requireFirstLoginSession: RequestHandler = (req, res, next) => {
-  const session = req.session as any;
-  if (!session?.userId || session.role !== "admin") return res.status(401).json({ error: "not authenticated" });
-  next();
-};
+const requireFirstLoginSession: RequestHandler = ah(requireAdminSession);
 
 authRouter.post("/restore-backup", requireFirstLoginSession, restoreUpload.single("backup"), ah(async (req, res) => {
   const cleanup = () => {
@@ -323,7 +326,7 @@ const changePasswordSchema = z.object({
   newPassword: z.string().min(8),
 });
 
-authRouter.post("/change-password", ah(async (req, res) => {
+authRouter.post("/change-password", ah(requireAuth), ah(async (req, res) => {
   const session = req.session as any;
   if (!session?.userId || session.role !== "admin") return res.status(401).json({ error: "not authenticated" });
   if (session.mustChangePassword) return res.status(403).json({ error: "must_change_password" });
@@ -356,7 +359,7 @@ authRouter.post("/change-password", ah(async (req, res) => {
   res.json({ ok: true });
 }));
 
-authRouter.get("/mfa/status", ah(async (req, res) => {
+authRouter.get("/mfa/status", ah(requireAuth), ah(async (req, res) => {
   const session = req.session as any;
   if (!session?.userId || session.role !== "admin") return res.status(401).json({ error: "not authenticated" });
   const user = await prisma.adminUser.findUnique({ where: { id: session.userId } });
@@ -368,7 +371,7 @@ authRouter.get("/mfa/status", ah(async (req, res) => {
 // otherwise a botched setup could lock them out on next login.
 const mfaSetupSchema = z.object({ currentPassword: z.string().min(1).optional() });
 
-authRouter.post("/mfa/setup", ah(async (req, res) => {
+authRouter.post("/mfa/setup", ah(requireAuth), ah(async (req, res) => {
   const session = req.session as any;
   if (!session?.userId || session.role !== "admin") return res.status(401).json({ error: "not authenticated" });
 
@@ -400,7 +403,7 @@ authRouter.post("/mfa/setup", ah(async (req, res) => {
 
 const mfaEnableSchema = z.object({ code: z.string().min(1) });
 
-authRouter.post("/mfa/enable", ah(async (req, res) => {
+authRouter.post("/mfa/enable", ah(requireAuth), ah(async (req, res) => {
   const session = req.session as any;
   if (!session?.userId || session.role !== "admin") return res.status(401).json({ error: "not authenticated" });
 
@@ -428,7 +431,7 @@ authRouter.post("/mfa/enable", ah(async (req, res) => {
 
 const mfaDisableSchema = z.object({ currentPassword: z.string().min(1) });
 
-authRouter.post("/mfa/disable", ah(async (req, res) => {
+authRouter.post("/mfa/disable", ah(requireAuth), ah(async (req, res) => {
   const session = req.session as any;
   if (!session?.userId || session.role !== "admin") return res.status(401).json({ error: "not authenticated" });
 
@@ -508,7 +511,7 @@ authRouter.post("/forgot-password", ah(async (req, res) => {
 // access even after the admin changes the password.
 const regenerateRecoveryKeySchema = z.object({ currentPassword: z.string().min(1) });
 
-authRouter.post("/regenerate-recovery-key", ah(async (req, res) => {
+authRouter.post("/regenerate-recovery-key", ah(requireAuth), ah(async (req, res) => {
   const session = req.session as any;
   if (!session?.userId || session.role !== "admin") return res.status(401).json({ error: "not authenticated" });
 
@@ -631,7 +634,7 @@ authRouter.post("/reset-password", ah(async (req, res) => {
 // admin account's own onboarding for a feature meant to just hand a few
 // trusted people read access.
 
-authRouter.get("/viewers", ah(async (req, res) => {
+authRouter.get("/viewers", ah(requireAuth), ah(async (req, res) => {
   const session = req.session as any;
   if (!session?.userId || session.role !== "admin") return res.status(401).json({ error: "not authenticated" });
 
@@ -647,7 +650,7 @@ const createViewerSchema = z.object({
   password: z.string().min(8),
 });
 
-authRouter.post("/viewers", ah(async (req, res) => {
+authRouter.post("/viewers", ah(requireAuth), ah(async (req, res) => {
   const session = req.session as any;
   if (!session?.userId || session.role !== "admin") return res.status(401).json({ error: "not authenticated" });
 
@@ -673,7 +676,7 @@ authRouter.post("/viewers", ah(async (req, res) => {
 
 const resetViewerPasswordSchema = z.object({ password: z.string().min(8) });
 
-authRouter.post("/viewers/:id/reset-password", ah(async (req, res) => {
+authRouter.post("/viewers/:id/reset-password", ah(requireAuth), ah(async (req, res) => {
   const session = req.session as any;
   if (!session?.userId || session.role !== "admin") return res.status(401).json({ error: "not authenticated" });
 
@@ -700,7 +703,7 @@ authRouter.post("/viewers/:id/reset-password", ah(async (req, res) => {
   res.json({ ok: true });
 }));
 
-authRouter.delete("/viewers/:id", ah(async (req, res) => {
+authRouter.delete("/viewers/:id", ah(requireAuth), ah(async (req, res) => {
   const session = req.session as any;
   if (!session?.userId || session.role !== "admin") return res.status(401).json({ error: "not authenticated" });
 
