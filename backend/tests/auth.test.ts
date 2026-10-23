@@ -218,3 +218,78 @@ describe("viewer accounts", () => {
     expect((await viewer.get("/api/sensors")).status).toBe(401);
   });
 });
+
+// Every admin route in auth.ts must honour sessionEpoch like requireAuth
+// does (see middleware/auth.ts), not just session.userId and role.
+describe("revoked sessions on auth routes", () => {
+  beforeEach(() => createAdmin());
+
+  async function revokedSession() {
+    const stolen = await loginAdmin();
+    const admin = await loginAdmin();
+    const res = await admin.post("/api/auth/change-password").send({ currentPassword: ADMIN_PASSWORD, newPassword: "another-long-password" });
+    expect(res.status).toBe(200);
+    return stolen;
+  }
+
+  it.each([
+    ["get", "/api/auth/me", {}],
+    ["get", "/api/auth/mfa/status", {}],
+    ["post", "/api/auth/mfa/setup", {}],
+    ["post", "/api/auth/mfa/enable", { code: "123456" }],
+    ["post", "/api/auth/mfa/disable", { currentPassword: "another-long-password" }],
+    ["post", "/api/auth/change-password", { currentPassword: "another-long-password", newPassword: "attacker-password" }],
+    ["post", "/api/auth/regenerate-recovery-key", { currentPassword: "another-long-password" }],
+    ["get", "/api/auth/viewers", {}],
+    ["post", "/api/auth/viewers", { username: "extra-viewer", password: "extra-viewer-pass" }],
+    ["post", "/api/auth/viewers/1/reset-password", { password: "extra-viewer-pass" }],
+    ["delete", "/api/auth/viewers/1", {}],
+  ] as const)("%s %s answers 401", async (method, url, body) => {
+    const stolen = await revokedSession();
+    const res = await stolen[method](url).send(body);
+    expect(res.status).toBe(401);
+  });
+
+  it("leaves viewers and MFA settings untouched", async () => {
+    const stolen = await revokedSession();
+    await stolen.post("/api/auth/viewers").send({ username: "extra-viewer", password: "extra-viewer-pass" });
+    await stolen.post("/api/auth/mfa/setup").send({});
+
+    expect(await prisma.viewerUser.count()).toBe(0);
+    const user = await prisma.adminUser.findUniqueOrThrow({ where: { id: 1 } });
+    expect(user.totpSecret).toBeNull();
+    expect(user.totpEnabled).toBe(false);
+  });
+
+  it("still lets the current session use the same routes", async () => {
+    const admin = await loginAdmin();
+    expect((await admin.get("/api/auth/mfa/status")).status).toBe(200);
+    expect((await admin.post("/api/auth/viewers").send({ username: "viewer2", password: "viewer-password" })).status).toBe(200);
+  });
+
+  it("logs a revoked viewer out of /me", async () => {
+    const v = await createViewer("viewer1", "viewer-password");
+    const viewer = request.agent(app);
+    await viewer.post("/api/auth/viewer-login").send({ username: "viewer1", password: "viewer-password" });
+    await prisma.viewerUser.update({ where: { id: v.id }, data: { sessionEpoch: { increment: 1 } } });
+    expect((await viewer.get("/api/auth/me")).status).toBe(401);
+  });
+});
+
+describe("revoked sessions during first boot", () => {
+  beforeEach(() => createAdmin({ mustChangePassword: true, bootstrapTokenHash: bcrypt.hashSync("abcd1234", 4) }));
+
+  it("first-login rejects a revoked session even with the right token", async () => {
+    const agent = await loginAdmin();
+    await prisma.adminUser.update({ where: { id: 1 }, data: { sessionEpoch: { increment: 1 } } });
+    const res = await agent.post("/api/auth/first-login").send({ newUsername: "owner", newPassword: "a-long-new-password", bootstrapToken: "abcd1234" });
+    expect(res.status).toBe(401);
+  });
+
+  it("restore-backup rejects a revoked session before writing the upload", async () => {
+    const agent = await loginAdmin();
+    await prisma.adminUser.update({ where: { id: 1 }, data: { sessionEpoch: { increment: 1 } } });
+    const res = await agent.post("/api/auth/restore-backup").field("bootstrapToken", "abcd1234").attach("backup", Buffer.alloc(1024, 1), "backup.sqlite");
+    expect(res.status).toBe(401);
+  });
+});
