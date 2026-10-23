@@ -8,9 +8,12 @@ let wss: WebSocketServer | null = null;
 
 interface SessionPayload {
   userId?: number;
+  role?: string;
   mustChangePassword?: boolean;
   epoch?: number;
 }
+
+type Client = WebSocket & { isAlive?: boolean; session?: SessionPayload | null };
 
 // Replicates cookie-session's own verification exactly (read from its
 // source, not guessed): it stores the session as base64(JSON) in a
@@ -40,6 +43,34 @@ function readSession(req: IncomingMessage, sessionSecret: string): SessionPayloa
   }
 }
 
+// Same rules as requireAnyUser (middleware/auth.ts): an admin or a viewer,
+// each checked against its own table and sessionEpoch. AdminUser and
+// ViewerUser ids overlap (both start at 1), so the role decides the table.
+async function isSessionCurrent(session: SessionPayload | null | undefined): Promise<boolean> {
+  if (!session?.userId) return false;
+  if (session.role === "admin") {
+    if (session.mustChangePassword) return false;
+    const user = await prisma.adminUser.findUnique({ where: { id: session.userId } });
+    return !!user && session.epoch === user.sessionEpoch;
+  }
+  if (session.role === "viewer") {
+    const viewer = await prisma.viewerUser.findUnique({ where: { id: session.userId } });
+    return !!viewer && session.epoch === viewer.sessionEpoch;
+  }
+  return false;
+}
+
+// Re-checks every open connection's session: one revoked after the
+// handshake (password change or reset, MFA toggle, viewer reset or
+// deletion) gets closed instead of streaming readings until it drops.
+// Runs on every heartbeat tick; exported so tests can trigger it.
+export async function revalidateClients() {
+  for (const ws of wss?.clients ?? []) {
+    const client = ws as Client;
+    if (!(await isSessionCurrent(client.session))) client.close(4001, "session expired");
+  }
+}
+
 export function initWs(server: Server, sessionSecret: string) {
   wss = new WebSocketServer({
     server,
@@ -47,9 +78,9 @@ export function initWs(server: Server, sessionSecret: string) {
     maxPayload: 4096,
     // Async: the signed cookie alone isn't enough anymore — it has to match
     // the account's current sessionEpoch too, same revocation check as
-    // requireAuth (middleware/auth.ts), otherwise a cookie revoked by a
-    // password change/reset or MFA toggle would keep receiving live
-    // readings over this connection even after every REST endpoint rejects it.
+    // requireAnyUser (middleware/auth.ts). That check runs here at the
+    // handshake and again on every heartbeat (revalidateClients), so a
+    // connection whose session is revoked later is closed too.
     verifyClient: (info, callback) => {
       // Defense in depth, not the actual protection (that's the cookie
       // check below, and sameSite:"strict" already stops the cookie itself
@@ -72,14 +103,8 @@ export function initWs(server: Server, sessionSecret: string) {
         }
       }
 
-      const session = readSession(info.req, sessionSecret);
-      if (!session?.userId || session.mustChangePassword) {
-        callback(false, 401, "Unauthorized");
-        return;
-      }
-      prisma.adminUser
-        .findUnique({ where: { id: session.userId } })
-        .then((user) => callback(!!user && session.epoch === user.sessionEpoch, 401, "Unauthorized"))
+      isSessionCurrent(readSession(info.req, sessionSecret))
+        .then((ok) => callback(ok, 401, "Unauthorized"))
         .catch(() => callback(false, 500, "Internal error"));
     },
   });
@@ -88,8 +113,9 @@ export function initWs(server: Server, sessionSecret: string) {
   // client that didn't answer the previous ping, so a half-open connection
   // (network dropped without a clean close) doesn't accumulate forever.
   const HEARTBEAT_MS = 30_000;
-  wss.on("connection", (ws) => {
-    const client = ws as WebSocket & { isAlive?: boolean };
+  wss.on("connection", (ws, req) => {
+    const client = ws as Client;
+    client.session = readSession(req, sessionSecret);
     client.isAlive = true;
     client.on("pong", () => {
       client.isAlive = true;
@@ -98,7 +124,7 @@ export function initWs(server: Server, sessionSecret: string) {
 
   setInterval(() => {
     for (const ws of wss?.clients ?? []) {
-      const client = ws as WebSocket & { isAlive?: boolean };
+      const client = ws as Client;
       if (client.isAlive === false) {
         client.terminate();
         continue;
@@ -106,6 +132,7 @@ export function initWs(server: Server, sessionSecret: string) {
       client.isAlive = false;
       client.ping();
     }
+    revalidateClients().catch((err) => console.error("[ws] session revalidation failed", err));
   }, HEARTBEAT_MS);
 }
 
