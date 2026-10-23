@@ -2,8 +2,8 @@ name: Build and test
 
 # Every PR used to get only the dependency audit and CodeQL: nothing
 # compiled the code or ran a test before merge. This builds both
-# workspaces the way the Dockerfile does (same Node major) and runs the
-# backend's type-check and test suite.
+# workspaces the way the Dockerfile does (same Node major) and runs each
+# workspace's type-check and test suite.
 on:
   pull_request:
     branches: [main]
@@ -47,3 +47,5 @@ jobs:
 
       - run: npm ci
       - run: npm run build
+      - run: npm run typecheck
+      - run: npm test
