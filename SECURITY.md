@@ -75,6 +75,13 @@ much as the server itself, and treat the `.sqlite` file the same as any of the c
   `npm audit` on every PR and weekly, so a vulnerable dependency is flagged even between Dependabot
   runs.
 - **CodeQL** (SAST) runs on every PR and weekly against both the backend and frontend TypeScript.
+- **Watchtower is optional and holds the Docker socket.**
+  [`docker-compose.watchtower.yml`](./docker-compose.watchtower.yml) is a separate stack, not part
+  of the default deployment. It mounts `/var/run/docker.sock`, and whatever holds that socket
+  controls the Docker daemon: root on the host, even in its default monitor-only mode. Its image is
+  pinned by digest, so it only changes when the digest in that file is bumped by hand. If that
+  access isn't acceptable, don't deploy it and update by hand (or through the Portainer webhook in
+  Settings → Updates).
 
 ## Password strength
 
