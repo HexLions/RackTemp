@@ -75,6 +75,17 @@ describe("first boot (mustChangePassword)", () => {
     expect(await bcrypt.compare(ok.body.recoveryKey, user.recoveryKeyHash!)).toBe(true);
     expect((await agent.get("/api/sensors")).status).toBe(200);
   });
+
+  it("logs out other default-credential sessions once setup is finished", async () => {
+    await createAdmin({ mustChangePassword: true, bootstrapTokenHash: await bcrypt.hash("abcd1234", 4) });
+    const other = await loginAdmin();
+    const agent = await loginAdmin();
+
+    const ok = await agent.post("/api/auth/first-login").send({ newUsername: "owner", newPassword: "a-long-new-password", bootstrapToken: "abcd1234" });
+    expect(ok.status).toBe(200);
+    expect((await agent.get("/api/sensors")).status).toBe(200);
+    expect((await other.get("/api/auth/me")).status).toBe(401);
+  });
 });
 
 describe("session revocation (sessionEpoch)", () => {

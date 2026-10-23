@@ -220,10 +220,14 @@ authRouter.post("/first-login", ah(requireAdminSession), ah(async (req, res) => 
       mustChangePassword: false,
       recoveryKeyHash,
       bootstrapTokenHash: null, // one-shot: invalidated as soon as setup succeeds
+      // Any other session opened with the default admin/admin credentials
+      // before setup finished stops working; this one is realigned below.
+      sessionEpoch: { increment: 1 },
     },
   });
 
   session.mustChangePassword = false;
+  session.epoch = updated.sessionEpoch;
   clearSetupTokenFile();
   await logAudit("first_login_completed", { detail: `username: ${updated.username}`, ip: req.ip });
   res.json({ ok: true, username: updated.username, mustChangePassword: false, recoveryKey });
@@ -259,9 +263,16 @@ const restoreUpload = multer({
 // bootstrapToken can't be checked here: it arrives as a multipart form
 // field, which doesn't exist until multer has parsed the body — that check
 // stays in the handler below.
-const requireFirstLoginSession: RequestHandler = ah(requireAdminSession);
+// The mustChangePassword check also runs here, before multer: an already
+// configured instance answers 403 without accepting the upload first.
+const requireSetupPending: RequestHandler = ah(async (req, res, next) => {
+  const user = await prisma.adminUser.findUnique({ where: { id: (req.session as any).userId } });
+  if (!user?.mustChangePassword) return res.status(403).json({ error: "restore available only at first login" });
+  next();
+});
+const requireFirstLoginSession: RequestHandler[] = [ah(requireAdminSession), requireSetupPending];
 
-authRouter.post("/restore-backup", requireFirstLoginSession, restoreUpload.single("backup"), ah(async (req, res) => {
+authRouter.post("/restore-backup", ...requireFirstLoginSession, restoreUpload.single("backup"), ah(async (req, res) => {
   const cleanup = () => {
     if (req.file) fs.unlink(req.file.path, () => {});
   };
