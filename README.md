@@ -354,8 +354,9 @@ shipped (`#define OTA_AUTO_UPDATE 1` at the top of the sketch), downloads and fl
 download is checked against the MD5 the server reports for it (the only hash arduino-esp32's
 HTTPUpdate class actually supports). The version/MD5 request is covered by the certificate
 fingerprint below; the `.bin` download is not. So with a fingerprint pinned, a `.bin` swapped in
-transit is rejected; without one, anyone able to spoof the server address on the LAN can serve
-their own `.bin` together with a matching hash even over HTTPS. Either way there's no
+transit is rejected. Without one, firmware `2026-10-23.1` and later doesn't flash at all and only
+logs the update; older firmware still flashes, and anyone able to spoof the server address on the
+LAN could serve their own `.bin` together with a matching hash even over HTTPS. Either way there's no
 signature/authenticity check on the file itself — no embedded public key, no code signing. See
 [SECURITY.md](./SECURITY.md) for the details. Set `OTA_AUTO_UPDATE` to `0` and reflash if you'd
 rather only log available updates and reflash manually over USB.
