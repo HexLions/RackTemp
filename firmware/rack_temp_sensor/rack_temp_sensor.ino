@@ -43,23 +43,29 @@
 // so you can quickly tell if the device is running the latest flashed version.
 // Also used for OTA auto-update: if the server offers a different one, the
 // device downloads it and flashes itself (see checkFirmwareUpdate below).
-#define FIRMWARE_VERSION "2026-08-31.3"
+#define FIRMWARE_VERSION "2026-10-23.1"
 
 // OTA auto-update fetches and flashes a .bin over HTTPS, checked against
 // the MD5 the server reports for it (HTTPUpdate.setMD5sum, see
 // checkFirmwareUpdate below - the only hash arduino-esp32's HTTPUpdate class
 // actually exposes, confirmed by reading the real installed HTTPUpdate.h;
 // setSHA256sum doesn't exist on it despite an earlier version of this file
-// claiming otherwise) — that catches corruption and a swapped file,
-// but arduino-esp32's HTTPUpdate has no signature/authenticity API. So
-// anyone able to ARP- or DNS-spoof cfgServerHost on the LAN
-// can still serve their own .bin together with a matching hash and the check
-// passes even over HTTPS. Real authenticity needs ESP-IDF Secure Boot v2 or an app-level
-// RSA/ECDSA signature checked with mbedtls against an embedded public key,
-// which needs its own signing step in the release pipeline — out of scope
-// here, left for a future phase. Off by default; set to 1 only if you've
-// weighed that remaining tradeoff for your network. The version check itself
-// (just a GET, no download) still runs and logs when an update is available either way.
+// claiming otherwise). The .bin download itself can't be pinned (see
+// checkFirmwareUpdate), but the version/MD5 request goes through
+// beginRequest(), which checks the configured certificate fingerprint. So the
+// MD5 is only trustworthy with a fingerprint pinned, and the sensor only
+// flashes when one is: without it, anyone able to ARP- or DNS-spoof
+// cfgServerHost on the LAN could answer both requests with their own .bin
+// and a matching hash, even over HTTPS. Unpinned sensors just log that an
+// update is available.
+// Even pinned, nothing proves the image itself is genuine: arduino-esp32's
+// HTTPUpdate has no signature/authenticity API, so whoever controls the server
+// (or an admin account on it) decides what gets flashed. Real authenticity
+// needs ESP-IDF Secure Boot v2 or an app-level RSA/ECDSA signature checked
+// with mbedtls against an embedded public key, which needs its own signing
+// step in the release pipeline — out of scope here, left for a future phase.
+// Set to 0 to never flash automatically; the version check itself (just a
+// GET, no download) still runs and logs when an update is available either way.
 #define OTA_AUTO_UPDATE 1
 
 // BOOT button, held down AFTER boot (not at power-on — see setup()) to
@@ -594,6 +600,13 @@ void checkFirmwareUpdate() {
     Serial.println("New firmware available: " + latestVersion + " but server did not report an MD5 - not flashing.");
     return;
   }
+  // Without a pinned fingerprint the request above wasn't authenticated, so
+  // neither is the MD5 the .bin would be checked against (see OTA_AUTO_UPDATE).
+  if (cfgCertFingerprint.length() == 0) {
+    Serial.println("New firmware available: " + latestVersion + " but no server certificate fingerprint is configured - not flashing. "
+                   "Pin it in the setup portal to enable OTA updates, or reflash over USB.");
+    return;
+  }
   Serial.println("New firmware available: " + latestVersion + " (current: " FIRMWARE_VERSION "). Updating...");
 
   String host;
@@ -611,9 +624,9 @@ void checkFirmwareUpdate() {
   // where we could call verify() against the live peer certificate — only
   // setInsecure() is applied here (required for the handshake to complete
   // at all, same as beginRequest()/connectSecure()). The downloaded file
-  // is still content-authenticated by the MD5 check just above; this
-  // only adds encryption in transit against passive packet capture, not
-  // fingerprint pinning against an active MITM.
+  // is still checked against the MD5 set just above, which came over the
+  // pinned connection (the fingerprint check before this guarantees it), so
+  // a .bin swapped in transit is rejected.
   secureClient.setHandshakeTimeout(15000); // see connectSecure() - 120s default is too long to block loop() on
   secureClient.setInsecure();
   t_httpUpdate_return ret = httpUpdate.update(secureClient, buildUrl(host, port, "/api/firmware/latest.bin"));

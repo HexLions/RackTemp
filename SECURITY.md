@@ -37,14 +37,15 @@ to check the certificate), so the file is only as trustworthy as the MD5 it is c
 
 - **Fingerprint pinned:** an attacker on the network can't change the reported MD5, so a `.bin`
   swapped in transit fails the check.
-- **No fingerprint pinned:** an attacker able to spoof the server address answers both requests
-  and gets their own firmware flashed.
+- **No fingerprint pinned:** from firmware `2026-10-23.1` the sensor doesn't flash at all and only
+  logs that an update is available. Older firmware still flashes, so an attacker able to spoof
+  the server address could answer both requests and get their own firmware flashed: reflash those
+  sensors over USB, or pin their fingerprint.
 - **Either way, firmware images are not signed.** Whoever controls the server, or an admin
-  account (uploading firmware needs an admin session), decides what every sensor with
+  account (uploading firmware needs an admin session), decides what every pinned sensor with
   auto-update on will flash.
 
-Pin the fingerprint on every sensor, or set `OTA_AUTO_UPDATE 0` and reflash over USB to update, if
-that isn't acceptable for your network.
+Set `OTA_AUTO_UPDATE 0` and reflash over USB to update if that isn't acceptable for your network.
 
 **Secrets at rest.** The admin password is a bcrypt hash. Genuine third-party credentials — TOTP
 secret, SMTP password, Telegram bot token, Microsoft Graph client secret — are encrypted
