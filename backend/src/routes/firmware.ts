@@ -70,8 +70,10 @@ firmwareRouter.post("/", ah(requireAuth), upload.single("firmware"), ah(async (r
     if (req.file) fs.unlink(req.file.path, () => {});
   };
 
-  const version = (req.body?.version ?? "").trim();
-  const notes = (req.body?.notes ?? "").trim() || null;
+  // A repeated multipart field arrives as an array: treat anything but a
+  // single string as missing (400) instead of letting .trim() throw (500).
+  const version = typeof req.body?.version === "string" ? req.body.version.trim() : "";
+  const notes = (typeof req.body?.notes === "string" ? req.body.notes.trim() : "") || null;
   if (!version || !req.file) {
     cleanup();
     return res.status(400).json({ error: "version and .bin file are required" });

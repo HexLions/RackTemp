@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../src/db";
 import { authRouter } from "../src/routes/auth";
+import { firmwareRouter } from "../src/routes/firmware";
 import { sensorsRouter } from "../src/routes/sensors";
 import { systemRouter } from "../src/routes/system";
 
@@ -28,6 +29,7 @@ export function buildApp() {
   app.use("/api/auth", authRouter);
   app.use("/api/sensors", sensorsRouter);
   app.use("/api/system", systemRouter);
+  app.use("/api/firmware", firmwareRouter);
   app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2025") {
       return res.status(404).json({ error: "not found" });
