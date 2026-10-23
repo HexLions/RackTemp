@@ -7,13 +7,14 @@ import { authRouter } from "../src/routes/auth";
 import { firmwareRouter } from "../src/routes/firmware";
 import { sensorsRouter } from "../src/routes/sensors";
 import { systemRouter } from "../src/routes/system";
+import { applyRateLimits } from "../src/rateLimits";
 
 // Mirrors the middleware/router wiring in src/index.ts, which builds the
-// app inside main() and doesn't export it. Differences on purpose: no rate
-// limiters (tests log in many times) and a non-secure cookie, because
-// supertest talks plain HTTP and cookie-session refuses to set a secure
-// cookie there.
-export function buildApp() {
+// app inside main() and doesn't export it. Differences on purpose: rate
+// limiters only when asked for (most tests log in many times) and a
+// non-secure cookie, because supertest talks plain HTTP and cookie-session
+// refuses to set a secure cookie there.
+export function buildApp({ rateLimits = false }: { rateLimits?: boolean } = {}) {
   const app = express();
   app.use(express.json());
   app.use(
@@ -26,6 +27,7 @@ export function buildApp() {
       httpOnly: true,
     }),
   );
+  if (rateLimits) applyRateLimits(app);
   app.use("/api/auth", authRouter);
   app.use("/api/sensors", sensorsRouter);
   app.use("/api/system", systemRouter);
