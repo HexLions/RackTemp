@@ -347,15 +347,16 @@ of the sketch, if you want to change it):
 includes it on its own, no need to configure it. The ingest response can also carry a one-shot
 `{"reboot":true}` flag (set from the sensor's page in the dashboard), handled automatically.
 
-Separately, once a day the sensor checks `/api/firmware/latest` for a newer version and logs
-it if one's available — it does **not** flash itself automatically by default (`#define
-OTA_AUTO_UPDATE 0` at the top of the sketch). If enabled, the download is checked against the
-MD5 the server reports for it (the only hash arduino-esp32's HTTPUpdate class actually supports —
-rejects a corrupted or swapped-in-transit `.bin`), but there's
-still no signature/authenticity check on the file itself — no embedded public key, no code
-signing — so anyone able to spoof the server address on the LAN can still serve their own `.bin`
-together with a matching hash even over HTTPS. Set `OTA_AUTO_UPDATE` to `1` and reflash if you've
-weighed that remaining tradeoff for your network; otherwise reflash manually over USB to update.
+Separately, once a day the sensor checks `/api/firmware/latest` for a newer version and, as
+shipped (`#define OTA_AUTO_UPDATE 1` at the top of the sketch), downloads and flashes it. The
+download is checked against the MD5 the server reports for it (the only hash arduino-esp32's
+HTTPUpdate class actually supports). The version/MD5 request is covered by the certificate
+fingerprint below; the `.bin` download is not. So with a fingerprint pinned, a `.bin` swapped in
+transit is rejected; without one, anyone able to spoof the server address on the LAN can serve
+their own `.bin` together with a matching hash even over HTTPS. Either way there's no
+signature/authenticity check on the file itself — no embedded public key, no code signing. See
+[SECURITY.md](./SECURITY.md) for the details. Set `OTA_AUTO_UPDATE` to `0` and reflash if you'd
+rather only log available updates and reflash manually over USB.
 
 ### 🔒 HTTPS and certificate pinning
 

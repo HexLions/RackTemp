@@ -29,6 +29,23 @@ on that leg. Without a fingerprint pinned, a sensor's traffic is still encrypted
 packet capture) but not authenticated against an attacker able to actively intercept the
 connection.
 
+**Firmware updates (OTA).** The sketch ships with `OTA_AUTO_UPDATE 1`: once a day a sensor asks
+`/api/firmware/latest` for the current version and the MD5 of its `.bin`, and flashes the `.bin`
+if the version differs. That request goes through the same fingerprint check as every other one;
+the `.bin` download does not (arduino-esp32's `HTTPUpdate` opens its own connection, with no point
+to check the certificate), so the file is only as trustworthy as the MD5 it is checked against:
+
+- **Fingerprint pinned:** an attacker on the network can't change the reported MD5, so a `.bin`
+  swapped in transit fails the check.
+- **No fingerprint pinned:** an attacker able to spoof the server address answers both requests
+  and gets their own firmware flashed.
+- **Either way, firmware images are not signed.** Whoever controls the server, or an admin
+  account (uploading firmware needs an admin session), decides what every sensor with
+  auto-update on will flash.
+
+Pin the fingerprint on every sensor, or set `OTA_AUTO_UPDATE 0` and reflash over USB to update, if
+that isn't acceptable for your network.
+
 **Secrets at rest.** The admin password is a bcrypt hash. Genuine third-party credentials — TOTP
 secret, SMTP password, Telegram bot token, Microsoft Graph client secret — are encrypted
 (AES-256-GCM, key file separate from `SESSION_SECRET`; see `backend/src/services/fieldEncryption.ts`).
