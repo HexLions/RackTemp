@@ -34,6 +34,24 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   next();
 }
 
+// requireAuth minus the mustChangePassword gate: for the few admin routes
+// that exist precisely to finish first-boot setup (/first-login,
+// /restore-backup). The sessionEpoch check still applies, so a cookie
+// revoked by a password change can't reach them either.
+export async function requireAdminSession(req: Request, res: Response, next: NextFunction) {
+  const session = req.session as any;
+  if (!session || !session.userId || session.role !== "admin") {
+    return res.status(401).json({ error: "not authenticated" });
+  }
+
+  const user = await prisma.adminUser.findUnique({ where: { id: session.userId } });
+  if (!user || session.epoch !== user.sessionEpoch) {
+    req.session = null;
+    return res.status(401).json({ error: "session expired" });
+  }
+  next();
+}
+
 // Admin or viewer, either one - only for routes a read-only viewer is
 // meant to reach (currently just the read side of sensors.ts). Anything
 // gated by requireAuth above stays admin-only; this is the one deliberate
