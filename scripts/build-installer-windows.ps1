@@ -18,6 +18,9 @@ $tray = Join-Path $root "windows-tray\RackTempTray"
 $tools = Join-Path $root "tools"
 $stage = Join-Path $root "dist-windows\app"
 $outDir = Join-Path $root "dist-windows"
+# Single source of truth for the version: the tray exe and the installer
+# both take it from here, so their file metadata matches the release.
+$pkgVersion = (Get-Content (Join-Path $backend "package.json") -Raw | ConvertFrom-Json).version
 
 $nodeVersion = "24.20.0"
 $nodeDirName = "node-v$nodeVersion-win-x64"
@@ -93,7 +96,7 @@ Pop-Location
 
 Write-Host "== 3/7: tray shell build (WebView2 window) ==" -ForegroundColor Cyan
 Push-Location $tray
-dotnet publish -c Release -r win-x64 --self-contained true -o (Join-Path $root "dist-windows\tray-publish")
+dotnet publish -c Release -r win-x64 --self-contained true -p:Version=$pkgVersion -o (Join-Path $root "dist-windows\tray-publish")
 if ($LASTEXITCODE -ne 0) { throw "tray app publish failed" }
 Pop-Location
 
@@ -134,7 +137,6 @@ New-Item -ItemType Directory -Force -Path (Join-Path $stage "tray") | Out-Null
 Copy-Item (Join-Path $root "dist-windows\tray-publish\*") (Join-Path $stage "tray") -Recurse -Force
 
 Write-Host "== 7/7: compiling installer ==" -ForegroundColor Cyan
-$pkgVersion = (Get-Content (Join-Path $backend "package.json") -Raw | ConvertFrom-Json).version
 Write-Host "App version: $pkgVersion (from backend\package.json)"
 $iscc = Get-ISCC
 & $iscc "/DMyAppVersion=$pkgVersion" (Join-Path $root "installer\installer.iss")
