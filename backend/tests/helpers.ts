@@ -1,7 +1,7 @@
 import express from "express";
 import cookieSession from "cookie-session";
 import bcrypt from "bcryptjs";
-import { Prisma } from "@prisma/client";
+import { Prisma } from "../src/generated/prisma/client";
 import { prisma } from "../src/db";
 import { authRouter } from "../src/routes/auth";
 import { firmwareRouter } from "../src/routes/firmware";

@@ -8,8 +8,7 @@ import multer from "multer";
 import { z } from "zod";
 import { generateSecret as generateTotpSecret, generateURI as generateTotpURI, verify as verifyTotp, createGuardrails } from "otplib";
 import QRCode from "qrcode";
-import { PrismaClient } from "@prisma/client";
-import { prisma } from "../db";
+import { createPrismaClient, prisma } from "../db";
 import { requireAdminSession, requireAuth } from "../middleware/auth";
 import { resolveDbPath, resolveDataDir } from "../services/dbPath";
 import { encryptField, decryptField } from "../services/fieldEncryption";
@@ -298,7 +297,7 @@ authRouter.post("/restore-backup", ...requireFirstLoginSession, restoreUpload.si
   // Verify that it's really a RackTemp database before overwriting the
   // current one — opens the uploaded file with a separate client instead
   // of trusting the extension alone.
-  const testClient = new PrismaClient({ datasources: { db: { url: `file:${req.file.path}` } } });
+  const testClient = createPrismaClient(req.file.path);
   try {
     await testClient.adminUser.findFirst();
   } catch {

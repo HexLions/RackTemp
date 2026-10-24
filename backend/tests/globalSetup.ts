@@ -11,7 +11,7 @@ export default function setup() {
 
   execFileSync(
     process.execPath,
-    [path.resolve(__dirname, "../node_modules/prisma/build/index.js"), "db", "push", "--skip-generate"],
+    [path.resolve(__dirname, "../node_modules/prisma/build/index.js"), "db", "push"],
     {
       cwd: path.resolve(__dirname, ".."),
       env: { ...process.env, DATABASE_URL: TEST_DATABASE_URL },
