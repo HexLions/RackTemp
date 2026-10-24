@@ -6,7 +6,7 @@ import path from "path";
 import bcrypt from "bcryptjs";
 import { randomBytes } from "crypto";
 import { createServer as createHttpsServer } from "https";
-import { Prisma } from "@prisma/client";
+import { Prisma } from "./generated/prisma/client";
 import { prisma } from "./db";
 import { authRouter } from "./routes/auth";
 import { sensorsRouter } from "./routes/sensors";

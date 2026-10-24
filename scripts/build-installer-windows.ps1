@@ -129,6 +129,7 @@ Copy-Item (Join-Path $backend "dist") (Join-Path $stage "backend\dist") -Recurse
 Copy-Item (Join-Path $backend "public") (Join-Path $stage "backend\public") -Recurse -Force
 Copy-Item (Join-Path $backend "node_modules") (Join-Path $stage "backend\node_modules") -Recurse -Force
 Copy-Item (Join-Path $backend "prisma") (Join-Path $stage "backend\prisma") -Recurse -Force
+Copy-Item (Join-Path $backend "prisma.config.ts") (Join-Path $stage "backend\prisma.config.ts") -Force
 Copy-Item (Join-Path $backend "package.json") (Join-Path $stage "backend\package.json") -Force
 
 Copy-Item (Join-Path $nssmDir "win64\nssm.exe") (Join-Path $stage "nssm.exe") -Force

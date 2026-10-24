@@ -9,10 +9,9 @@
 // After running, every printed sensor needs its new key pasted into the
 // device's setup portal (hold BOOT for 2s after boot to reopen it).
 
+import "dotenv/config";
 import { randomBytes } from "crypto";
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { prisma } from "../src/db";
 
 // cuid v1 format: 'c' followed by 24 base36 chars (25 chars total).
 const CUID_PATTERN = /^c[a-z0-9]{24}$/;

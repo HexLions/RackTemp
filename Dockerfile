@@ -29,6 +29,7 @@ COPY --from=backend-build /app/backend/node_modules ./node_modules
 COPY --from=backend-build /app/backend/dist ./dist
 COPY --from=backend-build /app/backend/public ./public
 COPY --from=backend-build /app/backend/prisma ./prisma
+COPY --from=backend-build /app/backend/prisma.config.ts ./prisma.config.ts
 RUN mkdir -p /app/backend/data && chown -R node:node /app/backend
 
 # Not needed at runtime since the CMD below calls the local prisma binary
@@ -52,4 +53,4 @@ EXPOSE 7431
 # the shipped image and get loaded at every container start for no
 # reason — the local prisma binary is already right here, no resolution
 # needed. Same invocation style linux/racktemp.service already uses.
-CMD ["sh", "-c", "node node_modules/prisma/build/index.js db push --skip-generate && node dist/index.js"]
+CMD ["sh", "-c", "node node_modules/prisma/build/index.js db push && node dist/index.js"]

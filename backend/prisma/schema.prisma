@@ -1,12 +1,16 @@
+// Generated into src/ so tsc compiles it into dist/ with the rest of the
+// backend (gitignored, rebuilt by `prisma generate`). No engine binaries
+// since Prisma 7: queries go through the better-sqlite3 adapter in src/db.ts.
 generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
 }
 
+// The database URL lives in prisma.config.ts (CLI) and src/db.ts (runtime).
+// Switch to "postgresql" later for multi-instance / bigger deploys.
 datasource db {
-  // Switch to "postgresql" + DATABASE_URL later for multi-instance / bigger deploys.
   provider = "sqlite"
-  url      = env("DATABASE_URL")
 }
 
 model Sensor {
