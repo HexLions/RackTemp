@@ -13,6 +13,9 @@
 #define MyAppName "RackTemp"
 #ifndef MyAppVersion
   #define MyAppVersion "0.0.0-dev"
+  #define MyAppFileVersion "0.0.0"
+#else
+  #define MyAppFileVersion MyAppVersion
 #endif
 #define MyAppPublisher "HexLions"
 #define MyAppURL "https://github.com/HexLions/RackTemp"
@@ -25,6 +28,14 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
+; The exe's own version resource (Properties → Details). Without it Inno
+; writes 0.0.0.0, and code signing services check it against the release.
+; Numbers only, hence the separate define for the "-dev" fallback above.
+VersionInfoVersion={#MyAppFileVersion}
+VersionInfoProductVersion={#MyAppFileVersion}
+VersionInfoProductName={#MyAppName}
+VersionInfoCompany={#MyAppPublisher}
+VersionInfoDescription={#MyAppName} Setup
 DefaultDirName={autopf}\RackTemp
 DefaultGroupName=RackTemp
 DisableProgramGroupPage=yes
