@@ -51,10 +51,18 @@ describe("re-authentication limiter", () => {
   it("doesn't count successful requests", async () => {
     const app = buildApp({ rateLimits: true });
     const agent = await loginAdmin(app);
-    for (let i = 0; i < 11; i++) {
-      const res = await agent.post("/api/auth/regenerate-recovery-key").send({ currentPassword: ADMIN_PASSWORD });
-      expect(res.status).toBe(200);
+    for (let i = 0; i < 9; i++) {
+      await agent.post("/api/auth/regenerate-recovery-key").send({ currentPassword: "wrong-password" });
     }
+    // mfa/setup succeeds without a password while MFA is off, and skips the
+    // cost-12 bcrypt that regenerate-recovery-key does on success: eleven of
+    // those took over vitest's 5 s timeout on a loaded machine.
+    for (let i = 0; i < 3; i++) {
+      expect((await agent.post("/api/auth/mfa/setup").send({})).status).toBe(200);
+    }
+    // 9 failures + 3 successes: over the limit if successes counted.
+    const res = await agent.post("/api/auth/regenerate-recovery-key").send({ currentPassword: "wrong-password" });
+    expect(res.status).toBe(401);
   });
 
   it("leaves routes without a password check alone", async () => {
