@@ -676,6 +676,34 @@ reference for exposing an instance beyond a trusted LAN:
 
 ---
 
+## 🕵️ Privacy
+
+This program will not transfer any information to other networked systems unless specifically
+requested by the user or the person installing or operating it. There is no telemetry and no
+analytics. Its only outbound connections are the ones below, each started by an action or a
+setting of whoever runs the instance:
+
+- **Update check**: opening Settings → Updates asks the GitHub API for the latest RackTemp
+  release (`api.github.com`). Nothing about the instance is sent beyond the request itself.
+- **Email and Telegram**, only if configured in Settings → Notifications, through the SMTP
+  server, Microsoft Graph tenant or Telegram bot you set up: alert messages (sensor name, reading
+  and threshold, or that a sensor went offline), password reset emails you request, and, if you turn on emailed backups in
+  Settings → Backup, the backup file itself, which holds the database including credentials
+  (see [SECURITY.md](./SECURITY.md)).
+- **Password breach check**, only with `HIBP_PASSWORD_CHECK=1`: the first 5 hex characters of the
+  new password's SHA-1 hash go to HaveIBeenPwned (k-anonymity, see
+  [SECURITY.md](./SECURITY.md#password-strength)).
+- **Portainer webhook**, only if configured in Settings → Updates and only when you press the
+  redeploy button.
+- **Windows installer**: if the Microsoft Edge WebView2 runtime is missing, the installer
+  downloads it from Microsoft (`go.microsoft.com`).
+
+Sensors only talk to the RackTemp server they're configured with. Those third-party services
+(GitHub, your mail or Telegram provider, Microsoft, HaveIBeenPwned) handle requests under their
+own privacy policies.
+
+---
+
 ## 🗺️ Roadmap
 
 - 🐘 Migration to Postgres for multi-instance deploys (change `provider` in
