@@ -194,9 +194,9 @@ service** (auto-start, runs even without a logged-in user — designed for Windo
 1. Download `RackTemp-Setup-X.Y.Z.exe` from the [Releases](../../releases) (built automatically
    on every release, alongside the Docker image — see
    [`.github/workflows/windows-installer.yml`](.github/workflows/windows-installer.yml)).
-2. Run it (requires administrator privileges). Windows SmartScreen will probably warn that
-   the exe isn't signed ("Unknown publisher") — that's normal for an open-source installer without a
-   paid certificate: **More info → Run anyway**.
+2. Run it (requires administrator privileges). The installer is code-signed (see
+   **Code signing policy** further down), but SmartScreen can still warn on a new release until
+   enough people have installed it: **More info → Run anyway**.
 3. At the end of installation a dedicated RackTemp window opens (not the browser) — if the
    WebView2 runtime is missing it installs it on its own on the spot (needs internet at that
    moment; on up-to-date Windows 10/11 it's already present and this step is skipped).
@@ -701,6 +701,28 @@ setting of whoever runs the instance:
 Sensors only talk to the RackTemp server they're configured with. Those third-party services
 (GitHub, your mail or Telegram provider, Microsoft, HaveIBeenPwned) handle requests under their
 own privacy policies.
+
+---
+
+## ✍️ Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by
+[SignPath Foundation](https://signpath.org).
+
+What gets signed: the Windows installer (`RackTemp-Setup-X.Y.Z.exe`) and the RackTemp tray app
+inside it (`RackTempTray.exe`). Both are built by
+[`windows-installer.yml`](.github/workflows/windows-installer.yml) on GitHub Actions from this
+repository, only when a release is published. Third-party binaries shipped inside the installer
+(the Node.js runtime, the .NET runtime, nssm) keep their own upstream signatures, or none, and are
+not signed by this project.
+
+Team roles:
+
+- Committers and reviewers: [@HexLions](https://github.com/HexLions)
+- Approvers: [@HexLions](https://github.com/HexLions)
+
+Every signing request is approved by hand, one per release. Privacy: see the Privacy section
+above.
 
 ---
 
