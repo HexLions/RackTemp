@@ -2,8 +2,8 @@
 # Builds backend + frontend, stages a self-contained folder (portable
 # Node.js runtime + compiled app + systemd unit + install/uninstall
 # scripts), and tars it up as racktemp-linux-x64.tar.gz. Run on Linux
-# (x86_64) — the "native" Prisma engine generated here must match the
-# machine that later runs install.sh.
+# (x86_64) — the native better-sqlite3 module npm ci installs here must
+# match the machine that later runs install.sh.
 
 set -euo pipefail
 
@@ -52,6 +52,7 @@ cp -r "$BACKEND/dist" "$STAGE/backend/"
 cp -r "$BACKEND/public" "$STAGE/backend/"
 cp -r "$BACKEND/node_modules" "$STAGE/backend/"
 cp -r "$BACKEND/prisma" "$STAGE/backend/"
+cp "$BACKEND/prisma.config.ts" "$STAGE/backend/"
 cp "$BACKEND/package.json" "$STAGE/backend/package.json"
 
 cp "$LINUX_DIR/racktemp.service" "$STAGE/"

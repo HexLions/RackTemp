@@ -36,6 +36,7 @@ cp -r "$SCRIPT_DIR/backend/dist" "$INSTALL_DIR/backend/"
 cp -r "$SCRIPT_DIR/backend/public" "$INSTALL_DIR/backend/"
 cp -r "$SCRIPT_DIR/backend/node_modules" "$INSTALL_DIR/backend/"
 cp -r "$SCRIPT_DIR/backend/prisma" "$INSTALL_DIR/backend/"
+cp "$SCRIPT_DIR/backend/prisma.config.ts" "$INSTALL_DIR/backend/"
 cp "$SCRIPT_DIR/backend/package.json" "$INSTALL_DIR/backend/package.json"
 
 echo "== Data in $DATA_DIR =="

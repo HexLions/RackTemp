@@ -10,7 +10,7 @@ WorkingDirectory=/opt/racktemp/backend
 # Same command that runs in the Docker container on every start: creates/syncs
 # the SQLite tables if missing (idempotent). Without this, the service starts but
 # immediately crashes with "table AdminUser does not exist" on a fresh database.
-ExecStartPre=/opt/racktemp/node/bin/node node_modules/prisma/build/index.js db push --skip-generate
+ExecStartPre=/opt/racktemp/node/bin/node node_modules/prisma/build/index.js db push
 ExecStart=/opt/racktemp/node/bin/node dist/index.js
 Restart=on-failure
 RestartSec=5
