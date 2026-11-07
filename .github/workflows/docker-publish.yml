@@ -108,7 +108,7 @@ jobs:
       # by digest (steps.build.outputs.digest), which covers every tag
       # pushed above (:edge/:latest/:sha-.../release tag all point at the
       # same digest) with one signature.
-      - uses: sigstore/cosign-installer@v4.1.2
+      - uses: sigstore/cosign-installer@v4.1.3
 
       - name: Sign the published image (cosign, keyless)
         run: cosign sign --yes "${IMAGE}@${{ steps.build.outputs.digest }}"
